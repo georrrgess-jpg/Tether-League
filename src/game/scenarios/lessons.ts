@@ -14,6 +14,8 @@ interface Step {
   text: string;
   sub?: string;
   enter(): void;
+  /** Advance without the short "Nice!" pause (used when the next step continues the same motion). */
+  instant?: boolean;
   /** Returns true when the step's goal has been met. */
   check(events: SimEvent[]): boolean;
 }
@@ -131,6 +133,7 @@ export class LessonMode extends Scenario {
           {
             text: 'Keep holding and steer along the swing to build speed.',
             sub: 'Steering toward the anchor tightens the turn; the ring under you shows the time left.',
+            instant: true,
             enter: () => {},
             check: () => {
               const p = this.me();
@@ -139,7 +142,7 @@ export class LessonMode extends Scenario {
           },
           {
             text: 'Let go to launch! You fly off in the direction you were travelling.',
-            sub: 'Release earlier or later to change where you go.',
+            sub: 'Release earlier or later to change where you go. If the tether timed out, attach again first.',
             enter: () => {},
             check: (ev) => ev.some((e) => e.type === 'release' && e.robot === 0 && e.speed >= 6.5),
           },
@@ -148,18 +151,18 @@ export class LessonMode extends Scenario {
             sub: 'You must still be faster than running speed when you cross it.',
             enter: () => {
               this.place(0, -8, 5, 0);
-              this.setMarkers([{ kind: 'gate', x: 3, z: 1.6, x2: 3, z2: 6.6, color: YELLOW, width: 0.5 }]);
+              this.setMarkers([{ kind: 'gate', x: 1, z: 1.4, x2: 1, z2: 7, color: YELLOW, width: 0.5 }]);
             },
-            check: () => this.gate(3, 1.6, 3, 6.6),
+            check: () => this.gate(1, 1.4, 1, 7),
           },
           {
             text: 'Once more on the other wing.',
             sub: 'Any anchor works. Pick the one that sends you where you want to go.',
             enter: () => {
               this.place(0, -8, -5, 0);
-              this.setMarkers([{ kind: 'gate', x: 3, z: -6.6, x2: 3, z2: -1.6, color: YELLOW, width: 0.5 }]);
+              this.setMarkers([{ kind: 'gate', x: 1, z: -7, x2: 1, z2: -1.4, color: YELLOW, width: 0.5 }]);
             },
-            check: () => this.gate(3, -6.6, 3, -1.6),
+            check: () => this.gate(1, -7, 1, -1.4),
           },
         ];
         break;
@@ -446,6 +449,10 @@ export class LessonMode extends Scenario {
     const s = this.steps[this.index];
     if (s && s.check(events)) {
       audio.play('gate', { intensity: 0.6 });
+      if (s.instant) {
+        this.next();
+        return;
+      }
       this.coach(`Step ${this.index + 1} of ${this.steps.length}`, 'Nice!', '', true);
       this.wait = 0.7;
     }

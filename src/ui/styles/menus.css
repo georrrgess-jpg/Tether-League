@@ -1848,6 +1848,16 @@
   .ci-tag {
     display: none;
   }
+  .club .content {
+    grid-template-columns: auto minmax(0, 1fr) minmax(240px, 46%);
+  }
+  .tab {
+    min-height: 34px;
+    padding: 0 10px;
+  }
+  .tab span {
+    display: none;
+  }
   .bars {
     gap: 3px;
   }
@@ -1896,6 +1906,9 @@
   }
   .club-chip {
     padding: 4px;
+  }
+  .topbar:has(.screen-title h1) .wordmark {
+    display: none;
   }
   .credits {
     height: 44px;

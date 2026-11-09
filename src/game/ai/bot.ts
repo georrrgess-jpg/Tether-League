@@ -46,7 +46,7 @@ export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
     name: 'Club',
     summary: 'Passes, predicts rebounds and swings back to defend.',
     reaction: [0.18, 0.3],
-    kickDelay: [0.08, 0.2],
+    kickDelay: [0.12, 0.26],
     aimError: 0.15,
     anticipation: 0.75,
     tetherUse: 0.45,
@@ -59,7 +59,7 @@ export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
     name: 'Pro',
     summary: 'Sharp coverage, accurate finishing and deliberate swing attacks.',
     reaction: [0.1, 0.2],
-    kickDelay: [0.03, 0.1],
+    kickDelay: [0.06, 0.14],
     aimError: 0.07,
     anticipation: 1,
     tetherUse: 0.85,
@@ -93,26 +93,26 @@ export const TENDENCY: Record<TendencyId, { name: string; summary: string; style
   supportive: {
     name: 'Supportive',
     summary: 'Stays available for a pass and covers behind you when you attack.',
-    style: { lead: 2.5, width: 5.5, guard: 0.4, pass: 1.3, shootRange: 13, cover: true },
+    style: { lead: 2.5, width: 5.5, guard: 0.4, pass: 1.3, shootRange: 11.5, cover: true },
   },
   aggressive: {
     name: 'Aggressive',
     summary: 'Makes forward runs toward goal whenever the back is covered.',
-    style: { lead: 7, width: 4.5, guard: 0.5, pass: 0.9, shootRange: 15.5, cover: false },
+    style: { lead: 7, width: 4.5, guard: 0.5, pass: 0.9, shootRange: 13, cover: false },
   },
   defensive: {
     name: 'Defensive',
     summary: 'Holds a deeper position and looks for interceptions.',
-    style: { lead: -4, width: 3.5, guard: 0.33, pass: 1.1, shootRange: 12, cover: true },
+    style: { lead: -4, width: 3.5, guard: 0.33, pass: 1.1, shootRange: 11, cover: true },
   },
 };
 
 export const CLUB_STYLE: Record<ClubStyleId, BotStyle> = {
-  pressure: { lead: 5.5, width: 4, guard: 0.5, pass: 0.8, shootRange: 16, cover: false },
-  passing: { lead: 5, width: 6.5, guard: 0.42, pass: 1.5, shootRange: 13, cover: true },
-  wide: { lead: 4, width: 7.5, guard: 0.42, pass: 1.2, shootRange: 14, cover: true },
-  counter: { lead: 1, width: 5, guard: 0.34, pass: 1, shootRange: 14.5, cover: true },
-  balanced: { lead: 4, width: 5.5, guard: 0.42, pass: 1, shootRange: 14.5, cover: true },
+  pressure: { lead: 5.5, width: 4, guard: 0.46, pass: 0.8, shootRange: 13.5, cover: false },
+  passing: { lead: 5, width: 6.5, guard: 0.4, pass: 1.5, shootRange: 11, cover: true },
+  wide: { lead: 4, width: 7.5, guard: 0.4, pass: 1.2, shootRange: 12, cover: true },
+  counter: { lead: 1, width: 5, guard: 0.34, pass: 1, shootRange: 12.5, cover: true },
+  balanced: { lead: 4, width: 5.5, guard: 0.4, pass: 1, shootRange: 12, cover: true },
 };
 
 interface KickPlan {
@@ -394,7 +394,7 @@ export class BotDirector {
         const dx = bx - ownX;
         const dz = bz;
         const d = Math.hypot(dx, dz) || 1;
-        const out = Math.max(2.4, Math.min(9, d * st.guard));
+        const out = Math.max(2.2, Math.min(7, d * st.guard));
         b.tx = ownX + (dx / d) * out;
         b.tz = (dz / d) * out;
         // A goal-bound ball: step onto its path.

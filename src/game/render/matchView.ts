@@ -335,6 +335,9 @@ export class MatchView {
       [-hx, 0, hz + 1.6], [hx, 0, hz + 1.6], [-hx, 1.9, -hz - 0.8], [hx, 1.9, -hz - 0.8], [0, 2.6, -hz - 0.8], [0, 0, hz + 1.6],
     ];
     const topLimit = aspect < 1 ? 0.7 : 0.8;
+    // Touch devices keep a little more room below the pitch for the on-screen controls.
+    const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+    const bottomLimit = coarse && aspect >= 1 ? -0.84 : -0.96;
     let lo = 12;
     let hi = 220;
     for (let i = 0; i < 22; i++) {
@@ -345,7 +348,7 @@ export class MatchView {
       let ok = true;
       for (const p of pts) {
         v2.set(p[0], p[1], p[2]).project(cam);
-        if (Math.abs(v2.x) > 0.975 || v2.y > topLimit || v2.y < -0.96) {
+        if (Math.abs(v2.x) > 0.975 || v2.y > topLimit || v2.y < bottomLimit) {
           ok = false;
           break;
         }

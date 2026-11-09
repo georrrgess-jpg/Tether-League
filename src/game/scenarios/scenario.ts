@@ -11,6 +11,7 @@ import type { Expression } from '../render/textures';
 import type { PlayMode, PlaySession } from '../session';
 import { clearCommand, emptyCommand, type Command, type SimEvent, type World } from '../sim/types';
 import { createRobot, createWorld, placeBall, placeRobot, stepWorld } from '../sim/world';
+import { segmentsCrossPure } from './geometry';
 
 export const OPPONENT_LOOK: RobotLook = {
   chassis: 'all_rounder',
@@ -208,17 +209,7 @@ export abstract class Scenario implements PlayMode {
   dispose(): void {}
 }
 
-export function segmentsCross(p1x: number, p1z: number, p2x: number, p2z: number, ax: number, az: number, bx: number, bz: number): boolean {
-  const d1x = p2x - p1x;
-  const d1z = p2z - p1z;
-  const d2x = bx - ax;
-  const d2z = bz - az;
-  const den = d1x * d2z - d1z * d2x;
-  if (Math.abs(den) < 1e-9) return false;
-  const t = ((ax - p1x) * d2z - (az - p1z) * d2x) / den;
-  const u = ((ax - p1x) * d1z - (az - p1z) * d1x) / den;
-  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
-}
+export const segmentsCross = segmentsCrossPure;
 
 /** Simple scripted movement: run toward a point, slowing on arrival. */
 export function runTo(c: Command, x: number, z: number, rx: number, rz: number, stop = 0.25): number {

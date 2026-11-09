@@ -449,7 +449,7 @@
   bottom: calc(26px + var(--safe-b));
   width: calc(104px * var(--touch-scale));
   height: calc(104px * var(--touch-scale));
-  background: rgba(244, 138, 44, 0.9);
+  background: rgba(244, 138, 44, 0.62);
   font-size: calc(1.15rem * var(--touch-scale));
 }
 .tbtn-tether {
@@ -457,7 +457,7 @@
   bottom: calc(92px * var(--touch-scale) + var(--safe-b));
   width: calc(88px * var(--touch-scale));
   height: calc(88px * var(--touch-scale));
-  background: rgba(18, 188, 210, 0.9);
+  background: rgba(18, 188, 210, 0.62);
   font-size: calc(0.9rem * var(--touch-scale));
 }
 .touch-ui.swap .tbtn-kick {
@@ -519,5 +519,24 @@
   }
   .coach .c-sub {
     display: none;
+  }
+}
+
+/* Portrait play is supported but small: suggest rotating without blocking anything. */
+@media (orientation: portrait) and (max-width: 700px) {
+  .play-layer::after {
+    content: 'Tip: turn your device sideways for a bigger pitch';
+    position: absolute;
+    left: 50%;
+    top: calc(64px + var(--safe-t));
+    transform: translateX(-50%);
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(23, 39, 62, 0.8);
+    color: var(--on-dark);
+    font-size: 0.74rem;
+    font-weight: 800;
+    white-space: nowrap;
+    pointer-events: none;
   }
 }

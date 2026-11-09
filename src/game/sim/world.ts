@@ -710,7 +710,14 @@ export function stepWorld(w: World, cmds: Command[]): void {
 
   for (let i = 0; i < robots.length; i++) {
     const r = robots[i];
-    const sp = Math.hypot(r.vx, r.vz);
+    let sp = Math.hypot(r.vx, r.vz);
+    // Hard cap for robots (bumps included); the ball has its own, higher limit.
+    if (sp > TUNING.tether.maxSpeed) {
+      const k = TUNING.tether.maxSpeed / sp;
+      r.vx *= k;
+      r.vz *= k;
+      sp = TUNING.tether.maxSpeed;
+    }
     if (sp > 0.5) {
       const target = Math.atan2(r.vz, r.vx);
       r.facing += angDiff(target, r.facing) * Math.min(1, 14 * DT);

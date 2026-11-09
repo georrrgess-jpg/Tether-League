@@ -26,7 +26,7 @@ export const TUNING = {
     acceleration: 24,
     braking: 26,
     /** Deceleration while carrying more than run speed with input held (momentum retention). */
-    carryDecel: 4.2,
+    carryDecel: 3.6,
     /** Deceleration above run speed with no input. */
     coastDecel: 8,
     /** Sideways steering authority while above run speed. */
@@ -70,10 +70,10 @@ export const TUNING = {
     cooldownSeconds: 0.28,
     inputBufferSeconds: 0.12,
     /** Ball speed from a standing kick. */
-    baseSpeed: 8.6,
+    baseSpeed: 8.2,
     /** Added ball speed per unit of robot speed toward the kick direction. */
     forwardVelocityFactor: 0.76,
-    speedCap: 16.6,
+    speedCap: 16.2,
     /** After kicking, the kicker does not collide with the ball for this long (prevents self-blocks). */
     ghostSeconds: 0.16,
     /** Assisted pass: speed = passBase + passPerUnit * distance (never above the natural kick speed). */

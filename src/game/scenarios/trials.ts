@@ -9,13 +9,13 @@ import type { Marker } from '../render/matchView';
 import type { PlaySession } from '../session';
 import type { Command, SimEvent } from '../sim/types';
 import { OPPONENT_LOOK, Scenario, runTo, type ScenarioRobot } from './scenario';
+import { BANKS, COUNTERS, PASS_HOME, RELEASES, SHOTS, SWING_GATES, WAYPOINTS, type Gate } from './trialData';
 
 const YELLOW = '#ffe36a';
 const CYAN = '#7ff3ff';
 const DIM = '#9fb3c8';
 const CARRY_SPEED = 5.9;
 
-type Gate = [number, number, number, number];
 
 function robotsFor(id: TrialId, looks: RobotLook[]): ScenarioRobot[] {
   const me: ScenarioRobot = { team: 0, look: looks[0] };
@@ -55,49 +55,6 @@ export class TrialMode extends Scenario {
     return this.result;
   }
 
-  // ---------------------------------------------------------------- data
-
-  private static SWING_GATES: Gate[] = [
-    [-3.5, 2.6, -3.5, 6.8],
-    [3.5, -6.8, 3.5, -2.6],
-    [10.5, 2.6, 10.5, 6.8],
-  ];
-
-  private static RELEASES: { start: [number, number]; gate: Gate }[] = [
-    { start: [-8, 6], gate: [3, 2.2, 3, 6] },
-    { start: [-8, -6], gate: [3, -6, 3, -2.2] },
-    { start: [-9.5, 7.5], gate: [-1.5, -1.5, 1.5, 1.5] },
-    { start: [-9.5, -7.5], gate: [-1.5, 1.5, 1.5, -1.5] },
-    { start: [8, 6], gate: [-3, 2.2, -3, 6] },
-    { start: [8, -6], gate: [-3, -6, -3, -2.2] },
-    { start: [9.5, 1.5], gate: [10.2, -2.6, 13.6, -2.6] },
-    { start: [-12, 3.5], gate: [4.5, 1.6, 4.5, 5.4] },
-  ];
-
-  private static BANKS: { ball: [number, number]; player: [number, number]; wall: 1 | -1; seg: [number, number] }[] = [
-    { ball: [2, 2], player: [-1, 3.2], wall: -1, seg: [5.5, 10] },
-    { ball: [0, -3], player: [-2.5, -4], wall: 1, seg: [4.8, 9.6] },
-    { ball: [-4, 0], player: [-6.5, 0.6], wall: -1, seg: [2.2, 7] },
-  ];
-
-  private static WAYPOINTS: [number, number][] = [[8, -5], [9, 4.5], [4, 6.5], [10.5, 0], [5, -6.5], [11, 5.5], [7, 2], [3.5, -5], [10, -6], [6, 6]];
-  private static PASS_HOME: [number, number] = [-5, 0];
-
-  private static SHOTS: { start: [number, number]; from: [number, number]; z: number; speed: number }[] = [
-    { start: [-9.5, 0], from: [2, -6], z: 1.5, speed: 11 },
-    { start: [-9.5, 3], from: [3, 7], z: -1.8, speed: 12 },
-    { start: [-6.5, -5], from: [4, 0], z: 2.2, speed: 12.5 },
-    { start: [-4.5, 6.5], from: [0.5, -8], z: -2, speed: 12.5 },
-    { start: [-2.5, -7.5], from: [5, 6], z: 2.3, speed: 13 },
-    { start: [-0.5, 0], from: [6, -3], z: -2.3, speed: 13.5 },
-  ];
-
-  private static COUNTERS: { a: [number, number]; b: [number, number]; me: [number, number] }[] = [
-    { a: [1, -5.5], b: [-5, 4.5], me: [-9, 0] },
-    { a: [2, 5], b: [-6, -4], me: [-9.5, 1] },
-    { a: [0, -7], b: [-7, 2.5], me: [-10, -1.5] },
-  ];
-
   // --------------------------------------------------------------- setup
 
   private setup(): void {
@@ -116,7 +73,7 @@ export class TrialMode extends Scenario {
         break;
       case 'pass_window':
         this.place(0, -7.5, 0.6, 0);
-        this.place(1, TrialMode.WAYPOINTS[0][0], TrialMode.WAYPOINTS[0][1], Math.PI);
+        this.place(1, WAYPOINTS[0][0], WAYPOINTS[0][1], Math.PI);
         this.ball(-5.5, 0);
         this.passMarkers();
         break;
@@ -139,7 +96,7 @@ export class TrialMode extends Scenario {
 
   private gateMarkers(): void {
     const list: Marker[] = [];
-    TrialMode.SWING_GATES.forEach((g, i) => {
+    SWING_GATES.forEach((g, i) => {
       if (i < this.step) return;
       list.push({ kind: 'gate', x: g[0], z: g[1], x2: g[2], z2: g[3], color: i === this.step ? YELLOW : DIM, width: 0.5, opacity: i === this.step ? 1 : 0.5 });
     });
@@ -147,7 +104,7 @@ export class TrialMode extends Scenario {
   }
 
   private nextRelease(): void {
-    const cfg = TrialMode.RELEASES[this.attempt];
+    const cfg = RELEASES[this.attempt];
     this.place(0, cfg.start[0], cfg.start[1], cfg.start[0] < 0 ? 0 : Math.PI);
     this.ball(-13.6, -8.6);
     this.timer = 0;
@@ -159,7 +116,7 @@ export class TrialMode extends Scenario {
 
   private nextBank(): void {
     const w = this.world;
-    const cfg = TrialMode.BANKS[this.step];
+    const cfg = BANKS[this.step];
     this.place(0, cfg.player[0], cfg.player[1], 0);
     this.ball(cfg.ball[0], cfg.ball[1]);
     this.flag = false;
@@ -171,8 +128,8 @@ export class TrialMode extends Scenario {
   }
 
   private passGate(): Gate {
-    const wp = TrialMode.WAYPOINTS[this.step % TrialMode.WAYPOINTS.length];
-    const [hx, hz] = TrialMode.PASS_HOME;
+    const wp = WAYPOINTS[this.step % WAYPOINTS.length];
+    const [hx, hz] = PASS_HOME;
     const cx = (hx + wp[0]) / 2;
     const cz = (hz + wp[1]) / 2;
     const dx = wp[0] - hx;
@@ -185,7 +142,7 @@ export class TrialMode extends Scenario {
 
   private passMarkers(): void {
     const g = this.passGate();
-    const wp = TrialMode.WAYPOINTS[this.step % TrialMode.WAYPOINTS.length];
+    const wp = WAYPOINTS[this.step % WAYPOINTS.length];
     this.setMarkers([
       { kind: 'gate', x: g[0], z: g[1], x2: g[2], z2: g[3], color: YELLOW, width: 0.5 },
       { kind: 'ring', x: wp[0], z: wp[1], r: 1.1, color: CYAN, opacity: 0.6 },
@@ -193,7 +150,7 @@ export class TrialMode extends Scenario {
   }
 
   private nextShot(): void {
-    const s = TrialMode.SHOTS[this.step];
+    const s = SHOTS[this.step];
     this.place(0, s.start[0], s.start[1], Math.PI);
     this.ball(s.from[0], s.from[1]);
     this.phase = 0;
@@ -202,7 +159,7 @@ export class TrialMode extends Scenario {
   }
 
   private nextCounter(): void {
-    const c = TrialMode.COUNTERS[this.attempt % TrialMode.COUNTERS.length];
+    const c = COUNTERS[this.attempt % COUNTERS.length];
     this.place(0, c.me[0], c.me[1], 0);
     this.place(1, c.a[0], c.a[1], Math.PI);
     this.place(2, c.b[0] + 2.5, c.b[1], Math.PI);
@@ -223,7 +180,7 @@ export class TrialMode extends Scenario {
     if (this.id === 'pass_window') {
       const mate = w.robots[1];
       const c = cmds[1];
-      const wp = TrialMode.WAYPOINTS[this.step % TrialMode.WAYPOINTS.length];
+      const wp = WAYPOINTS[this.step % WAYPOINTS.length];
       const b = w.ball;
       const bd = Math.hypot(b.x - mate.x, b.z - mate.z);
       if (this.phase === 2) {
@@ -239,7 +196,7 @@ export class TrialMode extends Scenario {
         runTo(c, b.x + b.vx * 0.25, b.z + b.vz * 0.25, mate.x, mate.z, 0.2);
       } else runTo(c, wp[0], wp[1], mate.x, mate.z, 0.3);
     } else if (this.id === 'counterattack') {
-      const c = TrialMode.COUNTERS[this.attempt % TrialMode.COUNTERS.length];
+      const c = COUNTERS[this.attempt % COUNTERS.length];
       if (this.phase === 2) this.bots!.update(cmds);
       else if (this.phase === 1) {
         // Receiver runs onto the pass; passer supports.
@@ -275,7 +232,7 @@ export class TrialMode extends Scenario {
 
   private swingSchool(): void {
     const r = this.world.robots[0];
-    const g = TrialMode.SWING_GATES[this.step];
+    const g = SWING_GATES[this.step];
     if (this.playerCrossed(g[0], g[1], g[2], g[3])) {
       const sp = Math.hypot(r.vx, r.vz);
       if (sp >= CARRY_SPEED) {
@@ -300,7 +257,7 @@ export class TrialMode extends Scenario {
 
   private cleanRelease(events: SimEvent[]): void {
     const r = this.world.robots[0];
-    const cfg = TrialMode.RELEASES[this.attempt];
+    const cfg = RELEASES[this.attempt];
     this.timer += DT;
     for (const e of events) {
       if (e.type === 'attach') this.flag = true;
@@ -328,7 +285,7 @@ export class TrialMode extends Scenario {
         audio.play('fail', { intensity: 0.3 });
       }
       this.attempt++;
-      if (this.attempt >= TrialMode.RELEASES.length) {
+      if (this.attempt >= RELEASES.length) {
         this.result = this.count;
         this.setMarkers([]);
         this.finish(this.count > 0, `${this.count} / 8`, 'Clean launches');
@@ -337,7 +294,7 @@ export class TrialMode extends Scenario {
   }
 
   private bankShot(events: SimEvent[]): void {
-    const cfg = TrialMode.BANKS[this.step];
+    const cfg = BANKS[this.step];
     for (const e of events) {
       if (e.type === 'kick' || e.type === 'touch') this.flag = false;
       else if (e.type === 'wall') {
@@ -399,7 +356,7 @@ export class TrialMode extends Scenario {
     const b = w.ball;
     const idle = Math.hypot(b.vx, b.vz) < 0.4;
     if ((this.phase === 1 && this.timer > 4.5) || (this.phase === 2 && this.timer > 5) || (this.phase === 0 && idle && this.timer > 6)) {
-      this.ball(TrialMode.PASS_HOME[0] - 0.5, TrialMode.PASS_HOME[1]);
+      this.ball(PASS_HOME[0] - 0.5, PASS_HOME[1]);
       this.phase = 0;
       this.timer = 0;
       this.toast('New ball');
@@ -413,7 +370,7 @@ export class TrialMode extends Scenario {
 
   private lastSave(events: SimEvent[]): void {
     const w = this.world;
-    const s = TrialMode.SHOTS[this.step];
+    const s = SHOTS[this.step];
     this.timer -= DT;
     if (this.phase === 0) {
       // telegraph: hold the ball on its spot
@@ -459,7 +416,7 @@ export class TrialMode extends Scenario {
     }
     if (this.phase === 2 && this.timer <= 0) {
       this.step++;
-      if (this.step >= TrialMode.SHOTS.length) {
+      if (this.step >= SHOTS.length) {
         this.result = this.count;
         this.finish(this.count > 0, `${this.count} / 6`, 'Saves');
       } else nextTick(() => this.nextShot());
@@ -468,7 +425,7 @@ export class TrialMode extends Scenario {
 
   private counter(events: SimEvent[]): void {
     const w = this.world;
-    const c = TrialMode.COUNTERS[this.attempt % TrialMode.COUNTERS.length];
+    const c = COUNTERS[this.attempt % COUNTERS.length];
     const fail = (why: string) => {
       this.toast(why, 'bad');
       audio.play('fail', { intensity: 0.4 });

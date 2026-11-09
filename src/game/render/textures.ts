@@ -436,7 +436,13 @@ export function labelTexture(text: string, fg: string, bg: string): THREE.Textur
   g.roundRect(0, 0, 512, 96, 20);
   g.fill();
   g.fillStyle = fg;
-  g.font = '800 italic 54px Kanit, "Arial Black", sans-serif';
+  let size = 54;
+  g.font = `800 italic ${size}px Kanit, "Arial Black", sans-serif`;
+  const tw = g.measureText(text.toUpperCase()).width;
+  if (tw > 460) {
+    size = Math.floor((size * 460) / tw);
+    g.font = `800 italic ${size}px Kanit, "Arial Black", sans-serif`;
+  }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(text.toUpperCase(), 256, 52);
