@@ -115,11 +115,11 @@ export class Match {
   /** Symmetric legal spawn (point reflection through the centre spot); clears all velocities and tethers. */
   kickoff(): void {
     const w = this.world;
-    const sx = w.hx / 17;
-    placeRobot(w.robots[0], -4.5 * sx, -1.4, 0);
-    placeRobot(w.robots[1], -10.5 * sx, 2.6, 0);
-    placeRobot(w.robots[2], 4.5 * sx, 1.4, Math.PI);
-    placeRobot(w.robots[3], 10.5 * sx, -2.6, Math.PI);
+    const sx = w.hx / 15;
+    placeRobot(w.robots[0], -4.2 * sx, -1.5, 0);
+    placeRobot(w.robots[1], -9.5 * sx, 2.8, 0);
+    placeRobot(w.robots[2], 4.2 * sx, 1.5, Math.PI);
+    placeRobot(w.robots[3], 9.5 * sx, -2.8, Math.PI);
     placeBall(w, 0, 0);
     this.touches.length = 0;
     this.pendingPass = null;

@@ -20,7 +20,7 @@ export const TUNING = {
     endHold: 1.6,
   },
   robot: {
-    radius: 0.48,
+    radius: 0.62,
     mass: 1,
     maxRunSpeed: 5.2,
     acceleration: 24,
@@ -34,9 +34,9 @@ export const TUNING = {
     bumpRestitution: 0.25,
   },
   tether: {
-    acquisitionRange: 10.5,
-    minLength: 2.2,
-    maxLength: 10.5,
+    acquisitionRange: 11.2,
+    minLength: 2.4,
+    maxLength: 11.2,
     maxHoldSeconds: 1.9,
     warnSeconds: 0.45,
     cooldownSeconds: 0.35,
@@ -54,7 +54,7 @@ export const TUNING = {
     pressBuffer: 0.22,
   },
   ball: {
-    radius: 0.38,
+    radius: 0.42,
     mass: 0.35,
     maxSpeed: 18,
     wallRestitution: 0.82,
@@ -66,7 +66,7 @@ export const TUNING = {
     robotRestitution: 0.3,
   },
   kick: {
-    range: 1.2,
+    range: 1.48,
     cooldownSeconds: 0.28,
     inputBufferSeconds: 0.12,
     /** Ball speed from a standing kick. */
