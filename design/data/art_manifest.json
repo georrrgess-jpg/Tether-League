@@ -1,0 +1,120 @@
+{
+  "title": "Tether League Concept Art",
+  "createdDate": "2026-11-09",
+  "generationMethod": "Built-in image generation",
+  "reference": "User-provided original Tether League concept, used for art direction.",
+  "authorityNote": "Written rules override incidental generated text, numbers and illustrative poses.",
+  "images": [
+    {
+      "number": 1,
+      "file": "concept_art/01_club_home.png",
+      "title": "CLUB HOME",
+      "prompt": "A polished MAIN MENU in a bright robot clubhouse overlooking Harbor Park. Left third: simple vertical navigation PLAY highlighted cyan, CLUB, GARAGE, ACADEMY, SETTINGS. Center: two rounded expressive white robots in cyan jerseys 07 and 11 on a modest circular platform, high quality charming toy-like materials. Right third: next match card 'HARBOR CUP' 'VS EMBER WORKS', huge inviting 'PLAY NEXT MATCH' button; a small season progress strip 'ROOKIE LEAGUE \u00b7 MATCH 3/10'. Top shows modest earned credits and club badge. Bottom a trophy shelf with only two earned trophies and several empty spaces, subtle goal of improving club. Broad airy composition, sunny warm light, cyan orange navy ivory interface, organized professional game menu, not a cluttered shop.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2019704,
+      "sha256": "0bedf99d2b294cd65d2c2788ccd0e8c13e7a0a4146a71ce4aeb2839ff62252a5"
+    },
+    {
+      "number": 2,
+      "file": "concept_art/02_match_swing_attack.png",
+      "title": "MATCH: SWING ATTACK",
+      "prompt": "Full 2v2 gameplay view of Harbor Park from fixed elevated camera, entire rectangular field, two opposite goals, exactly 4 rounded robots, cyan pair versus orange pair, exactly ONE white ball. Cyan robot 07 attached to highlighted yellow side rail anchor via taut cyan rope, swinging around it toward ball, curved cyan motion trail with modest dotted tangent RELEASE direction. Other three robots position for a pass or defense. Top central scoreboard cyan2 orange1 time01:38. Bottom left compact controller hints 'HOLD: TETHER' 'RELEASE: LAUNCH' bottom right kick reticle hint. The core tether clearly attaches robot to fixed anchor not ball. Polished playable screenshot, minimal HUD, bright seaside backdrop.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2481942,
+      "sha256": "838bf0f379a432bb1d2e46100525b98a6bfbdfb9f630ba6a148e1734568d2ee3"
+    },
+    {
+      "number": 3,
+      "file": "concept_art/03_tether_training.png",
+      "title": "ACADEMY: TETHER BASICS",
+      "prompt": "A clean three-step GAMEPLAY TUTORIAL concept sheet within one in-game academy screen. Title 'TETHER BASICS'. Three equal large panels of same small practice arena and same white robot cyan07: panel1 '1 AIM' robot standing and yellow fixed anchor outlined with cyan selection reticle; panel2 '2 HOLD' rope taut from robot to that anchor with curved path around fixed point; panel3 '3 RELEASE' rope detached, robot moving along tangent arrow toward ball target. Physics visual must show swing around anchor and tangential release, not a teleport. Large bottom practical button 'TRY IT' and three small mastery medals. Navy ivory cyan interface and warm yellow anchors. Only simple short labels; the precise tutorial mechanics belong in separate documents. Original polished 3D visual style.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2220799,
+      "sha256": "b99ccde20e5d1740da7b816becfeed06522c9331d8545bfa9b70c19e0d44fda2"
+    },
+    {
+      "number": 4,
+      "file": "concept_art/04_teamwork_defense.png",
+      "title": "MATCH: DEFENSE AND PASSING",
+      "prompt": "A legible tactical training replay screen in the same 3D Harbor Park arena, elevated camera showing whole field, 4 robots exactly (2 cyan,2 orange) and only ONE ball. Near cyan goal, cyan11 makes a defensive interception while cyan07 moves into open sideline space. One short dotted cyan pass lane toward07. Orange striker has a thin orange projected shooting lane blocked by11. A small bottom replay scrub bar with PAUSED and PLAY, two short callouts 'COVER GOAL' near defender and 'PASS INTO SPACE' near open teammate. Top 'TEAMWORK LAB'. Clear separation between illustrative projected paths and actual ball, restrained visual trails. No extra ghost players. This is coach replay/training visualization, not mandatory live match overlays.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2453787,
+      "sha256": "0eb5cc6a4b1145cceb1e9d4a4ba0b9c71e9078be83092e26383fbcce15949bd6"
+    },
+    {
+      "number": 5,
+      "file": "concept_art/05_robot_garage.png",
+      "title": "ROBOT GARAGE",
+      "prompt": "A beautiful garage ROBOT SELECTION menu, four recognizable balanced chassis. Large center turntable shows selected ALL-ROUNDER: round white body navy joints cyan face expressive eyes, jersey07. Left card rail with ALL-ROUNDER selected, SCOUT slim spring legs, BULWARK broad sturdy torso, GLIDER curved light frame, each thumbnail visibly distinctive same family. Right panel uses readable qualitative comparisons Handling, Acceleration, Stability, Momentum with concise bars, not inflated level stats. Small strength tag 'BALANCED CONTROL', tradeoff tag 'NO SPECIALIZATION'. Bottom large 'EQUIP' button and secondary 'TEST DRIVE'; top garage title and earned credits. Warm workshop, cyan tools, clean ivory rounded UI, very limited text. Sidegrade progression, no paid boxes.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1971805,
+      "sha256": "e9566b90191cf51d7dc9656f94123f053e1defa245839f3138f8e043be80e18e"
+    },
+    {
+      "number": 6,
+      "file": "concept_art/06_league_hub.png",
+      "title": "LEAGUE HUB",
+      "prompt": "Professional sports game SEASON HUB in Tether League art direction. Header 'ROOKIE LEAGUE' badge and 'MATCH 3/10'. Left panel readable standings table with six original clubs, cyan highlight HARBOR SPARKS, other names EMBER WORKS, TIDE RUNNERS, SKYLINE BOTS, IRON COMETS, SUNSET GEARS. Center primary 'NEXT MATCH' versus presentation with cyan and orange robot busts, Harbor Park thumbnail, large 'PLAY MATCH' button. Right small season schedule with completed match checks and upcoming fixtures, lower right simple FOUR-TEAM PLAYOFF BRACKET with empty slots. Trophy silhouette and promotion progress bottom. Background sunny stadium seen through glass. Clear large typography, generous spacing, content not microscopic. Original 3D robot portraits and restrained navy ivory cyan orange sports UI.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2065480,
+      "sha256": "6c40f4cfbb7714045a99ebf02059fd80990a3509d73607b09b367f22f7393ca4"
+    },
+    {
+      "number": 7,
+      "file": "concept_art/07_match_results.png",
+      "title": "MATCH RESULTS",
+      "prompt": "A delightful MATCH RESULTS menu after cyan club victory. Top huge 'VICTORY' and score '3 \u2014 2'. Center two expressive white cyan robots celebrating with tiny confetti and warm stadium lights, no opponents required. Left panel three clear performance rows 'GOALS 2' 'ASSISTS 1' 'SAVES 3', a badge 'PLAYMAKER'. Right panel earned rewards 'CREDITS +80' and 'CLUB XP +120', simple XP progress bar and a clearly labelled cosmetic milestone 'NEXT: COMET TRAIL'. Bottom two clear buttons 'CONTINUE SEASON' primary and 'WATCH REPLAY' secondary. Small bottom strip 'NEW RECORD: 3 SAVES'. Confetti restrained, rewards earned through play, no cash icons or premium shops. Visually polished original robot sport interface with clear hierarchy.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2221616,
+      "sha256": "f3ba8fffe3256fd8a60473436e3ec7d47f4d15174767f4fadc8b8ed67f1b3faf"
+    },
+    {
+      "number": 8,
+      "file": "concept_art/08_arena_selection.png",
+      "title": "ARENA SELECT",
+      "prompt": "An ARENA SELECTION menu for Tether League featuring four landscape stadium thumbnail cards as largest elements in a 2x2 grid: HARBOR PARK sunny seaside standard green field cyan orange opposite goals; FOUNDRY COURT narrow enclosed warm industrial arena; SKYLINE STADIUM wide high-rise rooftop arena sunset; CHAMPIONSHIP DOME indoor symmetrical championship venue. Same rounded robots original sports style, every thumbnail readable and coherent. Harbor Park selected with cyan border, trophy badge on unlocked Foundry, clear small lock on Dome, no monetization. Bottom short selected description 'HARBOR PARK \u00b7 BALANCED' and large 'PLAY HERE' button. Navy ivory cyan frame, clean spacious minimal UI, no tiny text. Each field has visible anchor rails and two opposite goals, keep imagery practical lightweight 3D.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2221243,
+      "sha256": "3756ec7ceafcc9cf9d9a2cccff2f53b4dfbdb3ba62047817ab5b42ce13a16884"
+    },
+    {
+      "number": 9,
+      "file": "concept_art/09_skill_trials.png",
+      "title": "SKILL TRIALS",
+      "prompt": "An ACADEMY / SKILL TRIAL SELECTION screen. Left primary big live preview of compact colorful 3D practice court: white cyan07 robot, two highlighted yellow rail anchors, ONE ball, three numbered target rings mounted in goal; thin cyan swing trail toward target1. Right three stacked clean challenge cards 'SWING SCHOOL' with bronze silver gold medals, 'BANK SHOT' with gold target icon, 'LAST-SECOND SAVE' with shield icon; select SWING SCHOOL. Top title SKILL TRIALS, subtitle 'Learn. Improve. Master.'. Bottom selected trial personal best 'BEST 00:24.80' and large 'START TRIAL' button. Rounded ivory cards on navy background, bright cyan focus, toy-like materials, minimal decorative clutter, no daily timer or obligation. Show engaging practice progression.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2056524,
+      "sha256": "1b71900f8cfb8c69b0ee8ac600097b76170bf9cf901fa663028551e829ebdaa5"
+    },
+    {
+      "number": 10,
+      "file": "concept_art/10_club_customization.png",
+      "title": "CLUB CUSTOMIZATION",
+      "prompt": "Beautiful CLUB CUSTOMIZATION menu in Tether League robot clubhouse. Main center preview shows cyan07 white round robot beside matching cyan11 teammate with a simple striped jersey and glowing cyan tether spool. Left four neat category tabs 'COLORS' 'JERSEY' 'FACE' 'TRAIL'. Right palette of 8 tasteful color swatches and three simple jersey pattern thumbnails; selected cyan orange team accent combo. Small top club name editable 'HARBOR SPARKS' and shield badge. Bottom wide row of earned original cosmetic items including STAR FACE, STRIPE KIT, COMET TRAIL with obvious selected state; large 'SAVE LOOK' button. Cozy trophy shelf and stadium in background. Cosmetically expressive but readable team identity, no enormous shops, no premium currency, no random boxes. Consistent navy ivory cyan orange interface and charming low-poly 3D robots.",
+      "status": "complete",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1996313,
+      "sha256": "3ee1650d2225f5864ffac2b65259d7555c5491a634b7bdfbc2194710dd35f47f"
+    }
+  ],
+  "shared_style_prompt": "ONE original landscape concept image for TETHER LEAGUE. Use the provided original screenshot as a style reference: rounded white robots, black expressive face screens, cyan/orange jerseys, cyan tether beams, yellow anchors, bright lightweight stylized 3D stadiums, navy/ivory sports interface, rounded panels, bold readable sport typography, warm sunlight, restrained effects and minimal clutter. Create the requested new screen rather than duplicating the reference. No device mockups, watermarks, or real-game logos. Exact per-image scene brief follows in each prompt."
+}

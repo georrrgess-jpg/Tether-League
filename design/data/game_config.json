@@ -1,0 +1,259 @@
+{
+  "packVersion": "1.0",
+  "status": "untested_design_defaults",
+  "title": "Tether League",
+  "rulesVersion": 1,
+  "saveSchemaVersion": 1,
+  "simulation": {
+    "fixedHz": 60,
+    "maxCatchupSteps": 5,
+    "coordinatePlane": "xz",
+    "fieldLengthAxis": "x",
+    "visualHeightOnly": true
+  },
+  "match": {
+    "teamSize": 2,
+    "regulationSeconds": 180,
+    "goalCountdownSeconds": 2,
+    "suddenDeath": true,
+    "draws": false,
+    "playerTeam": "cyan",
+    "playerAttacks": "+x"
+  },
+  "arena": {
+    "id": "harbor_park",
+    "length": 34,
+    "width": 22,
+    "goalWidth": 6,
+    "goalDepth": 2,
+    "anchors": [
+      {
+        "id": "north_0",
+        "x": -12,
+        "z": -11.5
+      },
+      {
+        "id": "south_0",
+        "x": -12,
+        "z": 11.5
+      },
+      {
+        "id": "north_1",
+        "x": -4,
+        "z": -11.5
+      },
+      {
+        "id": "south_1",
+        "x": -4,
+        "z": 11.5
+      },
+      {
+        "id": "north_2",
+        "x": 4,
+        "z": -11.5
+      },
+      {
+        "id": "south_2",
+        "x": 4,
+        "z": 11.5
+      },
+      {
+        "id": "north_3",
+        "x": 12,
+        "z": -11.5
+      },
+      {
+        "id": "south_3",
+        "x": 12,
+        "z": 11.5
+      }
+    ]
+  },
+  "robot": {
+    "radius": 0.48,
+    "mass": 1,
+    "maxRunSpeed": 5,
+    "acceleration": 22,
+    "braking": 26
+  },
+  "tether": {
+    "acquisitionRange": 9.5,
+    "minLength": 2,
+    "maxLength": 9.5,
+    "maxHoldSeconds": 1.6,
+    "cooldownSeconds": 0.35,
+    "reelUnitsPerSecond": 1.8,
+    "maxSpeed": 10.5,
+    "anchorRetargetWhileAttached": false,
+    "wrapsObstacles": false
+  },
+  "ball": {
+    "radius": 0.38,
+    "mass": 0.35,
+    "maxSpeed": 18,
+    "wallRestitution": 0.82,
+    "drag": "time_based_tune_in_solver"
+  },
+  "kick": {
+    "range": 1.15,
+    "cooldownSeconds": 0.28,
+    "inputBufferSeconds": 0.1,
+    "baseSpeedContribution": 5,
+    "forwardVelocityFactor": 0.8,
+    "deliberateSpeedCap": 16,
+    "unitsNote": "Adapt velocity/impulse formula to chosen solver; these are design inputs."
+  },
+  "career": {
+    "clubsPerDivision": 6,
+    "regularMatchesPerClub": 10,
+    "leagueFixturesTotal": 30,
+    "rounds": 10,
+    "fixturesPerRound": 3,
+    "playoffTeams": 4,
+    "winPoints": 3,
+    "lossPoints": 0,
+    "promotion": "win_playoff_final",
+    "divisions": [
+      "rookie_league",
+      "harbor_division",
+      "metro_division",
+      "premier_division",
+      "championship_league"
+    ],
+    "tieBreakers": [
+      "points",
+      "goal_difference",
+      "goals_scored",
+      "stable_seed_order"
+    ]
+  },
+  "rewards": {
+    "matchComplete": {
+      "credits": 50,
+      "xp": 80
+    },
+    "winBonus": {
+      "credits": 30,
+      "xp": 40
+    },
+    "contributionMax": {
+      "credits": 20,
+      "xp": 30
+    },
+    "firstDivisionTitle": {
+      "credits": 300,
+      "xp": 250
+    },
+    "firstTrialMedals": {
+      "bronze": {
+        "credits": 20,
+        "xp": 20
+      },
+      "silver": {
+        "credits": 30,
+        "xp": 30
+      },
+      "gold": {
+        "credits": 50,
+        "xp": 50
+      }
+    }
+  },
+  "chassis": [
+    {
+      "id": "all_rounder",
+      "name": "All-Rounder",
+      "starter": true,
+      "credits": 0,
+      "modifiers": {
+        "acceleration": 1,
+        "braking": 1,
+        "mass": 1,
+        "releaseDrag": 1
+      }
+    },
+    {
+      "id": "scout",
+      "name": "Scout",
+      "starter": false,
+      "credits": 400,
+      "modifiers": {
+        "acceleration": 1.12,
+        "braking": 1.08,
+        "mass": 0.85,
+        "releaseDrag": 1.08
+      }
+    },
+    {
+      "id": "bulwark",
+      "name": "Bulwark",
+      "starter": false,
+      "credits": 500,
+      "modifiers": {
+        "acceleration": 0.9,
+        "braking": 0.94,
+        "mass": 1.2,
+        "releaseDrag": 1
+      }
+    },
+    {
+      "id": "glider",
+      "name": "Glider",
+      "starter": false,
+      "credits": 500,
+      "modifiers": {
+        "acceleration": 0.96,
+        "braking": 0.82,
+        "mass": 0.95,
+        "releaseDrag": 0.85
+      }
+    }
+  ],
+  "clubs": [
+    "harbor_sparks",
+    "ember_works",
+    "tide_runners",
+    "skyline_bots",
+    "iron_comets",
+    "sunset_gears"
+  ],
+  "arenas": [
+    "harbor_park",
+    "foundry_court",
+    "skyline_stadium",
+    "championship_dome"
+  ],
+  "trials": [
+    "swing_school",
+    "clean_release",
+    "bank_shot",
+    "pass_window",
+    "last_second_save",
+    "counterattack"
+  ],
+  "settingsDefaults": {
+    "masterVolume": 0.8,
+    "musicVolume": 0.45,
+    "effectsVolume": 0.8,
+    "reducedMotion": false,
+    "cameraShake": false,
+    "quality": "auto",
+    "anchorAssistance": true,
+    "aimAssistance": "light",
+    "teammateTendency": "supportive"
+  },
+  "deferred": [
+    "online_multiplayer",
+    "free_aerial_physics",
+    "moving_anchors",
+    "mandatory_accounts"
+  ],
+  "xpMilestones": [
+    150,
+    400,
+    800,
+    1500,
+    2500
+  ],
+  "repeatLevelXpAfterMilestones": 500
+}

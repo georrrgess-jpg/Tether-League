@@ -1,0 +1,28 @@
+{
+  "name": "tether-league",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tether League — a 2v2 robot ball sport built around tether swings, momentum and club progression.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "sim": "vite-node tools/simulate.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/nunito": "^5.3.0",
+    "@fontsource/kanit": "^5.3.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vite-node": "^6.0.0",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "pack": "Tether League Design Pack",
+  "version": "1.0",
+  "created": "2026-11-09",
+  "conceptImageCount": 10,
+  "markdownFileCount": 14,
+  "note": "SHA-256 hashes cover every payload file except this inventory itself. This is a design pack, not a playable game.",
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "bytes": 3141,
+      "sha256": "863d6f456f2cb141f30559a986111c92443398a4dd7345beecf4e81af3cd4b62"
+    },
+    {
+      "path": "OPEN_GALLERY.html",
+      "bytes": 4838,
+      "sha256": "eb5782f7061558dfcc2a1a11eeb9248245ae7fe815d9ea4c9d28cb6d328d054a"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4362,
+      "sha256": "aabbabfde4c3c841c7831d5e61fbfc5e21717ec451474376fc149513320317d1"
+    },
+    {
+      "path": "START_HERE_CLAUDE_PROMPT.md",
+      "bytes": 4778,
+      "sha256": "d9f9e201c92fcb1a2b5fa343ac57e64b81fd84c21b68f9c4accce73228bdfb1c"
+    },
+    {
+      "path": "concept_art/01_club_home.png",
+      "bytes": 2019704,
+      "sha256": "0bedf99d2b294cd65d2c2788ccd0e8c13e7a0a4146a71ce4aeb2839ff62252a5"
+    },
+    {
+      "path": "concept_art/02_match_swing_attack.png",
+      "bytes": 2481942,
+      "sha256": "838bf0f379a432bb1d2e46100525b98a6bfbdfb9f630ba6a148e1734568d2ee3"
+    },
+    {
+      "path": "concept_art/03_tether_training.png",
+      "bytes": 2220799,
+      "sha256": "b99ccde20e5d1740da7b816becfeed06522c9331d8545bfa9b70c19e0d44fda2"
+    },
+    {
+      "path": "concept_art/04_teamwork_defense.png",
+      "bytes": 2453787,
+      "sha256": "0eb5cc6a4b1145cceb1e9d4a4ba0b9c71e9078be83092e26383fbcce15949bd6"
+    },
+    {
+      "path": "concept_art/05_robot_garage.png",
+      "bytes": 1971805,
+      "sha256": "e9566b90191cf51d7dc9656f94123f053e1defa245839f3138f8e043be80e18e"
+    },
+    {
+      "path": "concept_art/06_league_hub.png",
+      "bytes": 2065480,
+      "sha256": "6c40f4cfbb7714045a99ebf02059fd80990a3509d73607b09b367f22f7393ca4"
+    },
+    {
+      "path": "concept_art/07_match_results.png",
+      "bytes": 2221616,
+      "sha256": "f3ba8fffe3256fd8a60473436e3ec7d47f4d15174767f4fadc8b8ed67f1b3faf"
+    },
+    {
+      "path": "concept_art/08_arena_selection.png",
+      "bytes": 2221243,
+      "sha256": "3756ec7ceafcc9cf9d9a2cccff2f53b4dfbdb3ba62047817ab5b42ce13a16884"
+    },
+    {
+      "path": "concept_art/09_skill_trials.png",
+      "bytes": 2056524,
+      "sha256": "1b71900f8cfb8c69b0ee8ac600097b76170bf9cf901fa663028551e829ebdaa5"
+    },
+    {
+      "path": "concept_art/10_club_customization.png",
+      "bytes": 1996313,
+      "sha256": "3ee1650d2225f5864ffac2b65259d7555c5491a634b7bdfbc2194710dd35f47f"
+    },
+    {
+      "path": "data/art_manifest.json",
+      "bytes": 11819,
+      "sha256": "974dd569b7763d18ea11da67244430dd3ca3dd2f10dc51ed3199474659184466"
+    },
+    {
+      "path": "data/game_config.json",
+      "bytes": 4966,
+      "sha256": "bf1c1dbbfd121ba91659b97f5dcd1d168df309dbd4a38cc496ecdc57c4b33471"
+    },
+    {
+      "path": "docs/01_GAME_VISION.md",
+      "bytes": 3400,
+      "sha256": "eb8b4a10e8bed504762ffab26a998a9a7992961adede5f7406f7202bdbb9b251"
+    },
+    {
+      "path": "docs/02_MATCH_RULES_AND_PHYSICS.md",
+      "bytes": 9110,
+      "sha256": "3da1200d26be10101b39feb7dd21ab63be852261dd2dda567e3d45b99e8a2bdf"
+    },
+    {
+      "path": "docs/03_MODES_AI_AND_ARENAS.md",
+      "bytes": 5172,
+      "sha256": "76b22901a26840cf850f730fec2919c6bc03ad45575385039b40f1e59e2054b6"
+    },
+    {
+      "path": "docs/04_PROGRESSION_AND_ECONOMY.md",
+      "bytes": 5782,
+      "sha256": "ceea53eec4c33667f2209ea48b35e5304b9f5cf5668809f6fbae792fa03ddf79"
+    },
+    {
+      "path": "docs/05_SCREENS_AND_USER_FLOWS.md",
+      "bytes": 5182,
+      "sha256": "0d86e0cc46660148f472c8a67461cfe75e66516438c5c9ca5cb874002a47b0ef"
+    },
+    {
+      "path": "docs/06_ART_AUDIO_AND_MOTION.md",
+      "bytes": 4317,
+      "sha256": "358988e34da48165941abbd887b3e0c73cd4751641ef6f3945907919140fdb22"
+    },
+    {
+      "path": "docs/07_TECHNICAL_BLUEPRINT.md",
+      "bytes": 6794,
+      "sha256": "f76eb168cbd549b87984f1b9542287ad4391ddc19f029e8badd0aca1ea1504fb"
+    },
+    {
+      "path": "docs/08_BUILD_PLAN_AND_ACCEPTANCE.md",
+      "bytes": 5075,
+      "sha256": "81367c612fc63e8f47eeb9d14bc847ef874595899ff0757295ee2aba646b30f6"
+    },
+    {
+      "path": "docs/09_CONCEPT_ART_GUIDE.md",
+      "bytes": 3736,
+      "sha256": "ad19ed944995e2c4e987bcbc854c5b5d24f63557c36637ce85decdda3df47e40"
+    },
+    {
+      "path": "docs/10_CONTENT_CATALOG.md",
+      "bytes": 4120,
+      "sha256": "c946c922a99e6ccf9c20da124b1ef88f947b832c674babc9695b8b35c759cb6c"
+    },
+    {
+      "path": "docs/11_RISKS_AND_DESIGN_DECISIONS.md",
+      "bytes": 3944,
+      "sha256": "d4ec0f1d55765bdcbd79597d70ba01e74d14eaf6ebb500c729744e7927a41459"
+    }
+  ]
+}
