@@ -26,6 +26,8 @@ export interface ViewFrame {
   dt: number;
   /** Highlighted anchor index or -1. */
   preview: number;
+  /** Draw the faint link line to the previewed anchor. */
+  link: boolean;
   aimX: number;
   aimZ: number;
   showAim: boolean;
@@ -716,7 +718,7 @@ export class MatchView {
         this.placeStrip(this.aimLine, bx + dx * 0.5, bz + dz * 0.5, bx + dx * (0.5 + len), bz + dz * (0.5 + len), 0.1);
       }
       // linking hint to the previewed anchor
-      const showLink = f.preview >= 0 && r.tState !== 'attached';
+      const showLink = f.link && f.preview >= 0 && r.tState !== 'attached';
       this.linkLine.visible = showLink;
       if (showLink) {
         const an = w.arena.anchors[f.preview];

@@ -4,7 +4,7 @@ import { CHASSIS } from '../../content/chassis';
 import type { RobotLook } from '../../content/cosmetics';
 import { TUNING } from '../../content/tuning';
 import { keyLabel, type Settings } from '../../storage/settings';
-import { badgeSvg } from '../../ui/badge';
+import { badgeSvg, isLight } from '../../ui/badge';
 import { fmtClock, h } from '../../ui/dom';
 import { BotDirector, type BotStyle, type Difficulty } from '../ai/bot';
 import type { RobotMood } from '../render/robotView';
@@ -109,7 +109,7 @@ export class MatchMode implements PlayMode {
 
     const team = (t: TeamInfo, side: 'home' | 'away') => {
       const score = h('span', { class: 'score' }, '0');
-      const el = h('div', { class: `team team-${side}`, style: `--team:${t.primary}` },
+      const el = h('div', { class: `team team-${side}${isLight(t.primary) ? ' is-light' : ''}`, style: `--team:${t.primary}` },
         h('span', { class: 'badge', html: badgeSvg(t.badge, t.primary, t.secondary) }),
         h('span', { class: 'tname' }, t.name),
         score,

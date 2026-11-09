@@ -70,6 +70,7 @@ export class PlaySession {
   private markerVersion = -1;
   private fps = 60;
   private hum = false;
+  private pausedAt = 0;
   private onResize = () => this.resize();
   private onVis = () => {
     if (document.hidden && !this.finished) this.pause();
@@ -78,7 +79,7 @@ export class PlaySession {
     if (e.code === 'F3') {
       e.preventDefault();
       this.toggleDebug();
-    } else if (this.paused && e.code === 'Escape' && !this.pauseEl?.querySelector('.confirm')) {
+    } else if (this.paused && e.code === 'Escape' && performance.now() - this.pausedAt > 200 && !this.pauseEl?.querySelector('.confirm')) {
       e.preventDefault();
       this.resume();
     }
@@ -149,6 +150,7 @@ export class PlaySession {
   pause(): void {
     if (this.paused || this.finished || !this.running) return;
     this.paused = true;
+    this.pausedAt = performance.now();
     // Safe release: no held input survives a pause, and detaching never adds an impulse.
     this.input.releaseAll();
     this.input.enabled = false;
@@ -344,7 +346,8 @@ export class PlaySession {
     this.view.render(w, {
       alpha: this.paused ? 1 : Math.min(1, this.acc / DT),
       dt: this.paused ? 0 : dt,
-      preview: live && mode.human >= 0 && (s.anchorAssistance || w.robots[mode.human].tState === 'attached' || true) ? this.input.preview : -1,
+      preview: live && mode.human >= 0 ? this.input.preview : -1,
+      link: s.anchorAssistance,
       aimX: this.input.aimX,
       aimZ: this.input.aimZ,
       showAim: live && this.input.showAim,

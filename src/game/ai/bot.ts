@@ -703,3 +703,26 @@ export class BotDirector {
     }
   }
 }
+
+/** Blends the declared tiers: level 0 = Rookie, 1 = Club, 2 = Pro. Used for career divisions. */
+export function difficultyAt(level: number): Difficulty {
+  const l = Math.max(0, Math.min(2, level));
+  const a = l <= 1 ? DIFFICULTY.rookie : DIFFICULTY.club;
+  const b = l <= 1 ? DIFFICULTY.club : DIFFICULTY.pro;
+  const t = l <= 1 ? l : l - 1;
+  const mix = (x: number, y: number) => x + (y - x) * t;
+  const near = t < 0.5 ? a : b;
+  return {
+    id: near.id,
+    name: t < 0.3 ? a.name : t > 0.8 ? b.name : `${a.name}+`,
+    summary: near.summary,
+    reaction: [mix(a.reaction[0], b.reaction[0]), mix(a.reaction[1], b.reaction[1])],
+    kickDelay: [mix(a.kickDelay[0], b.kickDelay[0]), mix(a.kickDelay[1], b.kickDelay[1])],
+    aimError: mix(a.aimError, b.aimError),
+    anticipation: mix(a.anticipation, b.anticipation),
+    tetherUse: mix(a.tetherUse, b.tetherUse),
+    passSkill: mix(a.passSkill, b.passSkill),
+    dribble: mix(a.dribble, b.dribble),
+    mistake: mix(a.mistake, b.mistake),
+  };
+}
