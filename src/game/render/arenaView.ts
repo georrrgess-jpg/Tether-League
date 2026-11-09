@@ -100,6 +100,7 @@ export class ArenaView {
   private crowdDirty = false;
   private disposables: { dispose(): void }[] = [];
   private dummy = new THREE.Object3D();
+  private instanced: THREE.InstancedMesh[] = [];
 
   constructor(private arena: ArenaDef, private quality: Quality, teamColors: [string, string]) {
     const th = THEMES[arena.id];
@@ -131,15 +132,32 @@ export class ArenaView {
 
     const std = (color: string, rough = 0.8, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
       this.track(new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, ...extra }));
-    const box = (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry = 0, cast = true): THREE.Mesh => {
-      const mesh = new THREE.Mesh(BOX, m);
-      mesh.scale.set(sx, sy, sz);
-      mesh.position.set(x, y, z);
-      mesh.rotation.y = ry;
-      mesh.castShadow = shadows && cast;
-      mesh.receiveShadow = shadows;
-      this.group.add(mesh);
-      return mesh;
+    // Static boxes are batched into one instanced mesh per material to keep draw calls low.
+    const batches = new Map<THREE.Material, { cast: THREE.Matrix4[]; flat: THREE.Matrix4[] }>();
+    const tmpQ = new THREE.Quaternion();
+    const tmpP = new THREE.Vector3();
+    const tmpS = new THREE.Vector3();
+    const Y = new THREE.Vector3(0, 1, 0);
+    const box = (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry = 0, cast = true): void => {
+      let b = batches.get(m);
+      if (!b) batches.set(m, (b = { cast: [], flat: [] }));
+      const mat = new THREE.Matrix4().compose(tmpP.set(x, y, z), tmpQ.setFromAxisAngle(Y, ry), tmpS.set(sx, sy, sz));
+      (cast ? b.cast : b.flat).push(mat);
+    };
+    const flushBoxes = () => {
+      for (const [m, b] of batches) {
+        for (const [list, cast] of [[b.cast, true], [b.flat, false]] as [THREE.Matrix4[], boolean][]) {
+          if (!list.length) continue;
+          const inst = new THREE.InstancedMesh(BOX, m, list.length);
+          list.forEach((mat, i) => inst.setMatrixAt(i, mat));
+          inst.instanceMatrix.needsUpdate = true;
+          inst.castShadow = shadows && cast;
+          inst.receiveShadow = shadows;
+          inst.frustumCulled = false;
+          this.group.add(inst);
+          this.instanced.push(inst);
+        }
+      }
     };
 
     // --- ground ---
@@ -348,6 +366,7 @@ export class ArenaView {
     }
 
     this.buildSurroundings(th, hx, hz, std, box);
+    flushBoxes();
   }
 
   private track<T extends { dispose(): void }>(d: T): T {
@@ -360,7 +379,7 @@ export class ArenaView {
     hx: number,
     hz: number,
     std: (color: string, rough?: number, extra?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial,
-    box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => THREE.Mesh,
+    box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => void,
   ): void {
     const id = this.arena.id;
     const low = this.quality === 'low';
@@ -453,7 +472,7 @@ export class ArenaView {
     else this.domeBackdrop(hx, hz, std, box);
   }
 
-  private harborBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => THREE.Mesh): void {
+  private harborBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => void): void {
     buildHarborScenery(this.group, -hz - 9.5, (d) => this.track(d), this.quality !== 'low');
     // palms and planters near the camera-side corners
     for (const sx of [-1, 1]) {
@@ -463,7 +482,7 @@ export class ArenaView {
     }
   }
 
-  private foundryBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => THREE.Mesh): void {
+  private foundryBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => void): void {
     const steel = std('#3b3632', 0.7, { metalness: 0.3 });
     const zb = -hz - 9;
     box(steel, hx * 2 + 30, 14, 1, 0, 7, zb, 0, false);
@@ -501,7 +520,7 @@ export class ArenaView {
     }
   }
 
-  private skylineBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => THREE.Mesh): void {
+  private skylineBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => void): void {
     const lit = '#ffd27a';
     const mats = ['#3a3566', '#4a3f78', '#2f2c58', '#56437a'].map((cc) => {
       const t = this.track(windowsTexture(cc, lit));
@@ -534,7 +553,7 @@ export class ArenaView {
     this.group.add(sun);
   }
 
-  private domeBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => THREE.Mesh): void {
+  private domeBackdrop(hx: number, hz: number, std: (c: string, r?: number, e?: Partial<THREE.MeshStandardMaterialParameters>) => THREE.MeshStandardMaterial, box: (m: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, ry?: number, cast?: boolean) => void): void {
     const shell = std('#0f1a3a', 0.9);
     box(shell, hx * 2 + 40, 22, 1, 0, 11, -hz - 13.5, 0, false);
     for (const sx of [-1, 1]) box(shell, 1, 22, hz * 2 + 40, sx * (hx + 12.5), 11, 0, 0, false);
@@ -643,6 +662,7 @@ export class ArenaView {
     for (const d of this.disposables) d.dispose();
     this.crowdBodies?.dispose();
     this.crowdHeads?.dispose();
+    for (const i of this.instanced) i.dispose();
   }
 }
 

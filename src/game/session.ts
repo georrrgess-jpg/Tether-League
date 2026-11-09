@@ -75,6 +75,9 @@ export class PlaySession {
   private onVis = () => {
     if (document.hidden && !this.finished) this.pause();
   };
+  private onBlur = () => {
+    if (!this.finished) this.pause();
+  };
   private onKey = (e: KeyboardEvent) => {
     if (e.code === 'F3') {
       e.preventDefault();
@@ -111,7 +114,7 @@ export class PlaySession {
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKey);
     document.addEventListener('visibilitychange', this.onVis);
-    window.addEventListener('blur', this.onVis as EventListener);
+    window.addEventListener('blur', this.onBlur);
     this.view.snap(this.mode.world);
     this.resize();
     audio.setCrowd(this.mode.crowdLevel());
@@ -128,7 +131,7 @@ export class PlaySession {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKey);
     document.removeEventListener('visibilitychange', this.onVis);
-    window.removeEventListener('blur', this.onVis as EventListener);
+    window.removeEventListener('blur', this.onBlur);
     audio.setTetherHum(false);
     audio.setCrowd(0);
     audio.setMusicIntensity(0);

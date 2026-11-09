@@ -22,7 +22,6 @@ export class MenuStage {
   private frame = { cx: 0.5, cy: 0.5, w: 0.5, h: 0.6 };
   private cur = { cx: 0.5, cy: 0.5, zoom: 1, yaw: 0 };
   private yawTarget = 0;
-  private spin = 0;
   private ring: THREE.MeshStandardMaterial;
   private banner: THREE.MeshStandardMaterial;
   private bannerStripe: THREE.MeshStandardMaterial;
@@ -253,7 +252,6 @@ export class MenuStage {
       this.shadows[i].position.set(p.x, 0.4, p.z);
       this.shadows[i].scale.set(s, s, 1);
     }
-    this.spin += dt;
     this.ring.emissiveIntensity = 1.0 + (this.reduced ? 0 : Math.sin(this.time * 2) * 0.25);
     this.gfx.render(this.scene, cam);
   }

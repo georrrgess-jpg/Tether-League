@@ -1,5 +1,5 @@
 import type { App, ScreenView } from '../../app';
-import { ROUNDS, currentRound, playerRank } from '../../career/career';
+import { ROUNDS, playerRank } from '../../career/career';
 import { ARENAS } from '../../content/arenas';
 import { CLUBS, DIVISIONS } from '../../content/clubs';
 import { careerMatchInfo } from '../../game/setup';
@@ -53,19 +53,17 @@ export function homeScreen(app: App): ScreenView {
       h('div', { class: 'next-comp' }, icon('trophy'), h('span', { class: 'display' }, `${div.name} · Season ${career.seasonNo}`)),
       h('h2', { class: 'display center big-line' }, text),
       h('p', { class: 'muted center' }, r.promoted ? `Promoted to the ${DIVISIONS[career.division + 1].name}.` : 'Another season awaits.'),
-      h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.navigate('season') }, icon('next'), 'Season review'),
+      h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.navigate('league') }, icon('next'), 'Season review'),
     );
   } else {
     card = h('section', { class: 'panel next-card' }, h('p', null, 'No fixture available.'), h('button', { class: 'btn btn-primary', onclick: () => app.navigate('league') }, 'Open league hub'));
   }
 
-  const round = career.phase === 'regular' ? currentRound(career) : ROUNDS;
   const played = career.fixtures.filter((f) => f.done && (f.home === 'player' || f.away === 'player')).length;
   const strip = h('button', { class: 'panel-dark season-strip', onclick: () => app.navigate('league'), 'aria-label': 'Open league hub' },
     h('div', { class: 'ss-top' }, icon('star'), h('b', null, div.name), h('span', null, career.phase === 'regular' ? `Match ${Math.min(ROUNDS, played + 1)}/${ROUNDS} · ${ordinal(playerRank(career))} place` : career.phase === 'complete' ? 'Season complete' : 'Playoffs')),
     h('div', { class: 'pips' }, Array.from({ length: ROUNDS }, (_, i) => h('i', { class: i < played ? 'on' : i === played && career.phase === 'regular' ? 'now' : '' }))),
   );
-  void round;
 
   const goal = h('div', { class: 'panel-dark goal-card' },
     h('div', { class: 'gc-row' }, h('b', null, `Club level ${lp.level}`), h('span', null, `${save.xp - lp.from} / ${lp.to - lp.from} XP`)),

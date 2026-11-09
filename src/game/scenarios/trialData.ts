@@ -31,8 +31,8 @@ export const WAYPOINTS: [number, number][] = [[8, -5], [9, 4.5], [4, 6.5], [10.5
 export const PASS_HOME: [number, number] = [-5, 0];
 
 export const SHOTS: { start: [number, number]; from: [number, number]; z: number; speed: number }[] = [
-  { start: [-9.5, 0], from: [2, -6], z: 1.5, speed: 11 },
-  { start: [-9.5, 3], from: [3, 7], z: -1.8, speed: 12 },
+  { start: [-9.5, 3.5], from: [2, -6], z: 1.5, speed: 11 },
+  { start: [-9.5, -3], from: [3, 7], z: -1.8, speed: 12 },
   { start: [-6.5, -5], from: [4, 0], z: 2.2, speed: 12.5 },
   { start: [-4.5, 6.5], from: [0.5, -8], z: -2, speed: 12.5 },
   { start: [-2.5, -7.5], from: [5, 6], z: 2.3, speed: 13 },

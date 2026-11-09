@@ -535,7 +535,7 @@ export class MatchView {
           this.arenaView.flashGoal(e.side);
           this.arenaView.excite(1);
           if (!reduced) {
-            this.confetti(sx * (w.hx - 1), 0, [this.opts.looks[scoring * 2].primary, '#ffffff', '#f6c542'], 70);
+            this.confetti(sx * (w.hx - 1), 0, [this.opts.teamColors[scoring], '#ffffff', '#f6c542'], 70);
             this.shake = Math.max(this.shake, 0.3);
           }
           break;
