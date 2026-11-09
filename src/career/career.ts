@@ -323,6 +323,8 @@ export function validCareer(s: unknown): s is CareerState {
   const okTie = (t: Tie | null) => !!t && typeof t.id === 'string' && c.clubs.includes(t.a) && c.clubs.includes(t.b) && typeof t.done === 'boolean' && okScore(t.ag) && okScore(t.bg) && !(t.done && t.ag === t.bg);
   if (!c.semis.every(okTie)) return false;
   if (c.phase !== 'regular' && c.semis.length !== 2) return false;
+  if (c.phase === 'regular' && c.fixtures.every((f) => f.done)) return false;
+  if (c.phase !== 'regular' && c.fixtures.some((f) => !f.done)) return false;
   if ((c.phase === 'final' || c.phase === 'complete') && !okTie(c.final)) return false;
   if (c.phase === 'complete' && (!c.result || !c.champion)) return false;
   return true;

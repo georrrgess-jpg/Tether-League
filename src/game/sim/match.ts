@@ -310,12 +310,21 @@ export class Match {
 
     if (this.pendingSave) {
       const ps = this.pendingSave;
+      const age = w.tick - ps.tick;
       if (goalSide === ps.side) this.pendingSave = null;
-      else if (w.tick - ps.tick > 0.6 * HZ) {
-        this.stats[ps.robot].saves++;
-        this.lastSaveTick[ps.side] = w.tick;
-        this.events.push({ type: 'save', robot: ps.robot });
-        this.pendingSave = null;
+      else if (age > 0.6 * HZ) {
+        // A deflection that only slows the shot is not a save yet: wait while the ball is still
+        // rolling toward that goal mouth (bounded, so a ball resting near the line still resolves).
+        const b = w.ball;
+        const dir = ps.side === 1 ? 1 : -1;
+        const toLine = w.hx - b.x * dir;
+        const threatening = toLine < 6 && b.vx * dir > 0.4 && Math.abs(b.z) < w.arena.goalWidth / 2 + 0.3;
+        if (!threatening || age > 3 * HZ) {
+          this.stats[ps.robot].saves++;
+          this.lastSaveTick[ps.side] = w.tick;
+          this.events.push({ type: 'save', robot: ps.robot });
+          this.pendingSave = null;
+        }
       }
     }
 

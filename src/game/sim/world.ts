@@ -117,7 +117,7 @@ export function anchorDistance(w: World, r: Robot, anchor: number): number {
 }
 
 export function anchorInRange(w: World, r: Robot, anchor: number): boolean {
-  if (anchor < 0 || anchor >= w.arena.anchors.length) return false;
+  if (!Number.isInteger(anchor) || anchor < 0 || anchor >= w.arena.anchors.length) return false;
   return anchorDistance(w, r, anchor) <= TUNING.tether.acquisitionRange;
 }
 

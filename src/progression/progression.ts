@@ -251,6 +251,8 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
   };
   save.committed.push(result.matchId);
   if (save.committed.length > 80) save.committed.splice(0, save.committed.length - 80);
+  // A replayed fixture (only possible after a season was rebuilt from a damaged save) replaces its old record.
+  save.results = save.results.filter((r) => r.matchId !== committed.matchId);
   save.results.push(committed);
   if (save.results.length > 12) save.results.splice(0, save.results.length - 12);
   if (save.seasons.length > 40) save.seasons.splice(0, save.seasons.length - 40);
@@ -268,7 +270,7 @@ export function startNextSeason(save: SaveGame): boolean {
 }
 
 export function itemPrice(id: string): number {
-  if (id.startsWith('chassis:')) return CHASSIS[id.slice(8) as ChassisId]?.credits ?? -1;
+  if (id.startsWith('chassis:')) return Object.hasOwn(CHASSIS, id.slice(8)) ? CHASSIS[id.slice(8) as ChassisId].credits : -1;
   return COSMETIC_BY_ID[id]?.credits ?? -1;
 }
 

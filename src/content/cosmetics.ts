@@ -46,7 +46,8 @@ export const COSMETICS: CosmeticDef[] = [
   { id: 'badge_flame', kind: 'badge', name: 'Flame', blurb: '', credits: -1 },
 ];
 
-export const COSMETIC_BY_ID: Record<string, CosmeticDef> = Object.fromEntries(COSMETICS.map((c) => [c.id, c]));
+/** Null-prototype lookup so ids such as "constructor" can never resolve to inherited members. */
+export const COSMETIC_BY_ID: Record<string, CosmeticDef> = Object.assign(Object.create(null), Object.fromEntries(COSMETICS.map((c) => [c.id, c])));
 
 export const STARTER_COSMETICS = COSMETICS.filter((c) => c.credits === 0).map((c) => c.id);
 

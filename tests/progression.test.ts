@@ -578,7 +578,7 @@ describe('shop', () => {
   // object index, so inherited keys such as "constructor" resolve to a truthy non-item whose `credits` is
   // undefined; `def.credits < 0` is then false and the pick is spent on a bogus owned id. Not reachable from the
   // current UI (it only passes catalogue ids). Remove `.fails` once the lookup is own-property safe.
-  it.fails('usePick rejects ids that only exist on Object.prototype', () => {
+  it('usePick rejects ids that only exist on Object.prototype', () => {
     for (const id of ['constructor', 'toString', '__proto__']) {
       const save = freshSave();
       save.picks = 1;

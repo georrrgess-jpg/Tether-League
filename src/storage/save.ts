@@ -199,7 +199,7 @@ function sanitizeClub(raw: unknown, owned: string[]): ClubProfile {
   if (!isObj(raw)) return d;
   const colorOk = (v: unknown, def: string) => (typeof v === 'string' && CLUB_COLORS.some((c) => c.id === v) ? v : def);
   const cos = (v: unknown, kind: string, def: string) => (typeof v === 'string' && COSMETIC_BY_ID[v]?.kind === kind && owned.includes(v) ? v : def);
-  const chassis = (v: unknown): ChassisId => (typeof v === 'string' && v in CHASSIS && owned.includes(`chassis:${v}`) ? (v as ChassisId) : 'all_rounder');
+  const chassis = (v: unknown): ChassisId => (typeof v === 'string' && Object.hasOwn(CHASSIS, v) && owned.includes(`chassis:${v}`) ? (v as ChassisId) : 'all_rounder');
   const nums = Array.isArray(raw.numbers) ? raw.numbers : [];
   let n0 = int(nums[0], 0, 99, 7);
   const n1 = int(nums[1], 0, 99, 11);
@@ -286,17 +286,22 @@ export function validateSave(input: unknown): SaveGame {
   const owned = new Set<string>([...STARTER_COSMETICS, 'chassis:all_rounder']);
   for (const o of ownedRaw) {
     if (typeof o !== 'string') continue;
-    if (o.startsWith('chassis:') ? o.slice(8) in CHASSIS : COSMETIC_BY_ID[o] && COSMETIC_BY_ID[o].credits >= 0) owned.add(o);
+    if (o.startsWith('chassis:') ? Object.hasOwn(CHASSIS, o.slice(8)) : COSMETIC_BY_ID[o] && COSMETIC_BY_ID[o].credits >= 0) owned.add(o);
   }
   const ownedList = [...owned];
 
   const seedFallback = int(raw.createdAt, 0, 8e15, 1) >>> 0;
   let career: CareerState;
+  // A rebuilt season reuses its division/season numbers, so ledger entries for that season must be
+  // dropped or the replayed fixtures would be treated as already committed.
+  let rebuilt = '';
   if (validCareer(raw.career)) career = raw.career;
   else {
     const c = isObj(raw.career) ? raw.career : {};
     career = newSeason(int(c.division, 0, DIVISIONS.length - 1, 0), int(c.seasonNo, 1, 9999, 1), seedFallback);
+    rebuilt = `c-d${career.division}s${career.seasonNo}`;
   }
+  const stale = (id: string) => rebuilt !== '' && (id.startsWith(`${rebuilt}r`) || id.startsWith(`${rebuilt}-`));
 
   const seasons: SeasonResult[] = [];
   for (const s of Array.isArray(raw.seasons) ? raw.seasons : []) {
@@ -367,7 +372,7 @@ export function validateSave(input: unknown): SaveGame {
     trials,
     lessons: (Array.isArray(raw.lessons) ? raw.lessons : []).filter((l): l is string => typeof l === 'string' && LESSONS.some((d) => d.id === l)),
     flags,
-    committed: (Array.isArray(raw.committed) ? raw.committed : []).filter((c): c is string => typeof c === 'string' && c.length < 80).slice(-80),
+    committed: (Array.isArray(raw.committed) ? raw.committed : []).filter((c): c is string => typeof c === 'string' && c.length < 80 && !stale(c)).slice(-80),
     results,
     prefs,
     matchSeq: int(raw.matchSeq, 0, 99999999, 0),

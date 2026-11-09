@@ -797,7 +797,7 @@ describe('stat jitter', () => {
     expect(m.stats[0].ownGoals).toBe(0);
   });
 
-  it.fails('a deflected shot that still rolls in is not also credited as a save', () => {
+  it('a deflected shot that still rolls in is not also credited as a save', () => {
     // Same scenario as the check above (which guards the preconditions); only the save credit is asserted here.
     const { m, ev } = clippedShot(0.9);
     expect(ev.filter((e) => e.type === 'save')).toHaveLength(0);

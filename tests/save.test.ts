@@ -445,7 +445,7 @@ describe('validateSave', () => {
   // fixture, so the rebuilt career cannot progress past that match (always true for a playoff tie the player
   // had already played, e.g. `c-d0s1-sf1`). Remove `.fails` once a rebuild also invalidates those ledger ids
   // (or bumps the season number).
-  it.fails('a rebuilt career can be played to the end even though the lost season had committed matches', () => {
+  it('a rebuilt career can be played to the end even though the lost season had committed matches', () => {
     const save = freshSave(2024);
     // Play the whole league stage and the semi-final, then lose the career data.
     for (let i = 0; i < 11; i++) {
