@@ -8,7 +8,6 @@ import type { MatchResult } from '../src/game/modes/matchMode';
 import type { RobotStats } from '../src/game/sim/match';
 import {
   REWARDS,
-  XP_MILESTONES,
   claimLevels,
   commitLesson,
   commitMatch,
@@ -94,6 +93,8 @@ function playSeason(save: SaveGame, decide: (next: NextMatch) => [number, number
   return out;
 }
 
+/** Reward lines paid by the match itself (not objectives, achievements, mastery or the season). */
+const matchLines = <T extends { source?: string }>(lines: T[]) => lines.filter((l) => (l.source ?? 'match') === 'match');
 const sum = (lines: { credits: number; xp: number }[]) => lines.reduce((a, l) => ({ credits: a.credits + l.credits, xp: a.xp + l.xp }), { credits: 0, xp: 0 });
 const contributionLabels: string[] = REWARDS.contribution.map((t) => t.label);
 
@@ -127,7 +128,8 @@ describe('commitMatch', () => {
     const a = commitMatch(save, result({ matchId: 'q-1' }), CTX);
     const b = commitMatch(save, result({ matchId: 'q-2' }), CTX);
     expect(b).not.toBe(a);
-    expect(b.credits).toBe(a.credits);
+    // The match lines are identical; objectives / achievements completed by the first match may add extra lines.
+    expect(sum(matchLines(b.rewards))).toEqual(sum(matchLines(a.rewards)));
     expect(save.records.matches).toBe(2);
     expect(save.xp).toBe(a.xp + b.xp);
   });
@@ -164,13 +166,20 @@ describe('commitMatch', () => {
     expect(quickSave.career.fixtures.every((f) => !f.done)).toBe(true);
     expect(careerSave.career.fixtures.filter((f) => f.done)).toHaveLength(3);
 
-    expect(quick.rewards.map((l) => l.label.replace('Quick match played', 'Match completed'))).toEqual(career.rewards.map((l) => l.label));
-    quick.rewards.forEach((l, i) => {
-      expect(l.credits).toBe(Math.round(career.rewards[i].credits * REWARDS.quickFactor));
-      expect(l.xp).toBe(Math.round(career.rewards[i].xp * REWARDS.quickFactor));
+    const qm = matchLines(quick.rewards);
+    const cm = matchLines(career.rewards);
+    expect(qm.map((l) => l.label.replace('Quick match played', 'Match completed'))).toEqual(cm.map((l) => l.label));
+    qm.forEach((l, i) => {
+      expect(l.credits).toBe(Math.round(cm[i].credits * REWARDS.quickFactor));
+      expect(l.xp).toBe(Math.round(cm[i].xp * REWARDS.quickFactor));
     });
-    expect(quick.credits).toBeLessThan(career.credits);
-    expect(quick.xp).toBeLessThan(career.xp);
+    // Objectives completed in a quick match pay the same reduced factor.
+    for (const l of quick.rewards.filter((x) => x.source === 'objective')) {
+      const twin = career.rewards.find((x) => x.label === l.label);
+      if (twin) expect(l.xp).toBe(Math.round(twin.xp * REWARDS.quickFactor));
+    }
+    expect(sum(qm).credits).toBeLessThan(sum(cm).credits);
+    expect(sum(qm).xp).toBeLessThan(sum(cm).xp);
     expect(quickSave.credits).toBe(quick.credits);
     expect(quickSave.xp).toBe(quick.xp);
     // Records still count quick matches.
@@ -207,10 +216,10 @@ describe('commitMatch', () => {
     expect(loss.won).toBe(false);
     expect(loss.credits).toBeGreaterThan(0);
     expect(loss.xp).toBeGreaterThan(0);
-    expect(loss.rewards).toHaveLength(1);
+    expect(matchLines(loss.rewards)).toHaveLength(1);
     expect(loss.rewards[0]).toMatchObject({ credits: REWARDS.matchComplete.credits, xp: REWARDS.matchComplete.xp });
-    expect(sum(win).credits).toBeGreaterThan(loss.credits);
-    expect(sum(win).xp).toBeGreaterThan(loss.xp);
+    expect(sum(win).credits).toBeGreaterThan(sum(matchLines(loss.rewards)).credits);
+    expect(sum(win).xp).toBeGreaterThan(sum(matchLines(loss.rewards)).xp);
     expect(save.credits).toBe(before.credits + loss.credits);
     expect(save.xp).toBe(before.xp + loss.xp);
     expect(save.records).toMatchObject({ matches: 3, wins: 2, streak: 0, bestStreak: 2, bestMargin: 3 });
@@ -289,7 +298,7 @@ describe('club levels', () => {
 
   it('crossing several milestones at once grants each level exactly once', () => {
     const save = freshSave();
-    save.xp = XP_MILESTONES[2]; // level 3 straight away
+    save.xp = levelThreshold(3); // level 3 straight away
     const grants = claimLevels(save);
     expect(grants).toHaveLength(3);
     expect(save.claimedLevels).toEqual([1, 2, 3]);
@@ -312,20 +321,21 @@ describe('club levels', () => {
     const save = freshSave();
     // XP sits just below the second threshold with nothing claimed yet (e.g. XP earned from trials before the
     // level rewards existed): one match crosses it and both outstanding levels are granted together.
-    save.xp = XP_MILESTONES[1] - 20;
+    save.xp = levelThreshold(2) - 20;
     const res = result({ matchId: 'q-lvl', score: [1, 0] });
     const rec = commitMatch(save, res, CTX);
-    expect(save.xp).toBeGreaterThanOrEqual(XP_MILESTONES[1]);
-    expect(rec.grants.map((g) => g.label)).toEqual(['Club level 1', 'Club level 2']);
+    expect(save.xp).toBeGreaterThanOrEqual(levelThreshold(2));
+    expect(levelFor(save.xp)).toBe(2);
+    expect(rec.grants.map((g) => g.label).filter((l) => l.startsWith('Club level'))).toEqual(['Club level 1', 'Club level 2']);
+    expect(rec.progress).toMatchObject({ levelBefore: 1, levelAfter: 2 });
     expect(save.claimedLevels).toEqual([1, 2]);
     const snapshot = economy(save);
     expect(commitMatch(save, res, CTX)).toBe(rec);
     expect(economy(save)).toEqual(snapshot);
-    // The next match, still at level 2, grants no level reward again.
+    // The next match never grants levels 1 or 2 again (it may reach level 3 through achievements).
     const next = commitMatch(save, result({ matchId: 'q-lvl-2', score: [0, 1] }), CTX);
-    expect(levelFor(save.xp)).toBe(2);
-    expect(next.grants).toEqual([]);
-    expect(save.claimedLevels).toEqual([1, 2]);
+    expect(next.grants.filter((g) => g.label === 'Club level 1' || g.label === 'Club level 2')).toEqual([]);
+    expect(save.claimedLevels).toEqual(Array.from({ length: levelFor(save.xp) }, (_v, i) => i + 1));
   });
 
   it('a chassis level reward unlocks the chassis, or falls back to credits when it is already owned', () => {
@@ -366,10 +376,12 @@ describe('club levels', () => {
     const save = freshSave();
     const first = commitLesson(save, 'move');
     expect(first.first).toBe(true);
-    expect(save.credits).toBe(first.credits);
-    expect(save.xp).toBe(first.xp);
+    // The lesson reward plus any achievement it completes (Academy Graduate bronze).
+    expect(save.credits).toBe(first.credits + sum(first.bonus).credits);
+    expect(save.xp).toBe(first.xp + sum(first.bonus).xp);
+    expect(first.bonus.map((l) => l.source)).toEqual(['achievement']);
     const snapshot = economy(save);
-    expect(commitLesson(save, 'move')).toMatchObject({ first: false, credits: 0, xp: 0, grants: [] });
+    expect(commitLesson(save, 'move')).toMatchObject({ first: false, credits: 0, xp: 0, grants: [], bonus: [] });
     expect(economy(save)).toEqual(snapshot);
   });
 });
@@ -421,7 +433,8 @@ describe('championship and seasons', () => {
     expect(save.career.result!.stage).toBe('missed');
     expect(last.seasonComplete).toBe(true);
     expect(last.rewards.filter((l) => l.label === 'Season completed')).toHaveLength(1);
-    expect(last.rewards).toHaveLength(2); // match completed + season completed
+    // match completed + season completed + season prize (objective / mastery / achievement lines may follow)
+    expect(last.rewards.filter((l) => l.source === 'match' || l.source === 'season').map((l) => l.label)).toEqual(['Match completed', 'Season completed', 'Season prize · 6th in the league']);
     expect(save.trophies).toEqual([]);
     expect(save.seasons).toHaveLength(1);
     expect(last.grants.some((g) => g.kind === 'trophy')).toBe(false);

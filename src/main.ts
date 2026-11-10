@@ -6,6 +6,7 @@ import '@fontsource-variable/nunito/wght.css';
 import './ui/styles/base.css';
 import './ui/styles/hud.css';
 import './ui/styles/menus.css';
+import './ui/styles/progress.css';
 import './ui/styles/polish.css';
 import { App } from './app';
 

@@ -16,6 +16,7 @@
     "sim": "vite-node tools/simulate.ts",
     "balance": "vite-node tools/balance.ts",
     "sweep": "vite-node tools/sweep.ts",
+    "economy": "vite-node tools/economy.ts",
     "swingcheck": "vite-node tools/swingcheck.ts && vite-node tools/swingstats.ts 4 harbor_park club && vite-node tools/trialswing.ts"
   },
   "dependencies": {

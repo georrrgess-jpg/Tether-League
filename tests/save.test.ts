@@ -525,7 +525,8 @@ describe('validateSave', () => {
     const before = { credits: s.credits, xp: s.xp };
     const gold = commitTrial(s, 'swing_school', TRIALS.swing_school.gold);
     expect(gold).toMatchObject({ medal: 3, newBest: true, credits: 0, xp: 0, paidMedals: [] });
-    expect(s.credits).toBe(before.credits);
+    // No medal money; only objective / achievement rewards from this attempt (shown as bonus lines).
+    expect(s.credits - before.credits).toBe(gold.bonus.reduce((a, l) => a + l.credits, 0) + gold.grants.reduce((a, g) => a + (g.kind === 'credits' ? Number(/\+(\d+)/.exec(g.detail)?.[1] ?? 0) : 0), 0));
     const release = commitTrial(s, 'clean_release', TRIALS.clean_release.gold);
     expect(release.paidMedals).toEqual(['Gold']);
     expect(release.credits).toBe(REWARDS.trialMedal[3].credits);

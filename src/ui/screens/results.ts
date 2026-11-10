@@ -1,14 +1,56 @@
 import type { App, ScreenView } from '../../app';
+import { CHASSIS } from '../../content/chassis';
+import { COSMETIC_BY_ID } from '../../content/cosmetics';
+import { MASTERY_MAX, TIER_NAMES } from '../../content/progression';
 import { MEDAL_NAMES, TRIALS, type TrialId } from '../../content/trials';
-import { describeLevelReward, levelFor, levelProgress } from '../../progression/progression';
-import type { Grant } from '../../storage/save';
+import { masteryProgress } from '../../progression/mastery';
+import { describeLevelReward, levelProgress } from '../../progression/progression';
+import type { Grant, ProgressReport, RewardLine } from '../../storage/save';
 import { fmtTime, h, icon } from '../dom';
 import { shell } from '../shell';
+import { TIER_LABEL } from './progress';
+
+const ITEM_ICON: Record<string, string> = { face: 'face', pattern: 'shirt', trail: 'trail', celebration: 'party', badge: 'save', topper: 'face', title: 'star', color: 'palette' };
 
 function grantList(grants: Grant[]): HTMLElement | null {
   if (!grants.length) return null;
-  const ic: Record<Grant['kind'], string> = { pick: 'gift', credits: 'coin', chassis: 'garage', arena: 'home', trophy: 'trophy' };
-  return h('ul', { class: 'grants' }, grants.map((g) => h('li', null, icon(ic[g.kind]), h('div', null, h('b', null, g.label), h('span', null, g.detail)))));
+  const ic: Record<Grant['kind'], string> = { pick: 'gift', credits: 'coin', chassis: 'garage', arena: 'home', trophy: 'trophy', item: 'gift' };
+  return h('ul', { class: 'grants' }, grants.map((g) => h('li', null, icon(g.kind === 'item' && g.item ? ITEM_ICON[COSMETIC_BY_ID[g.item]?.kind] ?? 'gift' : ic[g.kind]), h('div', null, h('b', null, g.label), h('span', null, g.detail)))));
+}
+
+/** What a committed match / trial moved: objectives, achievement tiers, mastery and level ups. Display only. */
+export function progressSummary(app: App, report: ProgressReport, title = 'Progress', grants: Grant[] = []): HTMLElement | null {
+  const items: HTMLElement[] = [];
+  if (report.levelAfter > report.levelBefore) {
+    const road = grants.filter((g) => g.label.startsWith('Club level')).map((g) => g.detail);
+    items.push(h('li', { class: 'ps-level' }, icon('star'), h('div', null, h('b', null, report.levelAfter - report.levelBefore > 1 ? `Club level ${report.levelBefore} → ${report.levelAfter}` : `Club level ${report.levelAfter} reached`), h('span', null, road.length ? road.join(' · ') : 'Club Road reward collected'))));
+  }
+  for (const o of report.objectives) {
+    items.push(h('li', { class: o.done ? 'ps-done' : '' }, icon(o.done ? 'check' : 'target'),
+      h('div', null, h('b', null, o.text), h('span', null, o.done ? `${TIER_LABEL[o.tier]} objective complete` : `${o.before} → ${o.after} of ${o.target}`)),
+      o.done ? null : h('div', { class: 'bar ps-bar' }, h('i', { style: `width:${Math.round((o.after / o.target) * 100)}%` })),
+    ));
+  }
+  for (const a of report.achievements) {
+    items.push(h('li', { class: 'ps-done' }, h('i', { class: `medal m${a.tier} is-on` }, icon('star')), h('div', null, h('b', null, a.name), h('span', null, `${TIER_NAMES[a.tier - 1]} tier earned`))));
+  }
+  const m = report.mastery;
+  if (m && m.gained > 0) {
+    const mp = masteryProgress(app.save.progress.mastery[m.chassis] ?? 0);
+    items.push(h('li', { class: m.levelAfter > m.levelBefore ? 'ps-done' : '' }, icon('garage'),
+      h('div', null, h('b', null, `${CHASSIS[m.chassis].name} mastery +${m.gained}`), h('span', null, m.levelAfter > m.levelBefore ? `Mastery level ${m.levelAfter} of ${MASTERY_MAX}` : `Level ${m.levelAfter} of ${MASTERY_MAX}`)),
+      h('div', { class: 'bar ps-bar' }, h('i', { style: `width:${Math.round(mp.frac * 100)}%` })),
+    ));
+  }
+  if (!items.length) return null;
+  return h('section', { class: 'panel progress-summary' },
+    h('h2', { class: 'section-head' }, icon('target'), title, h('button', { class: 'btn btn-ghost btn-small', onclick: () => app.navigate('progress') }, 'Open', icon('next'))),
+    h('ul', { class: 'ps-list' }, items),
+  );
+}
+
+function lineList(lines: RewardLine[]): HTMLElement {
+  return h('ul', { class: 'reward-lines' }, lines.map((l) => h('li', { class: `src-${l.source ?? 'match'}` }, h('span', null, l.label), h('b', { class: 'cr' }, `+${l.credits}`), h('b', { class: 'xp' }, `+${l.xp} XP`))));
 }
 
 /**
@@ -25,8 +67,7 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
   }
   const career = r.kind !== 'quick';
   const lp = levelProgress(save.xp);
-  const levelBefore = levelFor(r.xpBefore);
-  const leveled = lp.level > levelBefore;
+  const leveled = r.progress.levelAfter > r.progress.levelBefore;
 
   const stat = (ic: string, label: string, value: number) => h('div', { class: 'stat' }, icon(ic), h('span', null, label), h('b', null, String(value)));
   const stats = h('section', { class: 'panel results-stats' },
@@ -42,11 +83,9 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
 
   const rewards = h('section', { class: 'panel-dark results-rewards' },
     h('h2', { class: 'section-head' }, icon('gift'), 'Match rewards'),
-    r.rewards.length
-      ? h('ul', { class: 'reward-lines' }, r.rewards.map((l) => h('li', null, h('span', null, l.label), h('b', { class: 'cr' }, `+${l.credits}`), h('b', { class: 'xp' }, `+${l.xp} XP`))))
-      : h('p', { class: 'muted' }, 'Rewards for this match were already collected.'),
+    r.rewards.length ? lineList(r.rewards) : h('p', { class: 'muted' }, 'Rewards for this match were already collected.'),
     h('div', { class: 'reward-total' }, h('span', null, icon('coin'), `+${r.credits} credits`), h('span', null, `+${r.xp} club XP`)),
-    h('div', { class: 'gc-row' }, h('b', null, `Club level ${lp.level}${leveled ? ' · level up!' : ''}`), h('span', null, `${save.xp - lp.from} / ${lp.to - lp.from}`)),
+    h('div', { class: 'gc-row' }, h('b', null, `Club level ${r.progress.levelAfter || lp.level}${leveled ? ' · level up!' : ''}`), h('span', null, `${save.xp - lp.from} / ${lp.to - lp.from}`)),
     h('div', { class: 'bar yellow' }, h('i', { style: `width:${Math.round(lp.frac * 100)}%` })),
     h('p', { class: 'muted' }, `Next: ${describeLevelReward(lp.level + 1)}`),
     grantList(r.grants),
@@ -69,7 +108,7 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
     r.won ? null : h('p', { class: 'muted on-dark-text' }, 'Completion rewards are yours either way. The Academy has drills for whatever went wrong.'),
   );
 
-  const el = shell(app, { nav: 'play', cls: 'results' }, head, stats, h('div', { class: 'stage-slot' }), rewards, records, actions);
+  const el = shell(app, { nav: 'play', cls: 'results' }, head, stats, h('div', { class: 'stage-slot' }), rewards, progressSummary(app, r.progress, 'Progress this match', r.grants), records, actions);
   return { el, stage: { shot: 'duo', moods: r.won ? ['celebrate', 'celebrate'] : ['sad', 'sad'] } };
 }
 
@@ -100,6 +139,7 @@ export function trialResultScreen(app: App, params: URLSearchParams): ScreenView
       h('div', { class: 'kv' }, h('span', null, 'Personal best'), h('b', null, `${formatTrialScore(id, rec?.best ?? null)}${o.newBest && rep.score !== null ? ' · new best!' : ''}`)),
       h('div', { class: 'kv' }, h('span', null, 'Next target'), h('b', null, next)),
       o.paidMedals.length ? h('div', { class: 'kv' }, h('span', null, `First ${o.paidMedals.join(' + ')} reward`), h('b', null, `+${o.credits} credits · +${o.xp} XP`)) : h('p', { class: 'muted' }, o.medal ? 'Medal rewards are paid once per tier. Improving your best is its own reward from here.' : rep.score === null ? 'That attempt did not finish. The objective is shown again before you start.' : 'Reach bronze to earn your first medal reward.'),
+      o.bonus.length ? lineList(o.bonus) : null,
       grantList(o.grants),
       h('p', { class: 'muted' }, def.objective),
       h('div', { class: 'dialog-actions' },
@@ -107,6 +147,7 @@ export function trialResultScreen(app: App, params: URLSearchParams): ScreenView
         h('button', { class: 'btn btn-cyan btn-big', 'data-autofocus': true, onclick: () => app.startTrial(id) }, icon('retry'), 'Retry'),
       ),
     ),
+    progressSummary(app, o.progress, 'Progress from this attempt', o.grants),
   );
   return { el };
 }

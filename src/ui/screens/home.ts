@@ -7,6 +7,7 @@ import { describeLevelReward, levelProgress } from '../../progression/progressio
 import { badgeSvg } from '../badge';
 import { h, icon } from '../dom';
 import { clubBadge, shell } from '../shell';
+import { nearestObjective } from './progress';
 
 export function trophyShelf(app: App): HTMLElement {
   const save = app.save;
@@ -65,11 +66,22 @@ export function homeScreen(app: App): ScreenView {
     h('div', { class: 'pips' }, Array.from({ length: ROUNDS }, (_, i) => h('i', { class: i < played ? 'on' : i === played && career.phase === 'regular' ? 'now' : '' }))),
   );
 
-  const goal = h('div', { class: 'panel-dark goal-card' },
+  // Next goals: the club level bar with its next reward, and the objective closest to done.
+  const near = nearestObjective(save);
+  const goal = h('section', { class: 'panel-dark goal-card next-goals', 'aria-label': 'Next goals' },
     h('div', { class: 'gc-row' }, h('b', null, `Club level ${lp.level}`), h('span', null, `${save.xp - lp.from} / ${lp.to - lp.from} XP`)),
-    h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(lp.frac * 100)}%` })),
-    h('div', { class: 'gc-row' }, h('span', { class: 'muted' }, `Next: ${describeLevelReward(lp.level + 1)}`),
+    h('div', { class: 'bar yellow' }, h('i', { style: `width:${Math.round(lp.frac * 100)}%` })),
+    h('div', { class: 'gc-row' }, h('span', { class: 'ng-next' }, icon('gift'), h('span', null, 'Next: ', h('b', null, describeLevelReward(lp.level + 1)))),
       save.picks > 0 ? h('button', { class: 'chip chip-yellow', onclick: () => app.navigate('club') }, icon('gift'), `${save.picks} free pick${save.picks > 1 ? 's' : ''}`) : null),
+    near
+      ? h('button', { class: 'ng-objective', title: near.text, onclick: () => app.navigate('progress'), 'aria-label': `Objective: ${near.text}, ${near.progress} of ${near.target}. Open Progress.` },
+          icon('target'),
+          h('span', { class: 'ng-text' }, near.text),
+          h('span', { class: 'ng-count' }, `${near.progress}/${near.target}`),
+          icon('next'),
+          h('span', { class: 'bar' }, h('i', { style: `width:${Math.round((near.progress / near.target) * 100)}%` })),
+        )
+      : h('button', { class: 'ng-objective', onclick: () => app.navigate('progress') }, icon('target'), h('span', { class: 'ng-text' }, 'Objectives and rewards'), icon('next')),
   );
 
   const side = h('div', { class: 'home-side' }, card, strip, goal,

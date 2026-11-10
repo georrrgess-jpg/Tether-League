@@ -20,6 +20,7 @@ export function playerLooks(save: SaveGame): [RobotLook, RobotLook] {
     pattern: c.pattern,
     trail: c.trail,
     celebration: c.celebration,
+    topper: c.topper,
   };
   return [
     { ...base, chassis: c.chassis, number: c.numbers[0] },

@@ -1,11 +1,19 @@
 import { commitPlayerResult, newSeason, type CareerState } from '../career/career';
-import { ARENAS, type ArenaId } from '../content/arenas';
-import { CHASSIS, CHASSIS_ORDER, type ChassisId } from '../content/chassis';
+import { ARENAS } from '../content/arenas';
+import { CHASSIS, type ChassisId } from '../content/chassis';
 import { DIVISIONS } from '../content/clubs';
 import { COSMETIC_BY_ID } from '../content/cosmetics';
+import { seasonPrize } from '../content/progression';
 import { MEDAL_NAMES, TRIALS, betterScore, medalFor, type TrialId } from '../content/trials';
 import type { MatchResult } from '../game/modes/matchMode';
-import type { CommittedResult, Grant, RewardLine, SaveGame } from '../storage/save';
+import { emptyReport, type AchievementStep, type CommittedResult, type Grant, type ProgressReport, type RewardLine, type SaveGame } from '../storage/save';
+import { settleAchievements } from './achievements';
+import { addMastery } from './mastery';
+import { advanceForMatch, advanceForTrial, matchFacts } from './objectives';
+import { claimLevels, levelFor, unlockedArenas } from './road';
+
+export { claimLevels, describeLevelReward, describeTrackReward, levelFor, levelProgress, levelReward, levelThreshold, unlockedArenas, type LevelReward } from './road';
+export { rerollObjective } from './objectives';
 
 /**
  * Rewards and ownership. Every payout happens inside a commit function that is idempotent by id;
@@ -33,73 +41,6 @@ export const REWARDS = {
   lesson: { credits: 10, xp: 15 },
 } as const;
 
-export const XP_MILESTONES = [150, 400, 800, 1500, 2500];
-export const XP_REPEAT = 500;
-
-/** Club level = number of XP thresholds reached. */
-export function levelFor(xp: number): number {
-  let level = 0;
-  for (const m of XP_MILESTONES) if (xp >= m) level++;
-  const last = XP_MILESTONES[XP_MILESTONES.length - 1];
-  if (xp >= last) level += Math.floor((xp - last) / XP_REPEAT);
-  return level;
-}
-
-export function levelThreshold(level: number): number {
-  if (level <= 0) return 0;
-  if (level <= XP_MILESTONES.length) return XP_MILESTONES[level - 1];
-  return XP_MILESTONES[XP_MILESTONES.length - 1] + (level - XP_MILESTONES.length) * XP_REPEAT;
-}
-
-export function levelProgress(xp: number): { level: number; from: number; to: number; frac: number } {
-  const level = levelFor(xp);
-  const from = levelThreshold(level);
-  const to = levelThreshold(level + 1);
-  return { level, from, to, frac: Math.max(0, Math.min(1, (xp - from) / (to - from))) };
-}
-
-export type LevelReward = { kind: 'pick' } | { kind: 'credits'; amount: number } | { kind: 'chassis'; id: ChassisId; fallback: number };
-
-export function levelReward(level: number): LevelReward {
-  for (const id of CHASSIS_ORDER) if (CHASSIS[id].unlockLevel === level) return { kind: 'chassis', id, fallback: 150 };
-  if (level === 1 || level === 3 || level === 5) return { kind: 'pick' };
-  if (level === 2 || level === 7) return { kind: 'credits', amount: 100 };
-  if (level > 8 && level % 4 === 0) return { kind: 'pick' };
-  return { kind: 'credits', amount: 60 };
-}
-
-export function describeLevelReward(level: number): string {
-  const r = levelReward(level);
-  if (r.kind === 'pick') return 'Free cosmetic pick';
-  if (r.kind === 'chassis') return `${CHASSIS[r.id].name} chassis`;
-  return `${r.amount} credits`;
-}
-
-/** Grants every unclaimed level reward up to the current level, once each. */
-export function claimLevels(save: SaveGame): Grant[] {
-  const grants: Grant[] = [];
-  const level = levelFor(save.xp);
-  for (let l = 1; l <= level; l++) {
-    if (save.claimedLevels.includes(l)) continue;
-    save.claimedLevels.push(l);
-    const r = levelReward(l);
-    if (r.kind === 'pick') {
-      save.picks++;
-      grants.push({ kind: 'pick', label: `Club level ${l}`, detail: 'Free cosmetic pick. Choose any locked item in Club customisation.' });
-    } else if (r.kind === 'credits') {
-      save.credits += r.amount;
-      grants.push({ kind: 'credits', label: `Club level ${l}`, detail: `+${r.amount} credits` });
-    } else if (!save.owned.includes(`chassis:${r.id}`)) {
-      save.owned.push(`chassis:${r.id}`);
-      grants.push({ kind: 'chassis', label: `Club level ${l}`, detail: `${CHASSIS[r.id].name} chassis unlocked in the Garage` });
-    } else {
-      save.credits += r.fallback;
-      grants.push({ kind: 'credits', label: `Club level ${l}`, detail: `+${r.fallback} credits (chassis already owned)` });
-    }
-  }
-  return grants;
-}
-
 export function contributionScore(s: { goals: number; assists: number; saves: number; passes: number; interceptions: number }): number {
   return s.goals * 3 + s.assists * 3 + s.saves * 2 + s.interceptions * 1 + s.passes * 0.5;
 }
@@ -107,11 +48,11 @@ export function contributionScore(s: { goals: number; assists: number; saves: nu
 export function matchRewards(result: MatchResult): RewardLine[] {
   const f = result.kind === 'quick' ? REWARDS.quickFactor : 1;
   const sc = (n: number) => Math.round(n * f);
-  const lines: RewardLine[] = [{ label: result.kind === 'quick' ? 'Quick match played' : 'Match completed', credits: sc(REWARDS.matchComplete.credits), xp: sc(REWARDS.matchComplete.xp) }];
-  if (result.won) lines.push({ label: 'Win bonus', credits: sc(REWARDS.winBonus.credits), xp: sc(REWARDS.winBonus.xp) });
+  const lines: RewardLine[] = [{ label: result.kind === 'quick' ? 'Quick match played' : 'Match completed', credits: sc(REWARDS.matchComplete.credits), xp: sc(REWARDS.matchComplete.xp), source: 'match' }];
+  if (result.won) lines.push({ label: 'Win bonus', credits: sc(REWARDS.winBonus.credits), xp: sc(REWARDS.winBonus.xp), source: 'match' });
   const score = contributionScore(result.player);
   const tier = REWARDS.contribution.find((t) => score >= t.min);
-  if (tier) lines.push({ label: tier.label, credits: sc(tier.credits), xp: sc(tier.xp) });
+  if (tier) lines.push({ label: tier.label, credits: sc(tier.credits), xp: sc(tier.xp), source: 'match' });
   return lines;
 }
 
@@ -131,15 +72,32 @@ function resultTitle(r: MatchResult): string {
 export interface CommitContext {
   label: string;
   opponentId: string;
+  /** Chassis the player's own robot used (earns mastery). Defaults to the club's equipped chassis. */
+  chassis?: ChassisId;
 }
 
-/** True when the player's home trophy shelf / arenas would change: used only for messaging. */
-export function unlockedArenas(save: SaveGame): ArenaId[] {
-  const out: ArenaId[] = ['harbor_park'];
-  if (save.seasons.length >= 1) out.push('foundry_court');
-  if (save.trophies.some((t) => t.division >= 1)) out.push('skyline_stadium');
-  if (save.career.division >= 3 || save.seasons.some((s) => s.division >= 3)) out.push('championship_dome');
-  return out;
+const STAGE_LABEL = { champion: 'champions', finalist: 'finalists', semifinalist: 'semi-finalists', missed: '' } as const;
+const ordinal = (n: number) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
+
+/**
+ * Pays reward lines added since the last call, claims Club Road levels, then settles achievements (which can
+ * themselves add XP and so levels) until nothing changes. Returns the achievement tiers earned.
+ */
+function settle(save: SaveGame, lines: RewardLine[], grants: Grant[], paidUpTo: { n: number }): AchievementStep[] {
+  const steps: AchievementStep[] = [];
+  for (let round = 0; round < 8; round++) {
+    for (; paidUpTo.n < lines.length; paidUpTo.n++) {
+      save.credits = Math.min(9999999, save.credits + lines[paidUpTo.n].credits);
+      save.xp = Math.min(9999999, save.xp + lines[paidUpTo.n].xp);
+    }
+    grants.push(...claimLevels(save));
+    const a = settleAchievements(save);
+    if (!a.steps.length) break;
+    steps.push(...a.steps);
+    lines.push(...a.lines);
+    grants.push(...a.grants);
+  }
+  return steps;
 }
 
 /**
@@ -156,41 +114,42 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
       matchId: result.matchId, kind: result.kind, label: ctx.label, arena: result.arena, opponentId: ctx.opponentId, opponent: result.opponent,
       score: result.score, won: result.won, overtime: result.overtime,
       stats: { goals: result.player.goals, assists: result.player.assists, saves: result.player.saves, passes: result.player.passes, interceptions: result.player.interceptions, shots: result.player.shots, swingKicks: result.player.swingKicks, ownGoals: result.player.ownGoals },
-      mateGoals: result.mate.goals, title: resultTitle(result), rewards: [], credits: 0, xp: 0, xpBefore: save.xp, grants: [], newRecords: [], seasonComplete: false, at: Date.now(),
+      mateGoals: result.mate.goals, title: resultTitle(result), rewards: [], credits: 0, xp: 0, xpBefore: save.xp, grants: [], newRecords: [], seasonComplete: false, progress: emptyReport(levelFor(save.xp)), at: Date.now(),
     };
   }
 
   const arenasBefore = unlockedArenas(save);
+  const quick = result.kind === 'quick';
+  const factor = quick ? REWARDS.quickFactor : 1;
   const rewards = matchRewards(result);
+  const masteryXp = rewards.reduce((a, l) => a + l.xp, 0);
   const grants: Grant[] = [];
   let seasonComplete = false;
+  const xpBefore = save.xp;
+  const levelBefore = levelFor(save.xp);
 
-  if (result.kind !== 'quick' && result.fixtureId) {
+  if (!quick && result.fixtureId) {
     const wasComplete = save.career.phase === 'complete';
     const ok = commitPlayerResult(save.career, result.fixtureId, result.score[0], result.score[1], result.overtime);
     if (ok && !wasComplete && save.career.phase === 'complete' && save.career.result) {
       seasonComplete = true;
       const res = save.career.result;
       save.seasons.push({ ...res });
-      rewards.push({ label: 'Season completed', credits: REWARDS.seasonComplete.credits, xp: REWARDS.seasonComplete.xp });
+      rewards.push({ label: 'Season completed', credits: REWARDS.seasonComplete.credits, xp: REWARDS.seasonComplete.xp, source: 'season' });
+      const prize = seasonPrize(res.division, res.rank, res.stage);
+      rewards.push({ label: `Season prize · ${ordinal(res.rank)} in the league${res.stage !== 'missed' ? `, playoff ${STAGE_LABEL[res.stage]}` : ''}`, credits: prize, xp: 0, source: 'season' });
       if (res.stage === 'champion') {
         const first = !save.trophies.some((t) => t.division === res.division);
         save.trophies.push({ division: res.division, seasonNo: res.seasonNo });
         const r = first ? REWARDS.divisionTitle : REWARDS.repeatTitle;
-        rewards.push({ label: first ? `${DIVISIONS[res.division].name} champions` : 'Title defended', credits: r.credits, xp: r.xp });
+        rewards.push({ label: first ? `${DIVISIONS[res.division].name} champions` : 'Title defended', credits: r.credits, xp: r.xp, source: 'season' });
         grants.push({ kind: 'trophy', label: DIVISIONS[res.division].trophy, detail: res.promoted ? `Promoted to the ${DIVISIONS[res.division + 1].name}` : 'Added to your trophy shelf' });
       }
     }
   }
 
-  const credits = rewards.reduce((a, l) => a + l.credits, 0);
-  const xp = rewards.reduce((a, l) => a + l.xp, 0);
-  const xpBefore = save.xp;
-  save.credits += credits;
-  save.xp += xp;
-  grants.push(...claimLevels(save));
-
-  // records
+  // records (before achievements, which read them)
+  const facts = matchFacts(result);
   const rec = save.records;
   const p = result.player;
   const newRecords: string[] = [];
@@ -207,13 +166,20 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
       rec.bestMargin = margin;
       if (rec.matches > 1 && margin >= 2) newRecords.push(`Biggest win: by ${margin}`);
     }
+    if (result.overtime) rec.overtimeWins++;
+    if (facts.comebackWins) rec.comebackWins++;
+    if (!quick) rec.careerWins++;
+    save.progress.arenaWins[result.arena] = (save.progress.arenaWins[result.arena] ?? 0) + 1;
   } else rec.streak = 0;
   rec.goals += p.goals;
   rec.assists += p.assists;
   rec.saves += p.saves;
   rec.passes += p.passes;
   rec.interceptions += p.interceptions;
-  rec.swingGoals += result.goals.filter((g) => g.scorer === 0 && g.swing).length;
+  rec.shots += p.shots;
+  rec.swingGoals += facts.swingGoals;
+  if (facts.cleanSheets) rec.cleanSheets++;
+  if (facts.hatTrick) rec.hatTricks++;
   if (p.goals > rec.bestGoals) {
     rec.bestGoals = p.goals;
     if (p.goals >= 2) newRecords.push(`New record: ${p.goals} goals in a match`);
@@ -223,10 +189,24 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
     if (p.saves >= 2) newRecords.push(`New record: ${p.saves} saves in a match`);
   }
 
+  // chassis mastery (the player's own robot), objectives, then pay and settle levels / achievements
+  const chassis: ChassisId = ctx.chassis && Object.hasOwn(CHASSIS, ctx.chassis) ? ctx.chassis : save.club.chassis;
+  const m = addMastery(save, chassis, masteryXp);
+  rewards.push(...m.lines);
+  grants.push(...m.grants);
+  const obj = advanceForMatch(save, result, facts, factor);
+  rewards.push(...obj.lines);
+  save.progress.rerolls = 1;
+  const achievements = settle(save, rewards, grants, { n: 0 });
+
+  const credits = rewards.reduce((a, l) => a + l.credits, 0);
+  const xp = rewards.reduce((a, l) => a + l.xp, 0);
+
   for (const a of unlockedArenas(save)) {
     if (!arenasBefore.includes(a)) grants.push({ kind: 'arena', label: ARENAS[a].name, detail: 'New venue unlocked for Quick Match' });
   }
 
+  const progress: ProgressReport = { objectives: obj.steps, achievements, mastery: m.step, levelBefore, levelAfter: levelFor(save.xp) };
   const committed: CommittedResult = {
     matchId: result.matchId,
     kind: result.kind,
@@ -247,6 +227,7 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
     grants,
     newRecords,
     seasonComplete,
+    progress,
     at: Date.now(),
   };
   save.committed.push(result.matchId);
@@ -269,15 +250,25 @@ export function startNextSeason(save: SaveGame): boolean {
   return true;
 }
 
+/** Shop price, 0 for starters, -1 for anything that cannot be bought (earned-only, opponent-only, unknown). */
 export function itemPrice(id: string): number {
   if (id.startsWith('chassis:')) return Object.hasOwn(CHASSIS, id.slice(8)) ? CHASSIS[id.slice(8) as ChassisId].credits : -1;
-  return COSMETIC_BY_ID[id]?.credits ?? -1;
+  const d = COSMETIC_BY_ID[id];
+  if (!d) return -1;
+  return d.unlock === 'shop' ? d.credits : d.unlock === 'starter' ? 0 : -1;
 }
 
-export type PurchaseOutcome = 'ok' | 'owned' | 'insufficient' | 'unknown' | 'no_pick';
+/** 'earned' = an earned-only item (Club Road, achievement or mastery): it can be owned but never bought or picked. */
+export type PurchaseOutcome = 'ok' | 'owned' | 'insufficient' | 'unknown' | 'no_pick' | 'earned';
+
+const earnedOnly = (id: string): boolean => {
+  const u = COSMETIC_BY_ID[id]?.unlock;
+  return u === 'level' || u === 'achievement' || u === 'mastery';
+};
 
 /** Buys an item with credits. Validates ownership and balance, so a repeated click cannot charge twice. */
 export function purchase(save: SaveGame, id: string): PurchaseOutcome {
+  if (earnedOnly(id)) return save.owned.includes(id) ? 'owned' : 'earned';
   const price = itemPrice(id);
   if (price < 0) return 'unknown';
   if (save.owned.includes(id)) return 'owned';
@@ -287,11 +278,13 @@ export function purchase(save: SaveGame, id: string): PurchaseOutcome {
   return 'ok';
 }
 
-/** Spends a free milestone pick on a cosmetic (not on chassis). */
+/** Spends a free pick on a shop cosmetic (never on chassis or earned-only items). */
 export function usePick(save: SaveGame, id: string): PurchaseOutcome {
   const def = COSMETIC_BY_ID[id];
-  if (!def || def.credits < 0) return 'unknown';
+  if (!def || def.unlock === 'opponent') return 'unknown';
+  if (earnedOnly(id)) return save.owned.includes(id) ? 'owned' : 'earned';
   if (save.owned.includes(id)) return 'owned';
+  if (def.unlock !== 'shop') return 'unknown';
   if (save.picks <= 0) return 'no_pick';
   save.picks--;
   save.owned.push(id);
@@ -306,6 +299,9 @@ export interface TrialOutcome {
   xp: number;
   paidMedals: string[];
   grants: Grant[];
+  /** Objective and achievement rewards from this attempt (on top of the medal credits / XP above). */
+  bonus: RewardLine[];
+  progress: ProgressReport;
 }
 
 /**
@@ -340,19 +336,23 @@ export function commitTrial(save: SaveGame, id: TrialId, score: number | null): 
     xp += REWARDS.trialMedal[rec.rewarded].xp;
     paidMedals.push(MEDAL_NAMES[rec.rewarded]);
   }
-  save.credits += credits;
-  save.xp += xp;
-  const grants = xp > 0 ? claimLevels(save) : [];
-  return { medal, previousBest, newBest, credits, xp, paidMedals, grants };
+  const levelBefore = levelFor(save.xp);
+  const obj = advanceForTrial(save, medal);
+  const lines: RewardLine[] = [{ label: 'Trial medals', credits, xp, source: 'trial' }, ...obj.lines];
+  const grants: Grant[] = [];
+  const achievements = settle(save, lines, grants, { n: 0 });
+  const bonus = lines.slice(1);
+  return { medal, previousBest, newBest, credits, xp, paidMedals, grants, bonus, progress: { objectives: obj.steps, achievements, mastery: null, levelBefore, levelAfter: levelFor(save.xp) } };
 }
 
 /** Marks a lesson complete; the small reward is paid the first time only. */
-export function commitLesson(save: SaveGame, id: string): { first: boolean; credits: number; xp: number; grants: Grant[] } {
-  if (save.lessons.includes(id)) return { first: false, credits: 0, xp: 0, grants: [] };
+export function commitLesson(save: SaveGame, id: string): { first: boolean; credits: number; xp: number; grants: Grant[]; bonus: RewardLine[] } {
+  if (save.lessons.includes(id)) return { first: false, credits: 0, xp: 0, grants: [], bonus: [] };
   save.lessons.push(id);
-  save.credits += REWARDS.lesson.credits;
-  save.xp += REWARDS.lesson.xp;
-  return { first: true, credits: REWARDS.lesson.credits, xp: REWARDS.lesson.xp, grants: claimLevels(save) };
+  const lines: RewardLine[] = [{ label: 'Lesson complete', credits: REWARDS.lesson.credits, xp: REWARDS.lesson.xp, source: 'lesson' }];
+  const grants: Grant[] = [];
+  settle(save, lines, grants, { n: 0 });
+  return { first: true, credits: REWARDS.lesson.credits, xp: REWARDS.lesson.xp, grants, bonus: lines.slice(1) };
 }
 
 export function medalCount(save: SaveGame): number {

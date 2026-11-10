@@ -1,16 +1,21 @@
 import { newSeason, validCareer, type CareerState, type SeasonResult } from '../career/career';
 import { ARENA_ORDER, type ArenaId } from '../content/arenas';
-import { CHASSIS, type ChassisId } from '../content/chassis';
-import { CLUB_COLORS, COSMETIC_BY_ID, STARTER_COSMETICS } from '../content/cosmetics';
+import { CHASSIS, CHASSIS_ORDER, type ChassisId } from '../content/chassis';
+import { CLUB_COLORS, COSMETIC_BY_ID, EARNED_COLORS, STARTER_COSMETICS, isOwnableCosmetic } from '../content/cosmetics';
 import { DIVISIONS } from '../content/clubs';
+import { ACHIEVEMENT_BY_ID, MASTERY_MAX, OBJECTIVE_BY_ID, roadReward, type ObjectiveTier } from '../content/progression';
 import { LESSONS, TRIALS, type TrialId } from '../content/trials';
+import { hashString } from '../game/sim/rng';
+import { settleAchievements } from '../progression/achievements';
+import { ensureObjectives } from '../progression/objectives';
+import { grantChassis, grantItem, legacyLevelValue, legacyThreshold, levelFor, levelThreshold } from '../progression/road';
 import { defaultSettings, sanitizeSettings, type Settings } from './settings';
 
 /**
  * Versioned save data. One complete snapshot is written at a time; the previous valid snapshot is kept
  * so a failed or corrupted write never erases a working save.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 const KEY = 'tether-league/save';
 const KEY_PREV = 'tether-league/save.prev';
 const KEY_NEXT = 'tether-league/save.next';
@@ -28,6 +33,10 @@ export interface ClubProfile {
   pattern: string;
   trail: string;
   celebration: string;
+  /** Head accessory (cosmetic kind 'topper'). */
+  topper: string;
+  /** Club title (cosmetic kind 'title'), shown under the club name. */
+  title: string;
 }
 
 export interface Records {
@@ -44,6 +53,40 @@ export interface Records {
   bestMargin: number;
   streak: number;
   bestStreak: number;
+  /** Lifetime counters added in save version 2 (start at 0 for migrated saves). */
+  shots: number;
+  cleanSheets: number;
+  overtimeWins: number;
+  comebackWins: number;
+  hatTricks: number;
+  careerWins: number;
+}
+
+export interface ActiveObjective {
+  /** Draw number (unique per save). */
+  uid: number;
+  id: string;
+  progress: number;
+}
+
+/** Club objectives, achievements and chassis mastery (save version 2). */
+export interface ProgressState {
+  /** Exactly three, in slot order easy / medium / hard. */
+  objectives: ActiveObjective[];
+  objectiveSeed: number;
+  /** Number of objectives drawn so far; feeds the seeded draw. */
+  objectiveSeq: number;
+  objectivesDone: number;
+  /** Free objective swaps available (0 or 1; refilled by each completed match). */
+  rerolls: number;
+  /** Highest tier paid per achievement id (0..3). */
+  achievements: Record<string, number>;
+  /** Mastery XP per chassis (the player's own robot only). */
+  mastery: Record<ChassisId, number>;
+  /** Highest mastery level paid per chassis. */
+  masteryClaimed: Record<ChassisId, number>;
+  /** Wins per arena. */
+  arenaWins: Partial<Record<ArenaId, number>>;
 }
 
 export interface TrialRecord {
@@ -55,17 +98,59 @@ export interface TrialRecord {
   rulesVersion: number;
 }
 
+export type RewardSource = 'match' | 'season' | 'objective' | 'achievement' | 'mastery' | 'trial' | 'lesson';
+
 export interface RewardLine {
   label: string;
   credits: number;
   xp: number;
+  /** What paid it (absent on version-1 records: treated as 'match'). */
+  source?: RewardSource;
 }
 
+export const GRANT_KINDS = ['pick', 'credits', 'chassis', 'arena', 'trophy', 'item'] as const;
+
 export interface Grant {
-  kind: 'pick' | 'credits' | 'chassis' | 'arena' | 'trophy';
+  kind: (typeof GRANT_KINDS)[number];
   label: string;
   detail: string;
+  /** Cosmetic id for 'item' grants. */
+  item?: string;
 }
+
+export interface ObjectiveStep {
+  id: string;
+  text: string;
+  tier: ObjectiveTier;
+  before: number;
+  after: number;
+  target: number;
+  done: boolean;
+}
+
+export interface AchievementStep {
+  id: string;
+  name: string;
+  tier: 1 | 2 | 3;
+}
+
+export interface MasteryStep {
+  chassis: ChassisId;
+  gained: number;
+  levelBefore: number;
+  levelAfter: number;
+}
+
+/** What a commit moved besides the reward lines: shown on result screens, never used to pay. */
+export interface ProgressReport {
+  objectives: ObjectiveStep[];
+  achievements: AchievementStep[];
+  mastery: MasteryStep | null;
+  levelBefore: number;
+  levelAfter: number;
+}
+
+export const emptyReport = (level = 0): ProgressReport => ({ objectives: [], achievements: [], mastery: null, levelBefore: level, levelAfter: level });
 
 /** Immutable record of a completed match, built once when the result is committed. */
 export interface CommittedResult {
@@ -88,6 +173,8 @@ export interface CommittedResult {
   grants: Grant[];
   newRecords: string[];
   seasonComplete: boolean;
+  /** Objectives, achievement tiers, mastery and club levels this match moved. */
+  progress: ProgressReport;
   at: number;
 }
 
@@ -131,6 +218,7 @@ export interface SaveGame {
   results: CommittedResult[];
   prefs: Prefs;
   matchSeq: number;
+  progress: ProgressState;
 }
 
 export function defaultClub(): ClubProfile {
@@ -146,16 +234,27 @@ export function defaultClub(): ClubProfile {
     pattern: 'pattern_plain',
     trail: 'trail_standard',
     celebration: 'celebration_wave',
+    topper: 'topper_antenna',
+    title: 'title_newcomers',
   };
 }
 
 export function emptyRecords(): Records {
-  return { matches: 0, wins: 0, goals: 0, assists: 0, saves: 0, passes: 0, interceptions: 0, swingGoals: 0, bestGoals: 0, bestSaves: 0, bestMargin: 0, streak: 0, bestStreak: 0 };
+  return {
+    matches: 0, wins: 0, goals: 0, assists: 0, saves: 0, passes: 0, interceptions: 0, swingGoals: 0, bestGoals: 0, bestSaves: 0, bestMargin: 0, streak: 0, bestStreak: 0,
+    shots: 0, cleanSheets: 0, overtimeWins: 0, comebackWins: 0, hatTricks: 0, careerWins: 0,
+  };
+}
+
+const perChassis = (): Record<ChassisId, number> => ({ all_rounder: 0, scout: 0, bulwark: 0, glider: 0 });
+
+export function emptyProgress(seed: number): ProgressState {
+  return { objectives: [], objectiveSeed: seed >>> 0, objectiveSeq: 0, objectivesDone: 0, rerolls: 0, achievements: {}, mastery: perChassis(), masteryClaimed: perChassis(), arenaWins: {} };
 }
 
 export function newSave(club: ClubProfile = defaultClub(), settings: Settings = defaultSettings(), seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0): SaveGame {
   const now = Date.now();
-  return {
+  const save: SaveGame = {
     version: SAVE_VERSION,
     createdAt: now,
     updatedAt: now,
@@ -177,7 +276,10 @@ export function newSave(club: ClubProfile = defaultClub(), settings: Settings = 
     results: [],
     prefs: { tendency: 'supportive', quickDifficulty: 'rookie', quickArena: 'harbor_park', quickOpponent: 'ember_works', quickMinutes: 3, relaxed: false },
     matchSeq: 0,
+    progress: emptyProgress(hashString(`objectives-${seed}`)),
   };
+  ensureObjectives(save);
+  return save;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +299,7 @@ export function cleanClubName(name: string): string {
 function sanitizeClub(raw: unknown, owned: string[]): ClubProfile {
   const d = defaultClub();
   if (!isObj(raw)) return d;
-  const colorOk = (v: unknown, def: string) => (typeof v === 'string' && CLUB_COLORS.some((c) => c.id === v) ? v : def);
+  const colorOk = (v: unknown, def: string) => (typeof v === 'string' && (CLUB_COLORS.some((c) => c.id === v) || EARNED_COLORS.some((c) => c.id === v && owned.includes(c.item))) ? v : def);
   const cos = (v: unknown, kind: string, def: string) => (typeof v === 'string' && COSMETIC_BY_ID[v]?.kind === kind && owned.includes(v) ? v : def);
   const chassis = (v: unknown): ChassisId => (typeof v === 'string' && Object.hasOwn(CHASSIS, v) && owned.includes(`chassis:${v}`) ? (v as ChassisId) : 'all_rounder');
   const nums = Array.isArray(raw.numbers) ? raw.numbers : [];
@@ -219,6 +321,8 @@ function sanitizeClub(raw: unknown, owned: string[]): ClubProfile {
     pattern: cos(raw.pattern, 'pattern', d.pattern),
     trail: cos(raw.trail, 'trail', d.trail),
     celebration: cos(raw.celebration, 'celebration', d.celebration),
+    topper: cos(raw.topper, 'topper', d.topper),
+    title: cos(raw.title, 'title', d.title),
   };
 }
 
@@ -244,15 +348,121 @@ function sanitizeResult(raw: unknown): CommittedResult | null {
     },
     mateGoals: int(raw.mateGoals, 0, 99, 0),
     title: str(raw.title, '', 30),
-    rewards: lines.filter(isObj).slice(0, 8).map((l) => ({ label: str(l.label, '', 40), credits: int(l.credits, 0, 9999, 0), xp: int(l.xp, 0, 9999, 0) })),
+    rewards: lines.filter(isObj).slice(0, 40).map((l) => ({ label: str(l.label, '', 80), credits: int(l.credits, 0, 9999, 0), xp: int(l.xp, 0, 9999, 0), source: REWARD_SOURCES.includes(l.source as RewardSource) ? (l.source as RewardSource) : 'match' })),
     credits: int(raw.credits, 0, 99999, 0),
     xp: int(raw.xp, 0, 99999, 0),
     xpBefore: int(raw.xpBefore, 0, 9999999, 0),
-    grants: grants.filter(isObj).slice(0, 8).map((g) => ({ kind: (['pick', 'credits', 'chassis', 'arena', 'trophy'] as const).includes(g.kind as Grant['kind']) ? (g.kind as Grant['kind']) : 'credits', label: str(g.label, '', 60), detail: str(g.detail, '', 120, ) })),
+    grants: grants.filter(isObj).slice(0, 40).map((g) => {
+      const kind = GRANT_KINDS.includes(g.kind as Grant['kind']) ? (g.kind as Grant['kind']) : 'credits';
+      const out: Grant = { kind, label: str(g.label, '', 60), detail: str(g.detail, '', 120) };
+      if (kind === 'item' && typeof g.item === 'string' && isOwnableCosmetic(g.item)) out.item = g.item;
+      return out;
+    }),
     newRecords: (Array.isArray(raw.newRecords) ? raw.newRecords : []).filter((x): x is string => typeof x === 'string').slice(0, 6).map((x) => x.slice(0, 60)),
     seasonComplete: raw.seasonComplete === true,
+    progress: sanitizeReport(raw.progress),
     at: int(raw.at, 0, 8e15, 0),
   };
+}
+
+const REWARD_SOURCES: RewardSource[] = ['match', 'season', 'objective', 'achievement', 'mastery', 'trial', 'lesson'];
+
+function sanitizeReport(raw: unknown): ProgressReport {
+  if (!isObj(raw)) return emptyReport();
+  const objectives: ObjectiveStep[] = [];
+  for (const o of (Array.isArray(raw.objectives) ? raw.objectives : []).slice(0, 12)) {
+    if (!isObj(o) || typeof o.id !== 'string' || !OBJECTIVE_BY_ID[o.id]) continue;
+    const def = OBJECTIVE_BY_ID[o.id];
+    objectives.push({ id: def.id, text: def.text, tier: def.tier, before: int(o.before, 0, def.target, 0), after: int(o.after, 0, def.target, 0), target: def.target, done: o.done === true });
+  }
+  const achievements: AchievementStep[] = [];
+  for (const a of (Array.isArray(raw.achievements) ? raw.achievements : []).slice(0, 40)) {
+    if (!isObj(a) || typeof a.id !== 'string' || !ACHIEVEMENT_BY_ID[a.id]) continue;
+    achievements.push({ id: a.id, name: ACHIEVEMENT_BY_ID[a.id].name, tier: int(a.tier, 1, 3, 1) as 1 | 2 | 3 });
+  }
+  let mastery: MasteryStep | null = null;
+  if (isObj(raw.mastery) && typeof raw.mastery.chassis === 'string' && Object.hasOwn(CHASSIS, raw.mastery.chassis)) {
+    const m = raw.mastery;
+    mastery = { chassis: m.chassis as ChassisId, gained: int(m.gained, 0, 99999, 0), levelBefore: int(m.levelBefore, 0, MASTERY_MAX, 0), levelAfter: int(m.levelAfter, 0, MASTERY_MAX, 0) };
+  }
+  return { objectives, achievements, mastery, levelBefore: int(raw.levelBefore, 0, 100000, 0), levelAfter: int(raw.levelAfter, 0, 100000, 0) };
+}
+
+function sanitizeProgress(raw: unknown, seedFallback: number): ProgressState {
+  const p = isObj(raw) ? raw : {};
+  const out = emptyProgress(typeof p.objectiveSeed === 'number' && Number.isInteger(p.objectiveSeed) && p.objectiveSeed >= 0 && p.objectiveSeed <= 0xffffffff ? p.objectiveSeed : hashString(`objectives-${seedFallback}`));
+  out.objectiveSeq = int(p.objectiveSeq, 0, 99999999, 0);
+  out.objectivesDone = int(p.objectivesDone, 0, 9999999, 0);
+  out.rerolls = int(p.rerolls, 0, 1, 0);
+  const seen = new Set<string>();
+  for (const o of (Array.isArray(p.objectives) ? p.objectives : []).slice(0, 3)) {
+    if (!isObj(o) || typeof o.id !== 'string' || !OBJECTIVE_BY_ID[o.id] || seen.has(o.id)) continue;
+    seen.add(o.id);
+    const def = OBJECTIVE_BY_ID[o.id];
+    out.objectives.push({ uid: int(o.uid, 0, 99999999, 0), id: def.id, progress: int(o.progress, 0, def.target - 1, 0) });
+  }
+  const ach = isObj(p.achievements) ? p.achievements : {};
+  for (const id of Object.keys(ach)) if (ACHIEVEMENT_BY_ID[id]) {
+    const t = int(ach[id], 0, 3, 0);
+    if (t > 0) out.achievements[id] = t;
+  }
+  const m = isObj(p.mastery) ? p.mastery : {};
+  const mc = isObj(p.masteryClaimed) ? p.masteryClaimed : {};
+  for (const id of CHASSIS_ORDER) {
+    out.mastery[id] = int(m[id], 0, 9999999, 0);
+    out.masteryClaimed[id] = int(mc[id], 0, MASTERY_MAX, 0);
+  }
+  const aw = isObj(p.arenaWins) ? p.arenaWins : {};
+  for (const a of ARENA_ORDER) {
+    const n = int(aw[a], 0, 9999999, 0);
+    if (n > 0) out.arenaWins[a] = n;
+  }
+  return out;
+}
+
+/**
+ * Version 1 -> 2: the Club Road replaces the old level rewards.
+ * - Levels a v1 save had claimed are carried onto the new track: every new level whose threshold is at or
+ *   below the XP of the highest old claimed level counts as claimed. Their item and chassis rewards are
+ *   granted; credits and picks are topped up only by the amount the new levels exceed what the old ones
+ *   paid, so nothing is paid twice and nothing already received is taken away. Later levels pay normally
+ *   at the next commit.
+ * - Achievement tiers already met by the existing records are marked earned and their items granted, but
+ *   their credits / XP are not paid retroactively (the counters added in v2 start from zero).
+ * - Objectives are seeded from the save's creation time; mastery starts from nothing.
+ */
+function migrateToV2(save: SaveGame): void {
+  const old = save.claimedLevels;
+  if (old.length) {
+    const top = legacyThreshold(Math.max(...old));
+    const reach = levelFor(Math.min(save.xp, top));
+    let oldCredits = 0;
+    let oldPicks = 0;
+    for (const l of old) {
+      const v = legacyLevelValue(l);
+      oldCredits += v.credits;
+      oldPicks += v.picks;
+    }
+    let newCredits = 0;
+    let newPicks = 0;
+    const claimed: number[] = [];
+    const before = save.credits;
+    for (let l = 1; l <= reach && levelThreshold(l) <= top; l++) {
+      claimed.push(l);
+      const r = roadReward(l);
+      if (r.kind === 'credits') newCredits += r.amount;
+      else if (r.kind === 'pick') newPicks++;
+      else if (r.kind === 'chassis') grantChassis(save, r.id, 0, '');
+      else grantItem(save, r.id, r.fallback, '');
+    }
+    // grantItem pays fallback credits for already-owned shop items: count them as new-track value.
+    newCredits += save.credits - before;
+    save.credits = Math.min(9999999, before + Math.max(0, newCredits - oldCredits));
+    save.picks = Math.min(99, save.picks + Math.max(0, newPicks - oldPicks));
+    save.claimedLevels = claimed;
+    save.flags.roadCarried = true;
+  }
+  settleAchievements(save, false);
 }
 
 /** Schema migrations by source version. Each returns data for the next version. */
@@ -264,6 +474,9 @@ const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string
     const { chassisOwned: _drop, ...rest } = raw;
     return { ...rest, owned, version: 1 };
   },
+  // 1 -> 2: Club Road, objectives, achievements, mastery, topper and title. The data changes are applied
+  // after validation by migrateToV2, which needs the typed save.
+  1: (raw) => ({ ...raw, version: 2 }),
 };
 
 export class SaveError extends Error {}
@@ -273,6 +486,7 @@ export function validateSave(input: unknown): SaveGame {
   if (!isObj(input)) throw new SaveError('Not a save file.');
   let raw = input;
   let version = typeof raw.version === 'number' ? raw.version : -1;
+  const fromVersion = version;
   if (version < 0 || version > SAVE_VERSION || !Number.isInteger(version)) throw new SaveError('Unsupported save version.');
   while (version < SAVE_VERSION) {
     const m = MIGRATIONS[version];
@@ -286,7 +500,7 @@ export function validateSave(input: unknown): SaveGame {
   const owned = new Set<string>([...STARTER_COSMETICS, 'chassis:all_rounder']);
   for (const o of ownedRaw) {
     if (typeof o !== 'string') continue;
-    if (o.startsWith('chassis:') ? Object.hasOwn(CHASSIS, o.slice(8)) : COSMETIC_BY_ID[o] && COSMETIC_BY_ID[o].credits >= 0) owned.add(o);
+    if (o.startsWith('chassis:') ? Object.hasOwn(CHASSIS, o.slice(8)) : isOwnableCosmetic(o)) owned.add(o);
   }
   const ownedList = [...owned];
 
@@ -321,6 +535,7 @@ export function validateSave(input: unknown): SaveGame {
   const rec = isObj(raw.records) ? raw.records : {};
   const records = emptyRecords();
   for (const k of Object.keys(records) as (keyof Records)[]) records[k] = int(rec[k], 0, 9999999, 0);
+  if (records.streak > records.bestStreak) records.bestStreak = records.streak;
 
   const trials: SaveGame['trials'] = {};
   const tr = isObj(raw.trials) ? raw.trials : {};
@@ -354,9 +569,10 @@ export function validateSave(input: unknown): SaveGame {
     if (c) results.push(c);
   }
 
-  return {
+  const createdAt = int(raw.createdAt, 0, 8e15, Date.now());
+  const save: SaveGame = {
     version: SAVE_VERSION,
-    createdAt: int(raw.createdAt, 0, 8e15, Date.now()),
+    createdAt,
     updatedAt: int(raw.updatedAt, 0, 8e15, Date.now()),
     club: sanitizeClub(raw.club, ownedList),
     settings: sanitizeSettings(raw.settings),
@@ -376,7 +592,11 @@ export function validateSave(input: unknown): SaveGame {
     results,
     prefs,
     matchSeq: int(raw.matchSeq, 0, 99999999, 0),
+    progress: sanitizeProgress(fromVersion < 2 ? null : raw.progress, createdAt),
   };
+  if (fromVersion < 2) migrateToV2(save);
+  ensureObjectives(save);
+  return save;
 }
 
 // ---------------------------------------------------------------------------

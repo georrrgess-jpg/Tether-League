@@ -294,7 +294,7 @@ export class App {
         const result = mode.result();
         this.end();
         // Rewards, fixtures and records are committed here, once, before any results UI exists.
-        commitMatch(this.save, result, { label: setup.label, opponentId });
+        commitMatch(this.save, result, { label: setup.label, opponentId, chassis: setup.looks[0].chassis });
         this.persist();
         this.navigate(`results?id=${encodeURIComponent(result.matchId)}`, true);
       },
@@ -337,7 +337,8 @@ export class App {
         const r = commitLesson(this.save, id);
         this.save.flags.onboarded = true;
         this.persist();
-        this.toast(r.first ? `Lesson complete! +${r.credits} credits, +${r.xp} XP` : 'Lesson complete!', 'good');
+        const bonus = r.bonus.reduce((acc, l) => ({ credits: acc.credits + l.credits, xp: acc.xp + l.xp }), { credits: r.credits, xp: r.xp });
+        this.toast(r.first ? `Lesson complete! +${bonus.credits} credits, +${bonus.xp} XP${r.bonus.length ? ` (incl. ${r.bonus.map((l) => l.label).join(', ')})` : ''}` : 'Lesson complete!', 'good');
         const next = mode.nextLesson();
         if (next && returnTo === 'onboarding') this.startLesson(next, returnTo);
         else this.navigate(returnTo === 'onboarding' ? 'home' : returnTo, true);

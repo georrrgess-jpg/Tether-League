@@ -1,13 +1,14 @@
 import type { App } from '../app';
-import { colorHex } from '../content/cosmetics';
+import { COSMETIC_BY_ID, colorHex } from '../content/cosmetics';
 import { levelProgress } from '../progression/progression';
 import { badgeSvg } from './badge';
 import { h, icon } from './dom';
 
-export type NavId = 'play' | 'club' | 'garage' | 'academy' | 'settings';
+export type NavId = 'play' | 'progress' | 'club' | 'garage' | 'academy' | 'settings';
 
 const NAV: { id: NavId; route: string; label: string; icon: string }[] = [
   { id: 'play', route: 'home', label: 'Play', icon: 'play' },
+  { id: 'progress', route: 'progress', label: 'Progress', icon: 'target' },
   { id: 'club', route: 'club', label: 'Club', icon: 'club' },
   { id: 'garage', route: 'garage', label: 'Garage', icon: 'garage' },
   { id: 'academy', route: 'academy', label: 'Academy', icon: 'academy' },
@@ -38,7 +39,12 @@ export interface ShellOptions {
   cls?: string;
 }
 
-/** Common frame for menu screens: wordmark, club chip, credits, stable five-item navigation. */
+/** The equipped club title's display name ('' when none). */
+export function clubTitle(app: App): string {
+  return COSMETIC_BY_ID[app.save.club.title]?.name ?? '';
+}
+
+/** Common frame for menu screens: wordmark, club chip, credits, stable six-item navigation. */
 export function shell(app: App, o: ShellOptions, ...content: (Node | null)[]): HTMLElement {
   const lp = levelProgress(app.save.xp);
   const nav = h('nav', { class: 'nav', 'aria-label': 'Main' },
@@ -57,7 +63,7 @@ export function shell(app: App, o: ShellOptions, ...content: (Node | null)[]): H
     h('div', { class: 'top-right' },
       h('button', { class: 'club-chip', onclick: () => app.navigate('club'), title: 'Club' },
         clubBadge(app),
-        h('span', { class: 'cc-text' }, h('b', null, app.save.club.name), h('small', null, `Club level ${lp.level}`)),
+        h('span', { class: 'cc-text' }, h('b', null, app.save.club.name), h('small', null, `Level ${lp.level}${clubTitle(app) ? ` · ${clubTitle(app)}` : ''}`)),
       ),
       creditsChip(app),
     ),
