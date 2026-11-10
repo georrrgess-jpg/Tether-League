@@ -62,7 +62,7 @@ export function homeScreen(app: App): ScreenView {
 
   const played = career.fixtures.filter((f) => f.done && (f.home === 'player' || f.away === 'player')).length;
   const strip = h('button', { class: 'panel-dark season-strip', onclick: () => app.navigate('league'), 'aria-label': 'Open league hub' },
-    h('div', { class: 'ss-top' }, icon('star'), h('b', null, div.name), h('span', null, career.phase === 'regular' ? `Match ${Math.min(ROUNDS, played + 1)}/${ROUNDS} · ${ordinal(playerRank(career))} place` : career.phase === 'complete' ? 'Season complete' : 'Playoffs')),
+    h('div', { class: 'ss-top' }, icon('star'), h('b', null, div.name), h('span', null, career.phase === 'regular' ? `Match ${Math.min(ROUNDS, played + 1)}/${ROUNDS} · ${played ? `${ordinal(playerRank(career))} place` : 'Season opener'}` : career.phase === 'complete' ? 'Season complete' : 'Playoffs')),
     h('div', { class: 'pips' }, Array.from({ length: ROUNDS }, (_, i) => h('i', { class: i < played ? 'on' : i === played && career.phase === 'regular' ? 'now' : '' }))),
   );
 
