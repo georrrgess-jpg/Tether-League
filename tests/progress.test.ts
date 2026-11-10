@@ -346,7 +346,9 @@ describe('save v2', () => {
     const s = validateSave(raw);
     expect(raw).toEqual(snapshot); // input untouched
     expect(s.version).toBe(SAVE_VERSION);
-    expect(SAVE_VERSION).toBe(2);
+    expect(SAVE_VERSION).toBe(3);
+    expect(s.club.ball).toBe('ball_classic');
+    expect(s.records.giveAndGos).toBe(0);
     expect(s.xp).toBe(2620);
     expect(s.club).toMatchObject({ name: 'Rope Rockets', chassis: 'scout', face: 'face_star', badge: 'badge_anchor', topper: 'topper_antenna', title: 'title_newcomers' });
     for (const id of ['face_star', 'badge_anchor', 'topper_fin', 'chassis:scout']) expect(s.owned).toContain(id);
@@ -426,5 +428,31 @@ describe('save v2', () => {
     s.club.topper = 'topper_fin';
     expect(playerLooks(s).map((l) => l.topper)).toEqual(['topper_fin', 'topper_fin']);
     expect(CHASSIS_ORDER.length).toBe(4);
+  });
+});
+
+describe('save v3', () => {
+  it('migrates a v2 save: adds the starter match ball and zeroed play counters, keeps everything else', () => {
+    const v2 = JSON.parse(JSON.stringify(fresh())) as Record<string, unknown>;
+    v2.version = 2;
+    const club = v2.club as Record<string, unknown>;
+    delete club.ball;
+    const rec = v2.records as Record<string, unknown>;
+    for (const k of ['giveAndGos', 'longBalls', 'wallPasses', 'oneTouchGoals']) delete rec[k];
+    rec.goals = 41;
+    v2.credits = 1234;
+    const s = validateSave(v2);
+    expect(s.version).toBe(3);
+    expect(s.club.ball).toBe('ball_classic');
+    expect(s.owned).toContain('ball_classic');
+    expect(s.records.goals).toBe(41);
+    expect(s.records.longBalls).toBe(0);
+    expect(s.credits).toBe(1234);
+  });
+
+  it('rejects an unknown or unowned ball and falls back to the starter ball', () => {
+    const raw = JSON.parse(JSON.stringify(fresh())) as Record<string, unknown>;
+    (raw.club as Record<string, unknown>).ball = 'ball_does_not_exist';
+    expect(validateSave(raw).club.ball).toBe('ball_classic');
   });
 });

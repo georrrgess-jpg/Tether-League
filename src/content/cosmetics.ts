@@ -1,4 +1,4 @@
-export type CosmeticKind = 'face' | 'pattern' | 'trail' | 'celebration' | 'badge' | 'topper' | 'title' | 'color';
+export type CosmeticKind = 'face' | 'pattern' | 'trail' | 'celebration' | 'badge' | 'topper' | 'title' | 'color' | 'ball';
 
 /**
  * How an item can be obtained.
@@ -28,6 +28,8 @@ const earned = (unlock: 'level' | 'achievement' | 'mastery', id: string, kind: C
 const opponent = (id: string, name: string): CosmeticDef => ({ id, kind: 'badge', name, blurb: '', unlock: 'opponent', credits: 0 });
 
 export const COSMETICS: CosmeticDef[] = [
+  // Match balls (textures.ballMaps): the club's ball, used in its matches
+  starter('ball_classic', 'ball', 'Classic Panels', 'The league ball: white panels, navy seams.'),
   // Faces (drawn by textures.drawFace)
   starter('face_basic', 'face', 'Basic Eyes', 'Friendly rounded eyes.'),
   shop('face_star', 'face', 'Star Face', 'Star-shaped eyes for big moments.', 160),

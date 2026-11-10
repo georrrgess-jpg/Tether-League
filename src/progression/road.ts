@@ -39,7 +39,7 @@ export function levelProgress(xp: number): { level: number; from: number; to: nu
 export type LevelReward = TrackReward;
 export const levelReward = roadReward;
 
-const KIND_LABEL: Record<CosmeticKind, string> = { face: 'face', pattern: 'jersey', trail: 'trail', celebration: 'celebration', badge: 'badge', topper: 'topper', title: 'club title', color: 'club colour' };
+const KIND_LABEL: Record<CosmeticKind, string> = { face: 'face', pattern: 'jersey', trail: 'trail', celebration: 'celebration', badge: 'badge', topper: 'topper', title: 'club title', color: 'club colour', ball: 'match ball' };
 
 export function itemKindLabel(id: string): string {
   const d = COSMETIC_BY_ID[id];
