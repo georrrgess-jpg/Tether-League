@@ -60,13 +60,14 @@ export class LessonMode extends Scenario {
     return i >= 0 && i < chain.length - 1 ? chain[i + 1] : null;
   }
 
-  private keys(): { move: string; tether: string; kick: string } {
+  private keys(): { move: string; tether: string; kick: string; pass: string } {
     const k = this.settings().keys;
-    if (this.touch) return { move: 'the left side of the screen', tether: 'SWING', kick: 'KICK' };
+    if (this.touch) return { move: 'the left side of the screen', tether: 'SWING', kick: 'KICK', pass: 'PASS' };
     return {
       move: `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])}`,
       tether: `right mouse or ${keyLabel(k.tether[0])}`,
       kick: `left mouse or ${keyLabel(k.kick[0])}`,
+      pass: `${keyLabel(k.pass[0])} (or ${keyLabel(k.pass[1])})`,
     };
   }
 
@@ -121,8 +122,8 @@ export class LessonMode extends Scenario {
       case 'tether':
         this.steps = [
           {
-            text: this.touch ? 'Move toward the glowing circle and tap SWING.' : `Point at the glowing circle and tap ${k.tether}.`,
-            sub: 'The glowing anchor is the one you will swing from. Your robot lets go by itself so the launch carries you there.',
+            text: this.touch ? 'Move toward the glowing circle and tap SWING.' : `Run toward the glowing circle (or point at it) and tap ${k.tether}.`,
+            sub: 'Swings go the way you are moving; standing still, toward your cursor. The glowing anchor is the one you will use.',
             enter: () => {
               this.place(0, -9, 5, 0);
               this.ball(PARK[0], PARK[1]);
@@ -135,7 +136,7 @@ export class LessonMode extends Scenario {
             },
           },
           {
-            text: this.touch ? 'Head beyond the gate and tap SWING to launch through it.' : `Point beyond the gate and tap ${k.tether} to launch through it.`,
+            text: this.touch ? 'Head for the gate and tap SWING to launch through it.' : `Head for the gate and tap ${k.tether} to launch through it.`,
             sub: 'You must still be faster than running speed when you cross it.',
             enter: () => {
               this.place(0, -8, 5, 0);
@@ -217,8 +218,8 @@ export class LessonMode extends Scenario {
       case 'pass':
         this.steps = [
           {
-            text: `Aim at your teammate and press ${k.kick} to pass.`,
-            sub: 'Passes that are aimed close to a teammate are weighted so they can be collected.',
+            text: `Press ${k.pass} near the ball to pass to your teammate.`,
+            sub: 'The pass button always finds your teammate, weighted so they can collect it. You can also aim and kick.',
             enter: () => {
               this.a = -2.5;
               this.b = 2;
@@ -231,8 +232,8 @@ export class LessonMode extends Scenario {
             check: (ev) => this.received(ev),
           },
           {
-            text: 'Again, but your teammate is moving. Lead them.',
-            sub: 'Aim where they are going, not where they are.',
+            text: `Again: your teammate is moving. Press ${k.pass}.`,
+            sub: 'A pass is played ahead of a moving teammate, into their path.',
             enter: () => {
               this.a = -3;
               this.b = -2;
@@ -243,8 +244,8 @@ export class LessonMode extends Scenario {
             check: (ev) => this.received(ev),
           },
           {
-            text: 'Give and go: pass, run into the marked space, and shoot the return ball.',
-            sub: 'Moving after a pass is how two robots beat a defence.',
+            text: `Give and go: pass, run into the marked space, and shoot the return ball.`,
+            sub: `Tip: in a match, press ${k.pass} without the ball to call for it.`,
             enter: () => {
               this.a = -1;
               this.b = 3;

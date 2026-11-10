@@ -51,17 +51,22 @@ module scripts on pages opened straight from disk.
 | Swing: tap again = let go now | tap again | tap again | tap again | tap again |
 | Swing: hold = let go yourself (rope glows green when lined up) | hold right mouse | hold Space | hold SWING | hold trigger |
 | Kick | left mouse | J / Enter | tap KICK | A / X |
+| Pass to teammate (without the ball: call for it) | K / F | K / F | tap PASS | B / Y |
 | Override the chosen anchor | Q / E | Q / E | – | – |
 | Pause | Esc / P | Esc / P | pause button | Start |
 
-Your swing target is wherever you point (cursor or right stick), otherwise the way you are moving,
-otherwise the ball. The glowing anchor is the one you will swing from.
+Swings go the way you are moving. Standing still, they go toward the cursor (if you used the mouse in
+the last few seconds), otherwise the way your robot faces. A gamepad's right stick always wins. A swing
+never starts backwards: if no anchor in reach can start you forward, none is highlighted.
+The glowing anchor is the one you will swing from.
 Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 
 ## What is in the game
 
 - **The sport**: three-minute 2v2 matches with sudden-death overtime, a free ball, deliberate kicks whose
-  power grows with your momentum, soft body touches, saves, passes and interceptions.
+  power grows with your momentum, a pass button that always finds your teammate (and calls for the
+  ball when you don't have it), saves, interceptions, and a slow-motion goal celebration with
+  fireworks and a camera push-in.
 - **Smart swing**: tap to swing round the highlighted anchor and launch toward your aim (tap again to
   let go early); hold to swing manually and let go when the rope glows green. Swings are planned from
   real rope physics (anchor, direction and release point), and the bots use the same planner.
@@ -83,11 +88,12 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (195 tests) |
+| `npm test` | Rule validation suite (202 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |
 | `npm run swingcheck` | Smart-swing accuracy and time gain from random spots on each arena |
+| `vite-node tools/swingdir.ts` | How often a swing starts backwards (should be 0%) |
 
 ## Layout
 

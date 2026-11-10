@@ -173,6 +173,8 @@ export class BotDirector {
   private ix: number[] = [];
   private iz: number[] = [];
   private challenger: [number, number] = [-1, -1];
+  /** Tick until which a robot (the player) has called for a pass. */
+  private passCall: number[] = [];
   private roleTick = -999;
 
   constructor(world: World, specs: BotSpec[], seed: number) {
@@ -218,6 +220,11 @@ export class BotDirector {
     const b = this.byId[robot];
     if (!b) return 'human';
     return `${b.role}${b.tether ? ' +tether' : ''}${b.kick ? ' ' + b.kick.kind : ''}`;
+  }
+
+  /** The player pressed pass without the ball: their teammate passes to them at the next chance. */
+  requestPass(robot: number): void {
+    this.passCall[robot] = this.w.tick + Math.round(1.6 * TUNING.sim.hz);
   }
 
   /** Forget plans after a kickoff reset. */
@@ -277,6 +284,7 @@ export class BotDirector {
     const w = this.w;
     for (let team = 0 as 0 | 1; team <= 1; team++) {
       const members = w.robots.filter((r) => r.team === team);
+      if (members.length === 0) continue;
       if (members.length === 1) {
         this.challenger[team] = members[0].id;
         continue;
@@ -484,6 +492,16 @@ export class BotDirector {
       }
     }
 
+    // A teammate who called for the ball gets it unless they are right on top of us or marked tightly.
+    if (mate && (this.passCall[mate.id] ?? -1) > w.tick) {
+      const md = Math.hypot(mate.x - ball.x, mate.z - ball.z);
+      let marked = 99;
+      for (const o of w.robots) if (o.team !== r.team) marked = Math.min(marked, Math.hypot(o.x - mate.x, o.z - mate.z));
+      if (md > 2.5 && marked > 1.2) {
+        this.passCall[mate.id] = -1;
+        return { kind: 'pass', ax: mate.x, az: mate.z, power: 1 };
+      }
+    }
     if (mate && rng.chance(Math.min(0.95, b.diff.passSkill * b.style.pass))) {
       const md = Math.hypot(mate.x - ball.x, mate.z - ball.z);
       const ahead = (mate.x - ball.x) * att;
@@ -531,6 +549,7 @@ export class BotDirector {
     c.power = 1;
     c.anchor = -1;
     c.swingDir = 0;
+    c.pass = false;
     c.mx = 0;
     c.mz = 0;
     c.ax = ball.x;
@@ -644,8 +663,12 @@ export class BotDirector {
         c.az = k.az;
         b.kickWait -= DT;
         if (b.kickWait <= 0 && r.kickCd <= 0 && b.hesitate <= 0) {
-          c.kick = true;
-          c.power = k.power;
+          // Passes use the same pass command as the player's pass button (led and weighted by the simulation).
+          if (k.kind === 'pass') c.pass = true;
+          else {
+            c.kick = true;
+            c.power = k.power;
+          }
           b.kick = null;
         }
       }

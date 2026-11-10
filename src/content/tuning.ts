@@ -81,6 +81,10 @@ export const TUNING = {
     /** Assisted pass: speed = passBase + passPerUnit * distance (never above the natural kick speed). */
     passBase: 5.6,
     passPerUnit: 0.62,
+    /** The pass button buffers a little longer than a kick so it can be pressed just before the ball arrives. */
+    passBufferSeconds: 0.22,
+    /** How far ahead (seconds of teammate movement, capped) a pass is led. */
+    passLeadMax: 0.6,
   },
   assist: {
     /** Max aim correction (radians) for off / light / strong. */

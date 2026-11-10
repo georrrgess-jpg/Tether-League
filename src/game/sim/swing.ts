@@ -1,6 +1,6 @@
 import { DT, TUNING } from '../../content/tuning';
 import type { Command, Robot, World } from './types';
-import { anchorInRange, pickAnchor } from './world';
+import { anchorInRange } from './world';
 
 /**
  * Swing planning shared by bots and the player's smart swing.
@@ -112,6 +112,10 @@ export interface PlanOptions {
   anchor?: number;
   /** Reject swings that would keep the robot on the rope longer than this (seconds). */
   maxSwingTime?: number;
+  /** Largest arc (radians) swung before release. */
+  maxArc?: number;
+  /** Only swings whose first motion heads toward the target (dot of start direction and target direction). */
+  minStartDot?: number;
 }
 
 /** Best swing toward (tx, tz), or null when no anchor in range can launch the robot that way. */
@@ -139,12 +143,17 @@ export function planSwing(w: World, r: Robot, tx: number, tz: number, opts: Plan
     const nx = (r.x - c.x) / (d || 1);
     const nz = (r.z - c.z) / (d || 1);
     const vt = r.vx * -nz + r.vz * nx;
+    const tdx = tx - r.x;
+    const tdz = tz - r.z;
+    const tdl = Math.hypot(tdx, tdz) || 1;
     for (const s of [1, -1] as const) {
       if (vt * s < -3) continue; // already swinging hard the other way
+      // Direction the robot starts moving on this swing: never backwards when the caller asks for forward starts.
+      if (opts.minStartDot !== undefined && ((-nz * s) * tdx + (nx * s) * tdz) / tdl < opts.minStartDot) continue;
       const thr = phiT - s * alpha;
       let arc = s * (thr - th0);
       arc = ((arc % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-      if (arc < MIN_ARC || arc > MAX_ARC) continue;
+      if (arc < MIN_ARC || arc > (opts.maxArc ?? MAX_ARC)) continue;
       // The arc must stay on the pitch (the rope never drags a robot through a wall).
       let ok = true;
       for (let k = 1; k <= 6; k++) {
@@ -170,6 +179,50 @@ export function planSwing(w: World, r: Robot, tx: number, tz: number, opts: Plan
           releaseX: rx, releaseZ: rz, lx, lz, releaseSpeed: sw.v, swingTime: sw.t,
           totalTime, runTime, gain: runTime - totalTime, tx, tz,
         };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Fallback when no planned launch reaches the target: the anchor and direction whose swing starts most
+ * directly toward the target (so pressing swing never sends the robot backwards), or null if every
+ * swing in range would start sideways or backwards.
+ */
+export function forwardSwing(w: World, r: Robot, tx: number, tz: number, only = -1): { anchor: number; dir: 1 | -1 } | null {
+  const T = TUNING.tether;
+  const margin = TUNING.robot.radius + 0.08;
+  const tdx = tx - r.x;
+  const tdz = tz - r.z;
+  const tdl = Math.hypot(tdx, tdz) || 1;
+  let best: { anchor: number; dir: 1 | -1 } | null = null;
+  let bestScore = -Infinity;
+  const anchors = w.arena.anchors;
+  for (let i = 0; i < anchors.length; i++) {
+    if (only >= 0 && i !== only) continue;
+    if (!anchorInRange(w, r, i)) continue;
+    const c = anchors[i];
+    const d = Math.hypot(r.x - c.x, r.z - c.z) || 1;
+    const rr = Math.max(T.minLength, Math.min(T.maxLength, d));
+    const nx = (r.x - c.x) / d;
+    const nz = (r.z - c.z) / d;
+    const th0 = Math.atan2(nz, nx);
+    for (const s of [1, -1] as const) {
+      const dot = ((-nz * s) * tdx + (nx * s) * tdz) / tdl;
+      if (dot < (only >= 0 ? -1 : 0.35)) continue;
+      // The first part of the arc must stay on the pitch.
+      let ok = true;
+      for (let k = 1; k <= 3; k++) {
+        const th = th0 + s * (0.8 / Math.max(1, rr / 3)) * (k / 3);
+        if (!insideField(w, c.x + Math.cos(th) * rr, c.z + Math.sin(th) * rr, margin)) ok = false;
+      }
+      if (!ok) continue;
+      // Prefer starting straight at the target, then longer ropes (gentler, faster arcs).
+      const score = dot * 2 + Math.min(rr, 8) * 0.06;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { anchor: i, dir: s };
       }
     }
   }
@@ -221,6 +274,8 @@ export interface SwingInput {
 export const TAP_SECONDS = 0.2;
 /** Automatic swings stay short so the player is never carried round a long loop in a tight moment. */
 export const AUTO_SWING_MAX = 1.05;
+/** Player swings: start toward the target and never wrap round more than this (radians). */
+const PLAYER_PLAN: PlanOptions = { maxSwingTime: AUTO_SWING_MAX, maxArc: 2.2, minStartDot: 0.1 };
 
 /**
  * The player's tether controller. A tap launches toward the target automatically; a hold is fully manual
@@ -229,6 +284,9 @@ export const AUTO_SWING_MAX = 1.05;
  */
 export class SmartSwing {
   plan: SwingPlan | null = null;
+  /** Forward-starting swing used when no planned launch reaches the target. */
+  fallback: { anchor: number; dir: 1 | -1 } | null = null;
+  private dir: 0 | 1 | -1 = 0;
   /** Active automatic swing (target locked when the button was pressed). */
   auto: { tx: number; tz: number } | null = null;
   /** True while a manual swing points at the target: the "let go now" cue. */
@@ -244,6 +302,8 @@ export class SmartSwing {
 
   reset(): void {
     this.plan = null;
+    this.fallback = null;
+    this.dir = 0;
     this.auto = null;
     this.cue = false;
     this.preview = -1;
@@ -262,9 +322,11 @@ export class SmartSwing {
       // Re-plan a few times a second; the plan is only a preview until the button goes down.
       if (w.tick - this.planTick >= 3 || pressed) {
         this.planTick = w.tick;
-        this.plan = planSwing(w, r, target.x, target.z, inp.anchor >= 0 ? { anchor: inp.anchor, maxSwingTime: AUTO_SWING_MAX } : { maxSwingTime: AUTO_SWING_MAX });
+        this.plan = planSwing(w, r, target.x, target.z, inp.anchor >= 0 ? { ...PLAYER_PLAN, anchor: inp.anchor } : PLAYER_PLAN);
+        this.fallback = this.plan ? null : forwardSwing(w, r, target.x, target.z, inp.anchor);
       }
-      this.preview = inp.anchor >= 0 ? inp.anchor : (this.plan?.anchor ?? pickAnchor(w, r, target.x, target.z, this.preview));
+      // No forward option in reach: highlight nothing, so a press gives the 'no anchor' cue instead of a backwards swing.
+      this.preview = inp.anchor >= 0 ? inp.anchor : (this.plan?.anchor ?? this.fallback?.anchor ?? -1);
     } else {
       this.preview = r.tAnchor;
     }
@@ -303,6 +365,8 @@ export class SmartSwing {
     this.cue = r.tState === 'attached' && !this.auto && inp.held && launchAlignment(r, target.x, target.z) > 0.97;
     c.tether = tether;
     c.anchor = this.preview;
-    c.swingDir = this.plan && this.plan.anchor === this.preview ? this.plan.dir : 0;
+    // The swing direction always comes from the plan (or the forward fallback), never from momentum.
+    if (r.tState !== 'attached') this.dir = this.plan && this.plan.anchor === this.preview ? this.plan.dir : this.fallback && this.fallback.anchor === this.preview ? this.fallback.dir : 0;
+    c.swingDir = this.dir;
   }
 }

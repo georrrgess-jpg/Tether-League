@@ -7,7 +7,7 @@ before changing rules or scope.
 ## Commands
 
 - `npm run dev`: dev server. `npm run build`: type-check and production build. `npm run preview`.
-- `npm run check`: type-check and the 195-test rule suite. Run it before committing.
+- `npm run check`: type-check and the 202-test rule suite. Run it before committing.
 - `npm run sim -- <matches> <arena> <difficultyA> <difficultyB>`: headless bot matches for tuning.
 - `npm run feasibility`: confirms the tether trial layouts are achievable.
 - `npm run swingcheck`: smart-swing aim accuracy, time gain over running, bot swing use, trial scores.
@@ -21,6 +21,8 @@ before changing rules or scope.
   player's smart swing and the bots. Change the planner there, not in two places.
 - Keep swing visuals minimal (highlighted anchor, rope, green rope cue). Players found extra preview
   lines and rings confusing; do not add them back without asking.
+- Swings must start toward the player's target (movement direction first, then a recently used cursor,
+  then facing). `tools/swingdir.ts` and `tests/pass.test.ts` guard this; keep them at 0% backwards.
 - All gameplay numbers live in `src/content/tuning.ts`; content is data in `src/content/`.
 - Rewards are paid only inside `commitMatch`, `commitTrial` and `commitLesson`
   (`src/progression/progression.ts`), which are idempotent. Screens display committed records.

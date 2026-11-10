@@ -19,10 +19,12 @@ export interface Command {
   anchor: number;
   /** Preferred swing direction on attach (from the swing planner); 0 lets the simulation choose. */
   swingDir: 0 | 1 | -1;
+  /** Pass pressed this tick (edge): a weighted, leading pass to the teammate, whatever the aim. */
+  pass: boolean;
 }
 
 export function emptyCommand(): Command {
-  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0 };
+  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0, pass: false };
 }
 
 export function clearCommand(c: Command): void {
@@ -33,6 +35,7 @@ export function clearCommand(c: Command): void {
   c.power = 1;
   c.anchor = -1;
   c.swingDir = 0;
+  c.pass = false;
 }
 
 export type TetherState = 'ready' | 'attached' | 'cooldown';
@@ -72,6 +75,8 @@ export interface Robot {
   kickCd: number;
   kickBuffer: number;
   kickPower: number;
+  /** The buffered kick is a pass. */
+  kickPass: boolean;
   ghost: number;
 
   /** Seconds since release from a swing while still above run speed (used for "swing kick" detection). */
@@ -98,7 +103,7 @@ export interface Ball {
 }
 
 export type SimEvent =
-  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number }
+  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean }
   | { type: 'touch'; robot: number; speed: number }
   | { type: 'wall'; speed: number; x: number; z: number; nx: number; nz: number }
   | { type: 'post'; speed: number; x: number; z: number }

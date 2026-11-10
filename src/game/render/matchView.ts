@@ -6,7 +6,7 @@ import type { SimEvent, World } from '../sim/types';
 import { ArenaView, type Quality } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
-import { ballTexture, blobTexture, ringTexture, shade, type Expression } from './textures';
+import { ballMaps, blobTexture, ringTexture, shade, type Expression } from './textures';
 
 export interface Marker {
   kind: 'ring' | 'disc' | 'line' | 'gate';
@@ -61,6 +61,7 @@ const col = new THREE.Color();
 const TRAIL_N = 20;
 /** Robots are drawn larger than their collision circle for readability at the fixed camera distance. */
 const ROBOT_SCALE = 1.75;
+const BALL_SCALE = 1.2;
 
 class Trail {
   mesh: THREE.Mesh;
@@ -172,6 +173,7 @@ export class MatchView {
   private opts: MatchViewOptions;
   private prev: Float32Array;
   private ball: THREE.Mesh;
+  private ballTrail = new Trail();
   private ballShadow: THREE.Mesh;
   private ballRing: THREE.Mesh;
   private shadows: THREE.Mesh[] = [];
@@ -193,6 +195,12 @@ export class MatchView {
   private markerGroup = new THREE.Group();
   private markerPulse: THREE.Mesh[] = [];
   private time = 0;
+  private timers: { t: number; fn: () => void }[] = [];
+  private focus = 0;
+  private focusTarget = 0;
+  private focusX = 0;
+  private goalLight = new THREE.PointLight('#ffffff', 0, 26, 1.4);
+  private goalLightLevel = 0;
   private shake = 0;
   private camBase = new THREE.Vector3();
   private camTarget = new THREE.Vector3(0, 0, 0.6);
@@ -259,13 +267,22 @@ export class MatchView {
     });
 
     // ball
-    const ballGeo = this.track(new THREE.SphereGeometry(TUNING.ball.radius, 24, 16));
-    this.ball = new THREE.Mesh(ballGeo, this.track(new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: 0.35 })));
+    // Drawn a little larger than the collision circle (like the robots) so it reads at the match camera.
+    const ballGeo = this.track(new THREE.SphereGeometry(TUNING.ball.radius * BALL_SCALE, 48, 32));
+    const maps = ballMaps();
+    const ballMat =
+      this.quality === 'low'
+        ? new THREE.MeshStandardMaterial({ map: maps.map, roughness: 0.4 })
+        : new THREE.MeshPhysicalMaterial({ map: maps.map, bumpMap: maps.bump, bumpScale: 1.4, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.18 });
+    this.ball = new THREE.Mesh(ballGeo, this.track(ballMat));
     this.ball.castShadow = shadows;
     this.scene.add(this.ball);
+    this.ballTrail.setStyle('trail_comet', '#ffffff', '#cfefff');
+    this.scene.add(this.ballTrail.mesh);
+    this.disposables.push(this.ballTrail.mesh.geometry, this.ballTrail.mesh.material as THREE.Material);
     this.ballShadow = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: blob, color: '#04161d', transparent: true, opacity: 0.55, depthWrite: false })));
     this.ballShadow.rotation.x = -Math.PI / 2;
-    this.ballShadow.scale.set(1.4, 1.4, 1);
+    this.ballShadow.scale.set(1.6, 1.6, 1);
     this.ballShadow.renderOrder = 1;
     this.scene.add(this.ballShadow);
     this.ballRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: ringT, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false })));
@@ -316,6 +333,7 @@ export class MatchView {
     this.pMesh.setColorAt(0, col.set('#ffffff'));
     this.scene.add(this.pMesh);
     this.scene.add(this.markerGroup);
+    if (this.quality !== 'low') this.scene.add(this.goalLight);
 
     this.resize();
   }
@@ -401,6 +419,8 @@ export class MatchView {
   snap(w: World): void {
     this.snapshot(w);
     for (const t of this.trails) t.clear();
+    this.ballTrail.clear();
+    this.focusTarget = 0; // kickoff: camera back to the full-pitch view
   }
 
   setMarkers(markers: Marker[]): void {
@@ -536,16 +556,62 @@ export class MatchView {
         case 'goal': {
           const sx = e.side === 1 ? 1 : -1;
           const scoring = e.side === 1 ? 0 : 1;
+          const color = this.opts.teamColors[scoring];
           this.arenaView.flashGoal(e.side);
           this.arenaView.excite(1);
-          if (!reduced) {
-            this.confetti(sx * (w.hx - 1), 0, [this.opts.teamColors[scoring], '#ffffff', '#f6c542'], 70);
-            this.shake = Math.max(this.shake, 0.3);
-          }
+          this.goalCelebration(w, sx, color, reduced);
           break;
         }
       }
     }
+  }
+
+  /** Run `fn` after `delay` seconds of rendered time (presentation only). */
+  private schedule(delay: number, fn: () => void): void {
+    this.timers.push({ t: delay, fn });
+  }
+
+  /** A rocket from the ground that bursts into a sphere of sparks. */
+  private firework(x: number, z: number, height: number, colors: string[]): void {
+    this.spawn(x, 0.4, z, 0, height * 2.4, 0, 0.42, 0.12, '#fff3c2', 0);
+    this.schedule(0.42, () => {
+      const n = this.quality === 'low' ? 14 : 34;
+      for (let i = 0; i < n; i++) {
+        const u = Math.random() * 2 - 1;
+        const a = Math.random() * Math.PI * 2;
+        const k = Math.sqrt(1 - u * u);
+        const sp = 3.5 + Math.random() * 2.5;
+        this.spawn(x, height, z, Math.cos(a) * k * sp, u * sp + 1, Math.sin(a) * k * sp, 0.9 + Math.random() * 0.6, 0.15, colors[i % colors.length], 2.6);
+      }
+      this.goalLight.position.set(x, height, z);
+      this.goalLight.color.set(colors[0]);
+      this.goalLightLevel = Math.max(this.goalLightLevel, 1);
+    });
+  }
+
+  /**
+   * Goal celebration: shockwave rings at the goal mouth, fireworks over the goal, a spotlight on the
+   * scorer and a camera push-in (no push-in or fireworks with reduced motion).
+   */
+  private goalCelebration(w: World, sx: number, color: string, reduced: boolean): void {
+    const gx = sx * w.hx;
+    const colors = [color, '#ffffff', '#f6c542'];
+    for (let k = 0; k < 3; k++) this.schedule(k * 0.14, () => this.flash(gx - sx * 0.6, 0, 5 + k * 3.5, k === 1 ? '#ffffff' : color, 0.7));
+    const scorer = w.robots[w.ball.lastTouchRobot];
+    if (scorer) {
+      for (let k = 0; k < 4; k++) this.schedule(0.2 + k * 0.35, () => this.flash(scorer.x, scorer.z, 2.6, '#f6c542', 0.5));
+    }
+    if (reduced) return;
+    this.confetti(gx - sx * 1, 0, colors, 70);
+    this.shake = Math.max(this.shake, 0.3);
+    // Fireworks burst low over the pitch in front of the goal so they stay in view during the push-in.
+    const gw = w.arena.goalWidth / 2 + 1.5;
+    this.firework(gx - sx * 2.5, -gw, 3.6, colors);
+    this.schedule(0.22, () => this.firework(gx - sx * 2.5, gw, 4.0, colors));
+    this.schedule(0.5, () => this.firework(gx - sx * 5, 0, 4.6, colors));
+    // Camera eases toward the goal for the celebration and back at the next kickoff.
+    this.focusX = gx * 0.55;
+    this.focusTarget = 1;
   }
 
   private updateParticles(dt: number): void {
@@ -686,12 +752,14 @@ export class MatchView {
     const b = w.ball;
     const bx = p[n * 2] + (b.x - p[n * 2]) * a;
     const bz = p[n * 2 + 1] + (b.z - p[n * 2 + 1]) * a;
-    this.ball.position.set(bx, TUNING.ball.radius, bz);
+    this.ball.position.set(bx, TUNING.ball.radius * BALL_SCALE, bz);
     const bs = Math.hypot(b.vx, b.vz);
     if (bs > 0.05) {
       v1.set(b.vz, 0, -b.vx).normalize();
       this.ball.rotateOnWorldAxis(v1, (bs * dt) / TUNING.ball.radius);
     }
+    // Streak behind a hard-hit ball (shots and swing kicks), never over the ball itself.
+    this.ballTrail.update(bx, bz, 0.25, !f.reduced && bs > 10.5);
     this.ballShadow.position.set(bx, 0.016, bz);
 
     // player-only helpers
@@ -759,14 +827,32 @@ export class MatchView {
     }
     this.updateParticles(dt);
 
+    // timed presentation effects
+    for (let i = this.timers.length - 1; i >= 0; i--) {
+      const tm = this.timers[i];
+      tm.t -= dt;
+      if (tm.t <= 0) {
+        this.timers.splice(i, 1);
+        tm.fn();
+      }
+    }
+    if (this.goalLightLevel > 0) {
+      this.goalLightLevel = Math.max(0, this.goalLightLevel - dt * 1.6);
+      this.goalLight.intensity = this.goalLightLevel * 90;
+    }
+    // Goal push-in: ease toward the scoring end and 25% closer, then back at kickoff.
+    const ft = f.reduced ? 0 : this.focusTarget;
+    this.focus += (ft - this.focus) * Math.min(1, dt * (ft > this.focus ? 2.6 : 3.5));
+    const fz = this.focus * this.focus * (3 - 2 * this.focus);
+    v3.set(this.focusX, 0, this.camTarget.z);
+    this.camera.position.copy(this.camBase).lerp(v3, 0.25 * fz);
+    this.camera.position.x += this.focusX * 0.55 * fz;
     // camera shake (opt-in, never with reduced motion)
     if (this.shake > 0.001 && f.shake && !f.reduced) {
       this.shake *= Math.exp(-dt * 9);
-      this.camera.position.set(this.camBase.x + (Math.random() - 0.5) * this.shake, this.camBase.y + (Math.random() - 0.5) * this.shake, this.camBase.z);
-    } else {
-      this.shake = 0;
-      this.camera.position.copy(this.camBase);
-    }
+      this.camera.position.x += (Math.random() - 0.5) * this.shake;
+      this.camera.position.y += (Math.random() - 0.5) * this.shake;
+    } else this.shake = 0;
     this.arenaView.update(dt, t, this.camera, f.reduced);
     this.gfx.render(this.scene, this.camera);
   }

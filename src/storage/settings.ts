@@ -1,4 +1,4 @@
-export type Action = 'up' | 'down' | 'left' | 'right' | 'tether' | 'kick' | 'anchorPrev' | 'anchorNext' | 'pause';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'tether' | 'kick' | 'pass' | 'anchorPrev' | 'anchorNext' | 'pause';
 
 export const ACTION_LABELS: Record<Action, string> = {
   up: 'Move up',
@@ -7,12 +7,13 @@ export const ACTION_LABELS: Record<Action, string> = {
   right: 'Move right',
   tether: 'Swing (tap or hold)',
   kick: 'Kick',
+  pass: 'Pass to teammate',
   anchorPrev: 'Previous anchor',
   anchorNext: 'Next anchor',
   pause: 'Pause',
 };
 
-export const ACTIONS: Action[] = ['up', 'down', 'left', 'right', 'tether', 'kick', 'anchorPrev', 'anchorNext', 'pause'];
+export const ACTIONS: Action[] = ['up', 'down', 'left', 'right', 'tether', 'kick', 'pass', 'anchorPrev', 'anchorNext', 'pause'];
 
 export interface Settings {
   masterVolume: number;
@@ -48,6 +49,7 @@ export function defaultKeys(): Record<Action, [string, string]> {
     right: ['KeyD', 'ArrowRight'],
     tether: ['Space', 'ShiftLeft'],
     kick: ['KeyJ', 'Enter'],
+    pass: ['KeyK', 'KeyF'],
     anchorPrev: ['KeyQ', ''],
     anchorNext: ['KeyE', ''],
     pause: ['Escape', 'KeyP'],

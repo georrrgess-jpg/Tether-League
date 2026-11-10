@@ -49,6 +49,7 @@ export function createRobot(id: number, team: 0 | 1, slot: number, chassis: Chas
     kickCd: 0,
     kickBuffer: 0,
     kickPower: 1,
+    kickPass: false,
     ghost: 0,
     carry: 99,
     lastKickTick: -999,
@@ -151,7 +152,9 @@ function tryAttach(w: World, r: Robot, anchor: number, want: 0 | 1 | -1 = 0): bo
   let dir: 1 | -1;
   const mt = r.mx * tx + r.mz * tz;
   const at = (r.aimX - r.x) * tx + (r.aimZ - r.z) * tz;
-  if (want !== 0 && (Math.abs(vt) < 3 || Math.sign(vt) === want)) dir = want;
+  // A planned direction always wins: the swing starts the way the player (or bot) meant, even if current
+  // momentum points the other way round the anchor.
+  if (want !== 0) dir = want;
   else if (Math.abs(vt) > 0.8) dir = vt > 0 ? 1 : -1;
   else if (Math.abs(mt) > 0.25) dir = mt > 0 ? 1 : -1;
   else if (Math.abs(at) > 0.5) dir = at > 0 ? 1 : -1;
@@ -167,9 +170,9 @@ function tryAttach(w: World, r: Robot, anchor: number, want: 0 | 1 | -1 = 0): bo
   r.tBuffer = 0;
   r.lastAttachTick = w.tick;
 
-  // Beginner assist: guarantee a minimum swing speed without touching inward motion.
-  if (Math.abs(vt) < T.startSpeed) {
-    const nvt = dir * T.startSpeed;
+  // Guarantee a minimum swing speed in the chosen direction without touching inward motion.
+  if (vt * dir < T.startSpeed) {
+    const nvt = dir * Math.max(T.startSpeed, Math.abs(vt) * 0.6);
     const keepR = Math.min(0, vr);
     r.vx = tx * nvt + nx * keepR;
     r.vz = tz * nvt + nz * keepR;
@@ -203,9 +206,14 @@ function controlRobot(w: World, r: Robot, c: Command): void {
   if (r.kickCd > 0) r.kickCd -= DT;
   if (r.ghost > 0) r.ghost -= DT;
   r.carry += DT;
-  if (c.kick) {
+  if (c.pass) {
+    r.kickBuffer = TUNING.kick.passBufferSeconds;
+    r.kickPower = 1;
+    r.kickPass = true;
+  } else if (c.kick) {
     r.kickBuffer = TUNING.kick.inputBufferSeconds;
     r.kickPower = Math.max(0.2, Math.min(1, c.power));
+    r.kickPass = false;
   } else if (r.kickBuffer > 0) r.kickBuffer -= DT;
 
   // --- tether state machine: READY -> ATTACHED -> COOLDOWN -> READY ---
@@ -317,6 +325,21 @@ function angDiff(a: number, b: number): number {
   return d;
 }
 
+/** The teammate a pass goes to (2v2: the only one), or null when there is none. */
+export function passTarget(w: World, r: Robot): Robot | null {
+  let best: Robot | null = null;
+  let bd = Infinity;
+  for (const m of w.robots) {
+    if (m.team !== r.team || m.id === r.id) continue;
+    const d = Math.hypot(m.x - r.x, m.z - r.z);
+    if (d < bd) {
+      bd = d;
+      best = m;
+    }
+  }
+  return best;
+}
+
 function tryKick(w: World, r: Robot): void {
   const K = TUNING.kick;
   const b = w.ball;
@@ -339,7 +362,18 @@ function tryKick(w: World, r: Robot): void {
   let assisted: 'none' | 'goal' | 'pass' = 'none';
   let target = -1;
   let speedLimit = Infinity;
-  if (r.assist > 0) {
+  const mate = r.kickPass ? passTarget(w, r) : null;
+  if (mate) {
+    // Pass button: aim at where the teammate will be, weighted so it can be collected.
+    const px = mate.x + mate.vx * Math.min(K.passLeadMax, Math.hypot(mate.x - b.x, mate.z - b.z) / 14);
+    const pz = mate.z + mate.vz * Math.min(K.passLeadMax, Math.hypot(mate.x - b.x, mate.z - b.z) / 14);
+    const pl = Math.hypot(px - b.x, pz - b.z) || 1;
+    ax = (px - b.x) / pl;
+    az = (pz - b.z) / pl;
+    assisted = 'pass';
+    target = mate.id;
+    speedLimit = K.passBase + K.passPerUnit * pl;
+  } else if (r.assist > 0) {
     const maxA = TUNING.assist.maxAngle[r.assist];
     const aim = Math.atan2(az, ax);
     let best = Infinity;
@@ -392,8 +426,10 @@ function tryKick(w: World, r: Robot): void {
   b.lastTouchRobot = r.id;
   b.lastTouchTick = w.tick;
   b.lastTouchDeliberate = true;
+  const wasPass = !!mate;
   r.kickCd = K.cooldownSeconds;
   r.kickBuffer = 0;
+  r.kickPass = false;
   r.ghost = K.ghostSeconds;
   r.lastKickTick = w.tick;
   r.lastKickDirX = ax;
@@ -407,6 +443,7 @@ function tryKick(w: World, r: Robot): void {
     assisted,
     swing,
     target,
+    pass: wasPass,
   });
 }
 

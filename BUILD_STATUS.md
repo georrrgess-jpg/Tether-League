@@ -1,6 +1,6 @@
 # Build status
 
-Last updated: 2026-11-10 (smart swing, decluttered). Release scope: the complete offline single-player game described in
+Last updated: 2026-11-10 (swing direction fix, pass button, new ball, goal celebrations). Release scope: the complete offline single-player game described in
 `design/docs/08_BUILD_PLAN_AND_ACCEPTANCE.md` (milestones A to D), minus the items listed under
 "Not done".
 
@@ -50,7 +50,7 @@ Production bundle: about 813 kB JS (227 kB gzipped), 46 kB CSS, no image assets.
 Commands used: `npm run check`, `npm run build`, `npm run sim`, `npm run feasibility`, plus
 Playwright scripts against the dev server and the production preview.
 
-**Automated (195 tests, about 1.5 s)**: tether acquisition, no retargeting, release preserving
+**Automated (202 tests, about 1.5 s)**: tether acquisition, no retargeting, release preserving
 velocity, speed cap, auto-release, cooldown, rope stability, pause detach without boost; ball drag
 against the analytic law, prediction against the stepped path, goals scoring once, misses not scoring,
 containment stress on every arena; kickoff resets, overtime, goal and clock on the same tick, own
@@ -89,6 +89,36 @@ thresholds are estimates. No real phone, Chromebook or gamepad was available, so
 device performance, touch comfort and gamepad mapping are untested. Frame rate was not measured on
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
+
+### Swing direction, pass button, ball and goal celebration update (2026-11-10)
+
+Reported: swings often went backwards ("because of my orientation or the way I hook onto the rim").
+
+- Causes found: (1) while moving with the keyboard, the swing aimed at wherever the mouse cursor was
+  resting, often behind the robot; (2) the planner allowed swings that start away from the target and
+  loop round; (3) with no planned route the simulation guessed the direction from momentum; (4) current
+  momentum could override the planned direction when hooking on.
+- Fixes: swings go the way you move (standing still: a recently used cursor, else facing; a pad's
+  right stick always wins); player swings must start toward the target and wrap at most 2.2 rad; a
+  forward-only fallback picks the anchor when no planned launch exists, and if nothing in reach starts
+  forward no anchor is highlighted; the planned direction always wins on attach.
+- `tools/swingdir.ts` (about 1,000 random trips per arena, tap standing / tap running / hold running):
+  backwards or sideways starts went from 3–10% to 0–0.3%. In the browser with real input (cursor parked
+  behind the robot, run right, tap Space) every swing went right.
+- Pass button (K / F, gamepad B / Y, touch PASS): a led, weighted pass to the teammate whatever the
+  aim, buffered 0.22 s. Without the ball it calls for a pass and the bot teammate plays it at its next
+  touch unless closely marked. Bots now pass through the same command.
+- Ball: a 32-panel ball computed on the sphere (no pole stretching) at 1024x512 with anti-aliased
+  seams, a bump map and a clear-coat finish, drawn 1.2x its collision size, with a streak when hit
+  above 10.5 u/s.
+- Goal celebration: 0.45 s of slow motion as the ball hits the net, shockwave rings at the goal mouth,
+  three fireworks and a flash of goal light in the scoring colours, a gold spotlight pulse on the
+  scorer, a camera push-in toward the goal (eases back at kickoff), and a team-coloured letter-by-letter
+  banner with stripe sweep. Reduced motion keeps the rings, spotlight, slow motion and a static banner,
+  and drops the camera push-in, fireworks, confetti, shake and the sweep.
+- Swing School medals are now 12 / 8 / 5 s (rules version 4) after the faster forward swings.
+- 202 tests pass (7 new: pass and forward-swing). Lessons, trials, a career match and the purchase /
+  customisation / save flows were re-run in the browser with no console errors.
 
 ### Smart swing update (2026-11-10)
 

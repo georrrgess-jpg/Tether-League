@@ -79,6 +79,7 @@ export class MatchMode implements PlayMode {
   private bannerT = 0;
   private lastClock = '';
   private hintKey = '';
+  private lastCall = -999;
 
   constructor(readonly setup: MatchSetup, private settings: () => Settings) {
     const look = setup.looks;
@@ -145,14 +146,35 @@ export class MatchMode implements PlayMode {
     setTimeout(() => el.remove(), 1900);
   }
 
-  private banner(text: string, sub: string, cls: string, seconds: number): void {
+  private banner(text: string, sub: string, cls: string, seconds: number, color?: string): void {
     this.elBanner.className = `banner show ${cls}`;
     this.elBanner.replaceChildren(h('strong', null, text), sub ? h('span', null, sub) : '');
     this.bannerT = seconds;
+    if (color) {
+      // Goal: team-coloured stripes sweep across the screen behind the letters, which pop in one by one.
+      const letters = h('strong', { class: 'goal-letters' }, [...text].map((ch, i) => h('i', { style: `animation-delay:${i * 45}ms` }, ch === ' ' ? '\u00a0' : ch)));
+      this.elBanner.replaceChildren(letters, sub ? h('span', null, sub) : '');
+      this.elBanner.classList.add('goal');
+      this.elBanner.style.setProperty('--team', color);
+      const sweep = h('div', { class: 'goal-sweep', style: `--team:${color}` }, h('i'), h('i'), h('i'));
+      this.hud.appendChild(sweep);
+      setTimeout(() => sweep.remove(), 1600);
+    }
   }
 
   tick(cmds: Command[]): void {
     const m = this.match;
+    if (m.phase === 'play' && cmds[0].pass) {
+      const me = this.world.robots[0];
+      const b = this.world.ball;
+      if (Math.hypot(b.x - me.x, b.z - me.z) > TUNING.kick.range + 0.4) {
+        this.bots.requestPass(0);
+        if (this.world.tick - this.lastCall > 60) {
+          this.lastCall = this.world.tick;
+          this.toast('Calling for the ball!');
+        }
+      }
+    }
     if (m.phase === 'play') this.bots.update(cmds);
     m.step(cmds);
     if (m.phase === 'countdown' && this.prevPhase !== 'countdown') {
@@ -190,7 +212,7 @@ export class MatchMode implements PlayMode {
             sub = rec.scorer === 0 ? 'You scored!' : `${who} scores`;
             if (rec.assist >= 0) sub += rec.assist === 0 ? ' · your assist' : ` · assist #${String(this.looks[rec.assist].number).padStart(2, '0')}`;
           }
-          this.banner(rec.swing && rec.ownGoalBy < 0 ? 'SWING GOAL!' : 'GOAL!', sub, ours ? 'ours' : 'theirs', TUNING.match.goalCelebration);
+          this.banner(rec.swing && rec.ownGoalBy < 0 ? 'SWING GOAL!' : 'GOAL!', sub, ours ? 'ours' : 'theirs', TUNING.match.goalCelebration + 0.8, rec.team === 0 ? this.setup.home.primary : this.setup.away.primary);
           audio.play(ours ? 'goal' : 'concede');
           audio.cheer(ours ? 1 : 0.5);
           break;
@@ -214,6 +236,7 @@ export class MatchMode implements PlayMode {
           break;
         case 'pass':
           if (e.from === 0) this.toast('Pass completed');
+          else if (e.to === 0) this.toast('Pass received', 'good');
           break;
         case 'intercept':
           if (e.robot === 0) this.toast('Interception', 'good');
@@ -252,11 +275,14 @@ export class MatchMode implements PlayMode {
       } else if (u.kick < 2) {
         key = 'kick';
         text = touch ? 'Tap KICK near the ball, or drag it to aim' : `Left click (or ${keyLabel(k.kick[0])}) near the ball to kick toward your aim`;
+      } else if (u.pass < 1 && m.elapsed > 20) {
+        key = 'pass';
+        text = touch ? 'Tap PASS to pass to your teammate. Without the ball, PASS calls for it' : `Press ${keyLabel(k.pass[0])} to pass to your teammate. Without the ball, it calls for a pass`;
       } else if (u.tether < 3) {
         key = 'tether';
         text = touch
           ? 'Tap SWING: you swing from the glowing anchor and launch the way you are heading. Tap again to let go early'
-          : `Tap right mouse (or ${keyLabel(k.tether[0])}): you swing from the glowing anchor and launch toward your cursor. Tap again to let go early`;
+          : `Tap right mouse (or ${keyLabel(k.tether[0])}): you swing from the glowing anchor and launch the way you are moving. Tap again to let go early`;
       }
     }
     if (key !== this.hintKey) {
@@ -276,6 +302,12 @@ export class MatchMode implements PlayMode {
       else if (m.phase === 'countdown') out[i] = 'idle';
       else out[i] = 'play';
     }
+  }
+
+  /** Slow motion for the first moments of a goal, as the ball hits the net. */
+  timeScale(): number {
+    const m = this.match;
+    return m.phase === 'goal' && m.phaseTime > TUNING.match.goalCelebration - 0.45 ? 0.4 : 1;
   }
 
   done(): boolean {

@@ -24,13 +24,16 @@ export class InputManager {
   /** True once any touch input has been seen (touch controls are then shown). */
   touchSeen = false;
   /** Counters the HUD uses to fade hints once an action has been performed. */
-  used = { move: 0, tether: 0, kick: 0 };
+  used = { move: 0, tether: 0, kick: 0, pass: 0 };
 
   private keys = new Set<string>();
   private bind = new Map<string, Action>();
   private mouseX = 0;
   private mouseY = 0;
   private kickQueued = false;
+  private passQueued = false;
+  private passId = -1;
+  private padPassPrev = false;
   private kickByKey = false;
   private tetherMouse = false;
   private tetherTouch = false;
@@ -45,6 +48,7 @@ export class InputManager {
   /** Set by modes that require manual swings (or always smart ones). */
   assistOverride: boolean | null = null;
   swingTargetX = 0;
+  private mouseMovedAt = -1e9;
   swingTargetZ = 0;
   private stickId = -1;
   private stickOX = 0;
@@ -108,6 +112,8 @@ export class InputManager {
   releaseAll(): void {
     this.keys.clear();
     this.kickQueued = false;
+    this.passQueued = false;
+    this.passId = -1;
     this.tetherMouse = false;
     this.tetherTouch = false;
     this.padTether = false;
@@ -137,7 +143,10 @@ export class InputManager {
       this.onPause();
       return;
     }
-    if (a === 'kick') {
+    if (a === 'pass') {
+      this.passQueued = true;
+      this.used.pass++;
+    } else if (a === 'kick') {
       this.kickQueued = true;
       this.kickByKey = true;
       this.used.kick++;
@@ -184,7 +193,13 @@ export class InputManager {
     if (!this.touchSeen) this.showTouch();
     this.device = 'touch';
     const kind = (target.closest('[data-touch]') as HTMLElement | null)?.dataset.touch;
-    if (kind === 'kick' && this.kickId < 0) {
+    if (kind === 'pass' && this.passId < 0) {
+      this.passId = e.pointerId;
+      this.passQueued = true;
+      this.used.pass++;
+      target.closest('[data-touch]')!.classList.add('is-down');
+      e.preventDefault();
+    } else if (kind === 'kick' && this.kickId < 0) {
       this.kickId = e.pointerId;
       this.kickSX = e.clientX;
       this.kickSY = e.clientY;
@@ -218,7 +233,10 @@ export class InputManager {
 
   private pointerMove(e: PointerEvent): void {
     if (e.pointerType === 'mouse') {
-      if (Math.abs(e.clientX - this.mouseX) + Math.abs(e.clientY - this.mouseY) > 2 && this.settings().aimMode !== 'keyboard') this.device = 'mouse';
+      if (Math.abs(e.clientX - this.mouseX) + Math.abs(e.clientY - this.mouseY) > 2) {
+        this.mouseMovedAt = performance.now();
+        if (this.settings().aimMode !== 'keyboard') this.device = 'mouse';
+      }
       this.mouseX = e.clientX;
       this.mouseY = e.clientY;
       return;
@@ -268,6 +286,9 @@ export class InputManager {
       this.stickX = this.stickY = 0;
       if (this.stickKnob) this.stickKnob.style.transform = '';
       this.stickBase?.classList.remove('is-down');
+    } else if (e.pointerId === this.passId) {
+      this.passId = -1;
+      this.touchRoot?.querySelector('[data-touch="pass"]')?.classList.remove('is-down');
     } else if (e.pointerId === this.kickId) {
       this.kickId = -1;
       this.kickQueued = true;
@@ -291,7 +312,8 @@ export class InputManager {
     root.innerHTML = `
       <div class="stick-base"><div class="stick-knob"></div></div>
       <div class="tbtn tbtn-tether" data-touch="tether"><span>SWING</span><small>tap · hold</small></div>
-      <div class="tbtn tbtn-kick" data-touch="kick"><span>KICK</span><small>drag to aim</small></div>`;
+      <div class="tbtn tbtn-kick" data-touch="kick"><span>KICK</span><small>drag to aim</small></div>
+      <div class="tbtn tbtn-pass" data-touch="pass"><span>PASS</span></div>`;
     this.layer.appendChild(root);
     this.touchRoot = root;
     this.stickBase = root.querySelector('.stick-base');
@@ -332,6 +354,13 @@ export class InputManager {
       this.device = 'pad';
     }
     this.padKickPrev = kick;
+    const passBtn = b(1) || b(3);
+    if (passBtn && !this.padPassPrev) {
+      this.passQueued = true;
+      this.used.pass++;
+      this.device = 'pad';
+    }
+    this.padPassPrev = passBtn;
     const pause = b(9);
     if (pause && !this.padPausePrev) this.onPause();
     this.padPausePrev = pause;
@@ -425,22 +454,27 @@ export class InputManager {
     }
     this.showAim = explicit;
 
-    // Swing target: where the player is pointing (cursor or aim stick), else where they are moving, else the ball.
+    // Swing target, in a fixed and predictable order:
+    //   1. the gamepad aim stick when it is pushed;
+    //   2. the direction you are moving (so a swing never goes "backwards" because the cursor is resting behind you);
+    //   3. standing still: the cursor, if the mouse was used in the last few seconds;
+    //   4. otherwise the way your robot is facing.
     let tx: number;
     let tz: number;
+    const mouseFresh = mouseAim && explicit && performance.now() - this.mouseMovedAt < 3000;
     if (pad && pad.aim && this.device === 'pad') {
       const l = Math.hypot(pad.ax, pad.az);
       tx = r.x + (pad.ax / l) * 10;
       tz = r.z + (pad.az / l) * 10;
-    } else if (explicit && mouseAim) {
-      tx = this.aimX;
-      tz = this.aimZ;
     } else if (ml > 0.2) {
       tx = r.x + dirX * 10;
       tz = r.z + dirZ * 10;
+    } else if (mouseFresh) {
+      tx = this.aimX;
+      tz = this.aimZ;
     } else {
-      tx = w.ball.x;
-      tz = w.ball.z;
+      tx = r.x + Math.cos(r.facing) * 10;
+      tz = r.z + Math.sin(r.facing) * 10;
     }
     this.swingTargetX = tx;
     this.swingTargetZ = tz;
@@ -459,7 +493,9 @@ export class InputManager {
     if (!this.enabled) c.tether = false;
     this.preview = this.swing.preview;
 
-    c.kick = this.enabled && this.kickQueued;
+    c.pass = this.enabled && this.passQueued;
+    this.passQueued = false;
+    c.kick = this.enabled && this.kickQueued && !c.pass;
     c.power = 1;
     if (this.kickQueued) {
       if (this.aimOnce) {

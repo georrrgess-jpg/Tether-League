@@ -262,27 +262,93 @@ export function clearJerseyCache(): void {
   jerseyCache.clear();
 }
 
-let ballTex: THREE.Texture | null = null;
-export function ballTexture(): THREE.Texture {
-  if (ballTex) return ballTex;
-  const [c, g] = makeCanvas(256, 128);
-  g.fillStyle = '#fbfbf6';
-  g.fillRect(0, 0, 256, 128);
-  g.fillStyle = '#22344f';
-  const spots: [number, number][] = [
-    [32, 30], [96, 20], [160, 34], [224, 22], [0, 78], [64, 70], [128, 84], [192, 72], [256, 78], [40, 116], [110, 122], [176, 114], [236, 120],
+let ballCache: { map: THREE.Texture; bump: THREE.Texture } | null = null;
+
+/**
+ * Panelled match ball, computed on the sphere so panels are not stretched at the poles: every pixel of an
+ * equirectangular map is assigned to the nearest of 12 pentagon centres (icosahedron vertices) or
+ * 20 hexagon centres (face centres), giving the classic 32-panel ball. Seams and a little panel "puff"
+ * shading come from the distance to the nearest neighbouring panel. A matching bump map adds seam depth.
+ */
+export function ballMaps(): { map: THREE.Texture; bump: THREE.Texture } {
+  if (ballCache) return ballCache;
+  const W = 1024;
+  const H = 512;
+  const t = (1 + Math.sqrt(5)) / 2;
+  const verts: number[][] = [
+    [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1],
+  ].map((v) => {
+    const l = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / l, v[1] / l, v[2] / l];
+  });
+  const faces = [
+    [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
   ];
-  for (const [x, y] of spots) {
-    g.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
-      g.lineTo(x + Math.cos(a) * 15, y + Math.sin(a) * 11);
-    }
-    g.closePath();
-    g.fill();
+  const centers: number[][] = [...verts];
+  for (const f of faces) {
+    const x = verts[f[0]][0] + verts[f[1]][0] + verts[f[2]][0];
+    const y = verts[f[0]][1] + verts[f[1]][1] + verts[f[2]][1];
+    const z = verts[f[0]][2] + verts[f[1]][2] + verts[f[2]][2];
+    const l = Math.hypot(x, y, z);
+    centers.push([x / l, y / l, z / l]);
   }
-  ballTex = tex(c);
-  return ballTex;
+  // Pentagons are smaller than hexagons on a real ball: weight their distance up a little.
+  const weight = centers.map((_, i) => (i < 12 ? 1.16 : 1));
+  const [mc, mg] = makeCanvas(W, H);
+  const [bc, bg] = makeCanvas(W, H);
+  const img = mg.createImageData(W, H);
+  const bump = bg.createImageData(W, H);
+  const white = [247, 248, 244];
+  const navy = [26, 40, 66];
+  const accent = [18, 188, 210];
+  const seam = [196, 201, 208];
+  for (let py = 0; py < H; py++) {
+    const theta = ((py + 0.5) / H) * Math.PI;
+    const st = Math.sin(theta);
+    const y = Math.cos(theta);
+    for (let px = 0; px < W; px++) {
+      const phi = ((px + 0.5) / W) * Math.PI * 2;
+      const x = -Math.cos(phi) * st;
+      const z = Math.sin(phi) * st;
+      let d1 = 9;
+      let d2 = 9;
+      let i1 = 0;
+      for (let i = 0; i < 32; i++) {
+        const c = centers[i];
+        const dot = x * c[0] + y * c[1] + z * c[2];
+        const d = Math.acos(Math.max(-1, Math.min(1, dot))) * weight[i];
+        if (d < d1) {
+          d2 = d1;
+          d1 = d;
+          i1 = i;
+        } else if (d < d2) d2 = d;
+      }
+      const edge = d2 - d1; // angular distance to the panel boundary (approx.)
+      const seamW = 0.018;
+      const panel = i1 < 12 ? navy : i1 === 12 || i1 === 25 ? accent : white;
+      // Anti-aliased seam: blend panel and seam colour across about one texel either side of the edge.
+      const k = Math.max(0, Math.min(1, (edge - seamW * 0.55) / (seamW * 0.9)));
+      const blend = k * k * (3 - 2 * k);
+      // Panels bulge slightly: darker toward the seams.
+      const puff = (1 - 0.13 * Math.exp(-Math.max(0, edge - seamW) / 0.05)) * (0.82 + 0.18 * blend);
+      const o = (py * W + px) * 4;
+      img.data[o] = (seam[0] + (panel[0] - seam[0]) * blend) * puff;
+      img.data[o + 1] = (seam[1] + (panel[1] - seam[1]) * blend) * puff;
+      img.data[o + 2] = (seam[2] + (panel[2] - seam[2]) * blend) * puff;
+      img.data[o + 3] = 255;
+      const h = 40 + blend * Math.min(215, 100 + Math.max(0, edge - seamW) * 1400);
+      bump.data[o] = bump.data[o + 1] = bump.data[o + 2] = h;
+      bump.data[o + 3] = 255;
+    }
+  }
+  mg.putImageData(img, 0, 0);
+  bg.putImageData(bump, 0, 0);
+  const map = tex(mc);
+  map.anisotropy = 8;
+  const bumpTex = tex(bc, false);
+  ballCache = { map, bump: bumpTex };
+  return ballCache;
 }
 
 export interface FieldPaint {
