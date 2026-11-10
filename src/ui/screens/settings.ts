@@ -90,13 +90,10 @@ export function settingsScreen(app: App): ScreenView {
 
   const data = () => {
     const file = h('input', { type: 'file', accept: 'application/json,.json', hidden: true }) as HTMLInputElement;
-    file.addEventListener('change', async () => {
-      const f = file.files?.[0];
-      file.value = '';
-      if (!f) return;
+    // Validate first; the current profile is untouched unless the import is valid and confirmed.
+    const applyImport = async (text: string, source: 'file' | 'code') => {
       try {
-        // Validate first; the current profile is untouched unless the import is valid and confirmed.
-        const imported = importSave(await f.text());
+        const imported = importSave(text);
         const ok = await app.confirm({ title: 'Replace current club?', body: `Import “${imported.club.name}” (club level data, ${imported.records.matches} matches played)? Your current club will be replaced.`, confirm: 'Import', danger: true });
         if (!ok) return;
         app.save = imported;
@@ -107,9 +104,45 @@ export function settingsScreen(app: App): ScreenView {
         app.toast('Save imported.', 'good');
         app.navigate('home');
       } catch (e) {
-        app.toast(e instanceof SaveError ? `Import failed: ${e.message}` : 'Import failed: the file could not be read.', 'bad', 6000);
+        app.toast(e instanceof SaveError ? `Import failed: ${e.message}` : `Import failed: the ${source === 'file' ? 'file' : 'save code'} could not be read.`, 'bad', 6000);
       }
+    };
+    file.addEventListener('change', async () => {
+      const f = file.files?.[0];
+      file.value = '';
+      if (!f) return;
+      let text: string;
+      try {
+        text = await f.text();
+      } catch {
+        app.toast('Import failed: the file could not be read.', 'bad', 6000);
+        return;
+      }
+      await applyImport(text, 'file');
     });
+    // Save codes are the same JSON as an exported file, for browsers and embeds that block downloads.
+    const codeBox = (value: string, readOnly: boolean) => {
+      const box = h('textarea', { class: 'save-code', id: readOnly ? 'save-code-out' : 'save-code-in', spellcheck: 'false', 'aria-label': 'Save code', readOnly: readOnly || null, placeholder: readOnly ? null : 'Paste a save code here' }) as HTMLTextAreaElement;
+      box.value = value;
+      return box;
+    };
+    const copyCode = async () => {
+      const code = exportSave(app.save);
+      try {
+        await navigator.clipboard.writeText(code);
+        app.toast('Save code copied. Keep it somewhere safe.', 'good');
+      } catch {
+        const box = codeBox(code, true);
+        setTimeout(() => { box.focus(); box.select(); });
+        await app.confirm({ title: 'Your save code', body: h('div', { class: 'stack' }, h('p', null, 'Copying was blocked here. The code is selected below: copy it with Ctrl+C (or long-press on a phone).'), box), confirm: 'Done', cancel: 'Close' });
+      }
+    };
+    const pasteCode = async () => {
+      const box = codeBox('', false);
+      setTimeout(() => box.focus());
+      const ok = await app.confirm({ title: 'Paste save code', body: h('div', { class: 'stack' }, h('p', null, 'Paste a save code from “Copy save code”. You will be asked before your current club is replaced.'), box), confirm: 'Load code' });
+      if (ok && box.value.trim()) await applyImport(box.value.trim(), 'code');
+    };
     return h('section', { class: 'panel settings-card' },
       h('h2', { class: 'section-head' }, icon('save'), 'Save data'),
       h('p', { class: 'muted' }, app.storage ? (app.saveFailed ? 'Saving is currently failing in this browser. Export a copy to keep your progress.' : 'Progress saves automatically in this browser after every result, purchase and change.') : 'Browser storage is blocked, so nothing can be saved automatically. Export a copy to keep your progress.'),
@@ -124,6 +157,8 @@ export function settingsScreen(app: App): ScreenView {
           app.toast('Save exported.', 'good');
         } }, 'Export save'),
         h('button', { class: 'btn', onclick: () => file.click() }, 'Import save'),
+        h('button', { class: 'btn', onclick: copyCode }, 'Copy save code'),
+        h('button', { class: 'btn', onclick: pasteCode }, 'Paste save code'),
         file,
         h('button', { class: 'btn btn-danger', onclick: async () => {
           const ok = await app.confirm({ title: 'Start a new club?', body: 'This permanently deletes your club, credits, unlocks, trophies and records in this browser. Export a save first if you might want it back.', confirm: 'Delete and start over', danger: true });

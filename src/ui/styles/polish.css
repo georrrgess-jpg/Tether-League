@@ -492,3 +492,19 @@
 .compare-note {
   font-size: 0.72rem;
 }
+
+/* Save codes (copy / paste a save where downloads are blocked) */
+.save-code {
+  width: 100%;
+  min-height: 7.5em;
+  max-height: 40vh;
+  resize: vertical;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid rgba(23, 39, 62, 0.18);
+  background: #f4f7fb;
+  color: #17273e;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+.save-code:focus { outline: 3px solid #29c5e6; outline-offset: 1px; }

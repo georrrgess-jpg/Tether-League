@@ -688,9 +688,9 @@ export function importSave(text: string): SaveGame {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new SaveError('That file is not valid JSON.');
+    throw new SaveError('It is not valid save data (JSON).');
   }
-  if (!isObj(data) || data.game !== 'tether-league' || !isObj(data.save)) throw new SaveError('That file is not a Tether League save.');
+  if (!isObj(data) || data.game !== 'tether-league' || !isObj(data.save)) throw new SaveError('It is not a Tether League save.');
   return validateSave(data.save);
 }
 
