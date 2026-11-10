@@ -1125,6 +1125,13 @@ button.swatch:not([disabled]):hover {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
+/* Tall desktop screens: cards grow toward a poster shape instead of leaving the lower half empty. */
+@media (min-width: 1100px) and (min-height: 820px) {
+  .mode-grid {
+    min-height: min(68vh, 640px);
+    align-content: stretch;
+  }
+}
 .mode-card {
   --mc: #ffc83d;
   --mc2: #ff9a3d;

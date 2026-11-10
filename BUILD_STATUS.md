@@ -50,7 +50,7 @@ Production bundle: about 813 kB JS (227 kB gzipped), 46 kB CSS, no image assets.
 Commands used: `npm run check`, `npm run build`, `npm run sim`, `npm run feasibility`, plus
 Playwright scripts against the dev server and the production preview.
 
-**Automated (238 tests, about 5 s)**: tether acquisition, no retargeting, release preserving
+**Automated (242 tests, about 5 s)**: tether acquisition, no retargeting, release preserving
 velocity, touch stick with any touch id (iOS ids can be negative), speed cap, auto-release, cooldown, rope stability, pause detach without boost; ball drag
 against the analytic law, prediction against the stepped path, goals scoring once, misses not scoring,
 containment stress on every arena; kickoff resets, overtime, goal and clock on the same tick, own
@@ -89,6 +89,34 @@ thresholds are estimates. No real phone, Chromebook or gamepad was available, so
 device performance, touch comfort and gamepad mapping are untested. Frame rate was not measured on
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
+
+### Flow update: lively walls, gentler difficulty, menus, robot polish (2026-11-10)
+
+- Mechanics (`src/game/sim/world.ts`, `tuning.ts`): lively walls (restitution 0.82 -> 0.9 plus a
+  1.3 u/s outward boost above 2.2 u/s normal speed, capped at max ball speed; posts keep 0.74);
+  wall pass (`bankPass`: when an opponent is within 1.15 of the straight lane, the pass banks off a
+  side wall if both legs are clear and the route is deliverable at full pace); one-touch strike
+  (first-time shot within 1.4 s of a teammate pass, x1.14 pace); kick buffer 0.16 s; rushed kicks
+  harsher (power 0.5, error 0.4 rad, cooldown 0.95 s). Bots use the same pass and wall code.
+- Difficulty: division levels 0 / 0.25 / 0.45 / 0.65 / 0.85 (were up to 1.9); teammate at
+  `mateLevel` (opponent + 0.35, min 1.2); comeback boost after 1/2/3+ career defeats (-0.12/-0.25/
+  -0.4, `careerMatchInfo().ease`, shown as a chip); mercy rule when opponents lead by 3+
+  (`BotDirector.setTeamEase`, decision quality only). `tools/balance.ts` mirrors both rules.
+  Measured (24 matches per cell) average stand-in win %: Harbor 96, Metro 79, Premier 71,
+  Championship 63 (strongest club 50); beginner stand-in 79/63/42/25. Mash goals about 0.2-0.6 per
+  match outside Rookie League. Sweep: 24 matches, no problems, 1 own goal.
+- Opponent shirt numbers never match the player's team.
+- Robots (`robotView.ts`, `textures.ts`, `menuStage.ts`): rope held by the hand on the anchor's
+  side at the real anchor height; celebrations without hands through heads; blended hop/spin;
+  Bulwark pads follow the arm; jet flames only when moving fast; cleaner head stripe, Glider wings,
+  Scout boot fins; readable trim/eyes/numbers on light and navy colours; capped texture caches;
+  podium rebuilds after fonts load. Draw calls 320/199/195 (high/medium/low).
+- Menus (`src/ui/**`): section accent colours, rail/compact rail/bottom tab bar/icon rail by
+  viewport, action dock for primary actions, CSS animations (off with reduced motion), comeback
+  chip, touch controls in the pause menu, phone HUD layout without overlaps. Checked 15 screens x 6
+  viewports with no horizontal overflow or console errors.
+- Touch: stick works with any touch id (iOS can report negative ids) and steers on press.
+- Not verified on real devices; no human playtest.
 
 ### Big update, stages 2–4: visuals, progression, UI (2026-11-10)
 

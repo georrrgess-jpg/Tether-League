@@ -45,7 +45,7 @@ module scripts on pages opened straight from disk.
 
 | Action | Mouse + keyboard | Keyboard only | Touch | Gamepad |
 | --- | --- | --- | --- | --- |
-| Move / steer a swing | WASD or arrows | same | drag the left side | left stick |
+| Move / steer a swing | WASD or arrows | same | hold or drag the stick (bottom left) | left stick |
 | Aim | mouse pointer | follows movement | drag the KICK button | right stick |
 | Swing: tap = launch toward your aim automatically | right mouse | Space / Left Shift | tap SWING | triggers / bumpers |
 | Swing: tap again = let go now | tap again | tap again | tap again | tap again |
@@ -64,14 +64,17 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 ## What is in the game
 
 - **The sport**: three-minute 2v2 matches with sudden-death overtime, a free ball, deliberate kicks whose
-  power grows with your momentum, a pass button that always finds your teammate (and calls for the
-  ball when you don't have it), saves, interceptions, and a slow-motion goal celebration with
-  fireworks and a camera push-in.
+  power grows with your momentum, a pass button that always finds your teammate (banking it off a
+  side wall when an opponent blocks the lane, and calling for the ball when you don't have it),
+  lively walls that kick the ball back with a little extra pace for crosses and wall passes,
+  one-touch strikes off a teammate's pass, saves, interceptions, and a slow-motion goal celebration
+  with fireworks and a camera push-in.
 - **Smart swing**: tap to swing round the highlighted anchor and launch toward your aim (tap again to
   let go early); hold to swing manually and let go when the rope glows green. Swings are planned from
   real rope physics (anchor, direction and release point), and the bots use the same planner.
 - **Club career**: five divisions of six clubs, a ten-match double round robin, four-team playoffs,
-  promotion by winning the final, trophies and season history.
+  promotion by winning the final, trophies and season history. The difficulty climbs gently; after a
+  defeat the next opponent eases off (comeback boost), and opponents three goals up ease off too.
 - **Quick Match**, **Academy** (five playable lessons), **six Skill Trials** with medals and personal bests,
   and a free **test drive** for every chassis.
 - **Four chassis** (sidegrades), **four arenas**, earned cosmetics (faces, jerseys, trails, celebrations,
@@ -90,7 +93,7 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (238 tests) |
+| `npm test` | Rule validation suite (242 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |

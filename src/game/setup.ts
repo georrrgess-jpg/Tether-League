@@ -47,6 +47,18 @@ export function opponentTeam(save: SaveGame, club: ClubDef): { team: TeamInfo; a
 const FACES = ['face_basic', 'face_visor', 'face_pixel', 'face_star', 'face_cheeky'];
 const PATTERNS = ['pattern_plain', 'pattern_stripe', 'pattern_chevron', 'pattern_hoops', 'pattern_sash'];
 
+/** Opponents never wear the same shirt numbers as the player's team (or each other), so robots are easy to tell apart. */
+export function distinctNumbers(opp: [RobotLook, RobotLook], mine: [RobotLook, RobotLook]): [RobotLook, RobotLook] {
+  const taken = new Set([mine[0].number, mine[1].number]);
+  const out = opp.map((l) => {
+    let n = l.number;
+    while (taken.has(n)) n = (n % 99) + 1;
+    taken.add(n);
+    return n === l.number ? l : { ...l, number: n };
+  });
+  return [out[0], out[1]];
+}
+
 export function opponentLooks(club: ClubDef, team: TeamInfo, division: number): [RobotLook, RobotLook] {
   const h = hashString(club.id);
   const byStyle: Record<string, [ChassisId, ChassisId]> = {
@@ -136,7 +148,7 @@ export function careerSetup(save: SaveGame): MatchSetup | null {
     arena: info.arena,
     home: playerTeam(save),
     away: team,
-    looks: [mine[0], mine[1], opp[0], opp[1]],
+    looks: [mine[0], mine[1], ...distinctNumbers(opp, mine)],
     oppDifficulty: info.difficulty,
     oppStyle: CLUB_STYLE[info.club.style],
     // The teammate plays a notch above the opposition (Club+ at least), so it carries its share.
@@ -163,7 +175,7 @@ export function quickSetup(save: SaveGame): MatchSetup {
     arena: save.prefs.quickArena,
     home: playerTeam(save),
     away: team,
-    looks: [mine[0], mine[1], opp[0], opp[1]],
+    looks: [mine[0], mine[1], ...distinctNumbers(opp, mine)],
     oppDifficulty: diff,
     oppStyle: CLUB_STYLE[club.style],
     mateDifficulty: diff.id === 'pro' ? DIFFICULTY.pro : DIFFICULTY.club,
