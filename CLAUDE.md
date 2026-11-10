@@ -7,7 +7,7 @@ before changing rules or scope.
 ## Commands
 
 - `npm run dev`: dev server. `npm run build`: type-check and production build. `npm run preview`.
-- `npm run check`: type-check and the 242-test rule suite. Run it before committing.
+- `npm run check`: type-check and the 254-test rule suite. Run it before committing.
 - `npm run sim -- <matches> <arena> <difficultyA> <difficultyB>`: headless bot matches for tuning.
 - `npm run feasibility`: confirms the tether trial layouts are achievable.
 - `npm run swingcheck`: smart-swing aim accuracy, time gain over running, bot swing use, trial scores.
@@ -30,6 +30,9 @@ before changing rules or scope.
   (`src/progression/progression.ts`), which are idempotent. Screens display committed records.
   Progression content (road, objectives, achievements, mastery, prizes) is data in
   `src/content/progression.ts`.
+- Plays (long ball, give-and-go, wall pass, one-touch strike) are simulation mechanics in
+  `src/game/sim/world.ts` (ball height, `lobPlan`, `bankPass`) credited by `src/game/sim/match.ts`;
+  player-facing text is `src/content/plays.ts`. `tests/plays.test.ts` guards them.
 - Scoring guards: mashed kicks are rushed, unaimed kicks never go backward, and an own-goal guard applies
   with aim assist on. `tests/scoring.test.ts` and `tools/balance.ts` keep spam scoring and own goals low.
 - Save schema changes need a migration and validation in `src/storage/save.ts`.

@@ -51,7 +51,9 @@ module scripts on pages opened straight from disk.
 | Swing: tap again = let go now | tap again | tap again | tap again | tap again |
 | Swing: hold = let go yourself (rope glows green when lined up) | hold right mouse | hold Space | hold SWING | hold trigger |
 | Kick (one press; mashing scuffs the shot) | left mouse | J / Enter | tap KICK | A / X |
-| Pass to teammate (without the ball: call for it) | K / F | K / F | tap PASS | B / Y |
+| Pass to teammate (without the ball: call for it) | tap K / F | tap K / F | tap PASS | tap B / Y |
+| Long ball over defenders (release on the gold notch) | hold K / F | hold K / F | hold PASS | hold B / Y |
+| Give-and-go (after passing, while running) | K / F again | K / F again | PASS again | B / Y again |
 | Override the chosen anchor | Q / E | Q / E | – | – |
 | Pause | Esc / P | Esc / P | pause button | Start |
 
@@ -69,6 +71,10 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
   lively walls that kick the ball back with a little extra pace for crosses and wall passes,
   one-touch strikes off a teammate's pass, saves, interceptions, and a slow-motion goal celebration
   with fireworks and a camera push-in.
+- **Plays**: long balls (hold PASS, release on the gold notch of the charge ring to land it on your
+  teammate), give-and-goes (pass, run, call it straight back), wall passes and one-touch strikes.
+  Bots use them too; completed plays pay a small reward and count toward objectives and achievements.
+  A Playbook and a Plays lesson in the Academy teach them.
 - **Smart swing**: tap to swing round the highlighted anchor and launch toward your aim (tap again to
   let go early); hold to swing manually and let go when the rope glows green. Swings are planned from
   real rope physics (anchor, direction and release point), and the bots use the same planner.
@@ -77,8 +83,9 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
   defeat the next opponent eases off (comeback boost), and opponents three goals up ease off too.
 - **Quick Match**, **Academy** (five playable lessons), **six Skill Trials** with medals and personal bests,
   and a free **test drive** for every chassis.
-- **Four chassis** (sidegrades), **four arenas**, earned cosmetics (faces, jerseys, trails, celebrations,
-  badges, head accessories), club colours, titles, name and numbers.
+- **Four chassis** (sidegrades), **four arenas**, cosmetics (faces, jerseys, trails, celebrations,
+  badges, head accessories, match balls), club colours, titles, name and numbers: 50 shop items plus
+  earned-only rewards from the Club Road and achievements.
 - **Progression**: a 40-level Club Road with a reward at every level, three rotating club objectives,
   31 tiered achievements, chassis mastery, and season prize money. See the Progress screen.
 - **Saves** in the browser with a backup snapshot, export/import and validation.
@@ -93,7 +100,7 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (242 tests) |
+| `npm test` | Rule validation suite (254 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |

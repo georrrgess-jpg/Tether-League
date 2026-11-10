@@ -50,7 +50,7 @@ Production bundle: about 813 kB JS (227 kB gzipped), 46 kB CSS, no image assets.
 Commands used: `npm run check`, `npm run build`, `npm run sim`, `npm run feasibility`, plus
 Playwright scripts against the dev server and the production preview.
 
-**Automated (242 tests, about 5 s)**: tether acquisition, no retargeting, release preserving
+**Automated (254 tests, about 6 s)**: tether acquisition, no retargeting, release preserving
 velocity, touch stick with any touch id (iOS ids can be negative), speed cap, auto-release, cooldown, rope stability, pause detach without boost; ball drag
 against the analytic law, prediction against the stepped path, goals scoring once, misses not scoring,
 containment stress on every arena; kickoff resets, overtime, goal and clock on the same tick, own
@@ -89,6 +89,34 @@ thresholds are estimates. No real phone, Chromebook or gamepad was available, so
 device performance, touch comfort and gamepad mapping are untested. Frame rate was not measured on
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
+
+### Plays, cosmetics and concept-art redesign (2026-11-10)
+
+- Plays (`src/game/sim/world.ts`, `match.ts`, `src/content/plays.ts`): the ball has height (gravity
+  24, air drag 0.12); above 1.3 it flies over robots, above the 2.1 crossbar it cannot score, a kick
+  only meets it below 1.0, and it settles after bounces (restitution 0.36, landing friction 0.6).
+  Dropping onto a robot is a cushioned first touch (keeps 15% of relative speed).
+  Long ball: PASS is sent on release; tap (< 0.18 s) = ground pass, hold charges over 1 s; carry
+  6..24 units; within 0.07 of `lobPlan().ideal` is a perfect ball that lands on the teammate's run,
+  otherwise short / long and up to 0.14 rad wide. Charge ring with gold notch and landing dot;
+  landing marker for lofted balls. Give-and-go: PASS without the ball within 4 s of passing while
+  running asks the teammate for a first-time return led 0.85 s into the run.
+  Match credits long balls, wall passes, give-and-goes (to the runner) and one-touch goals;
+  `commitMatch` pays 8 cr / 12 XP per play (max 4), adds lifetime records (save v3); five objectives
+  and four achievements. Bots read lofted balls, play long balls over blocked lanes (charge error
+  from aim skill) and return give-and-goes. Academy lesson 'plays' and a Playbook tab.
+  Balance unchanged within noise (average stand-in 100/75/50% at levels 0.25/0.65/0.97); sweep
+  clean (24 matches, 1 own goal).
+- Cosmetics: 40 new items incl. a new kind, match balls (`ballMaps(skin)`, `ballThumbDataUrl`); the
+  club ball is used in its matches. Earned-only items wired to the Club Road and play achievements.
+  Trails now draw (the trail sampled against its moving head point and never grew).
+  Shop fully owned at about match 67 (was 29).
+- UI redesigned to the supplied concept pack ("Clubhouse Atelier"): navy top bar, ivory cards,
+  violet / gold / teal accents, page tabs, action dock, bottom tab bar on portrait phones;
+  new Academy screen with Lessons / Trials / Playbook; compact match HUD with a YOU tag.
+  Checked every route at 1366x768, 1280x720, 1920x1080, 768x1024, 844x390 and 390x844.
+- Not verified on real devices; no human playtest. Headless rendering runs the simulation slower than
+  real time, so the Plays lesson was only partly driven end to end in a browser.
 
 ### Flow update: lively walls, gentler difficulty, menus, robot polish (2026-11-10)
 
