@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { RobotLook } from '../../content/cosmetics';
 import type { Quality } from './arenaView';
-import { faceTexture, jerseyTexture, shade, type Expression } from './textures';
+import { faceTexture, jerseyTexture, luminance, shade, type Expression } from './textures';
 
 /**
  * Procedural robot: rounded clear-coat white shell, navy joints, a dark glass face screen with glowing eyes,
@@ -23,9 +23,10 @@ export interface RobotPose {
   vx: number;
   vz: number;
   tethered: boolean;
-  /** World position of the anchor while tethered. */
+  /** World position of the anchor while tethered (`ay`: rope attachment height, default ANCHOR_Y). */
   ax: number;
   az: number;
+  ay?: number;
   /** Seconds since the last deliberate kick / bump (large when none). */
   kickAge: number;
   kickDir: number;
@@ -33,6 +34,9 @@ export interface RobotPose {
   mood: RobotMood;
   reduced: boolean;
 }
+
+/** Typical anchor head height in world units, used to aim the rope arm when the pose gives none. */
+const ANCHOR_Y = 2.6;
 
 const WHITE = '#f6f8f6';
 const NAVY = '#1f2d45';
@@ -215,6 +219,63 @@ const SKULL: V3 = [0.342, 0.279, 0.3];
 
 const chassisCache = new Map<ChassisId, ChassisGeo>();
 
+const WHITE_C = new THREE.Color('#ffffff');
+
+/**
+ * Trim (accent slot) colour: the club colour, unless it is so light it would vanish against the white shell
+ * (Ivory, Chrome...): then the secondary colour if that one shows, else a deeper shade of the primary.
+ */
+export function trimColor(primary: string, secondary: string): string {
+  if (!washedOut(primary)) return primary;
+  if (!washedOut(secondary)) return secondary;
+  return shade(primary, -0.45);
+}
+
+/** True for colours that barely show against the white shell: very light, or light and nearly grey. */
+function washedOut(hex: string): boolean {
+  const l = luminance(hex);
+  return l > 0.62 || (chroma(hex) < 0.1 && l > 0.3);
+}
+
+/** Colourfulness of a hex colour in sRGB (max - min channel, 0..1). */
+function chroma(hex: string): number {
+  const r = { r: 0, g: 0, b: 0 };
+  new THREE.Color(hex).getRGB(r, THREE.SRGBColorSpace);
+  return Math.max(r.r, r.g, r.b) - Math.min(r.r, r.g, r.b);
+}
+
+/** Bright, saturated light colour of the club hue for eyes and light strips (greys give a cool white). */
+export function vividColor(hex: string): string {
+  if (chroma(hex) < 0.1) return '#cdeeff';
+  const c = new THREE.Color(hex);
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl, THREE.SRGBColorSpace);
+  c.setHSL(hsl.h, Math.max(0.75, hsl.s), 0.62, THREE.SRGBColorSpace);
+  return '#' + c.getHexString(THREE.SRGBColorSpace);
+}
+
+/** Unit-sphere band in the x = 0 plane, from just above the face screen over the crown to the back of the head. */
+const CROWN_BAND = (() => {
+  const half = 0.235;
+  const g = new THREE.SphereGeometry(1, 44, 3, Math.PI - 0.84, 0.84 + 2.02, Math.PI / 2 - half, half * 2);
+  g.rotateZ(Math.PI / 2);
+  return g;
+})();
+
+/**
+ * Planar part laid out in (u, v) and placed with an explicit basis: u along `span`, v along `chord` (made
+ * perpendicular to span), extruded `depth` along their normal, origin at `at`.
+ */
+function placedExtrude(points: [number, number][], depth: number, bevel: number, at: V3, span: V3, chord: V3): THREE.BufferGeometry {
+  const g = extrude(points, depth, bevel);
+  const S = new THREE.Vector3(...span).normalize();
+  const C = new THREE.Vector3(...chord);
+  C.addScaledVector(S, -C.dot(S)).normalize();
+  const N = new THREE.Vector3().crossVectors(S, C);
+  g.applyMatrix4(new THREE.Matrix4().makeBasis(S, C, N).setPosition(at[0], at[1], at[2]));
+  return g;
+}
+
 function chassisGeo(id: ChassisId): ChassisGeo {
   const hit = chassisCache.get(id);
   if (hit) return hit;
@@ -235,7 +296,6 @@ function chassisGeo(id: ChassisId): ChassisGeo {
   // --- torso (scaled per chassis; y = 0 at the hem)
   const T = P.torso;
   T.add('navy', torus(0.122, 0.04), { p: [0, 0.43, 0], r: [Math.PI / 2, 0, 0] }); // collar
-  T.add('glow', torus(0.152, 0.008, 40), { p: [0, 0.412, 0], r: [Math.PI / 2, 0, 0] }); // collar light
   T.add('navy', torus(0.19, 0.042), { p: [0, 0.028, 0], r: [Math.PI / 2, 0, 0] }); // belt
   T.add('glow', torus(0.232, 0.009, 56), { p: [0, 0.028, 0], r: [Math.PI / 2, 0, 0] }); // light belt
   // Compact jet pack on the lower back: a moulded shell with two nozzles that point down and back.
@@ -252,7 +312,9 @@ function chassisGeo(id: ChassisId): ChassisGeo {
   // --- head (y = 0 at the head centre)
   const H = P.head;
   H.add('shell', SPH, { s: [SKULL[0], SKULL[1], SKULL[2]] });
-  H.add('accent', SPH, { p: [0, 0.012, -0.02], s: [0.3 * 0.42, 0.3 * 0.945, 0.3 * 0.99] }); // crown stripe
+  // Crown stripe: a band of the skull surface itself (front edge above the face screen, over the top and down
+  // the back), lifted 1.2% so it reads as an inlaid panel with clean edges and nothing to z-fight.
+  H.add('accent', CROWN_BAND, { s: [SKULL[0] * 1.012, SKULL[1] * 1.012, SKULL[2] * 1.012] });
   // navy rim around the face screen: a clear lip proud of the skull (no near-coincident surfaces)
   H.add('navy', new THREE.SphereGeometry(0.309, 40, 12, Math.PI / 2 - 1.06, 2.12, 1.02, 0.98), { p: [0, 0.035, 0.012], s: [1.14, 0.93, 1] });
   // chin seam
@@ -270,6 +332,14 @@ function chassisGeo(id: ChassisId): ChassisGeo {
     if (!bulwark) {
       A.add('shell', HEMI, { p: [0, 0.008, 0], s: [0.118, 0.1, 0.118] });
       A.add('accent', torus(0.115, 0.012, 32), { p: [0, 0.008, 0], r: [Math.PI / 2, 0, 0] });
+    } else {
+      // Armoured pauldron centred on the shoulder joint so it turns with the arm (a body-fixed pad was pierced
+      // by raised arms). The arm group is scaled by DIMS.bulwark.arm, so sizes are divided by it.
+      const k = 1 / DIMS.bulwark.arm;
+      const sx = right ? 1 : -1;
+      A.add('shell', SPH, { p: [sx * 0.01 * k, 0.045 * k, 0], s: [0.16 * k, 0.11 * k, 0.155 * k] });
+      A.add('secondary', torus(1, 0.05, 40), { p: [sx * 0.01 * k, 0.05 * k, 0], r: [Math.PI / 2, 0, 0], s: [0.162 * k, 0.157 * k, 0.4 * k] });
+      A.add('glow', SPH_LO, { p: [sx * 0.01 * k, 0.155 * k, 0.04 * k], s: [0.03 * k, 0.012 * k, 0.06 * k] });
     }
     A.add('shell', capsule(0.058, 0.17), { p: [0, -0.17, 0] });
     A.add('navy', torus(0.058, 0.014, 28), { p: [0, -0.165, 0], r: [Math.PI / 2, 0, 0] }); // elbow seam
@@ -290,28 +360,36 @@ function chassisGeo(id: ChassisId): ChassisGeo {
 
   // --- chassis identity
   if (id === 'scout') {
-    // side sensor antenna, a small visor peak and calf fins: light and quick
+    // side sensor antenna and winged boots: light and quick
     H.add('navy', CYL, { p: [-0.385, 0.165, -0.04], r: [0, 0, 0.25], s: [0.013, 0.2, 0.013] });
     H.add('glow', SPH_LO, { p: [-0.41, 0.27, -0.04], s: 0.03 });
-    for (const L of [P.legL, P.legR]) L.add('secondary', extrude([[0, 0], [0.12, -0.03], [0.02, 0.1]], 0.016), { p: [0, -0.17, -0.06], r: [0, Math.PI / 2, -0.35] });
-  } else if (bulwark) {
-    // armoured shoulders and a reinforced waist
-    for (const sx of [-1, 1]) {
-      P.body.add('shell', SPH, { p: [sx * 0.4, 0.76, 0], s: [0.16, 0.11, 0.155] });
-      P.body.add('secondary', torus(1, 0.05, 40), { p: [sx * 0.4, 0.765, 0], r: [Math.PI / 2, 0, 0], s: [0.162, 0.157, 0.4] });
-      P.body.add('glow', SPH_LO, { p: [sx * 0.4, 0.875, 0.04], s: [0.03, 0.012, 0.06] });
+    // swept ankle wings on the outer side of each boot, in the club colour
+    for (const [L, sx] of [[P.legL, -1], [P.legR, 1]] as [Parts, number][]) {
+      L.add('accent', extrude([[-0.035, -0.02], [0.05, 0.03], [0.115, 0.085], [0.1, 0.03], [0.04, -0.035]], 0.014, 0.006), { p: [sx * 0.078, -0.215, 0.0], r: [0, Math.PI / 2, 0] });
     }
+  } else if (bulwark) {
+    // armoured shoulders (built with the arms above) and a reinforced waist
     T.add('navy', torus(0.205, 0.05, 48), { p: [0, 0.045, 0], r: [Math.PI / 2, 0, 0] });
   } else if (id === 'glider') {
-    // swept wings on the back with glowing leading edges
+    // Swept-back wings rising from the jet pack in a shallow V, below the back number and clear of the arms.
+    // Each wing is laid out in its own plane: u runs out along the span, v back along the chord.
     for (const sx of [-1, 1]) {
-      const wing: [number, number][] = [[0, 0], [0, 0.12], [0.3, 0.27], [0.36, 0.27], [0.33, 0.21]].map(([x, y]) => [sx * x, y]);
-      const stripe: [number, number][] = [[0.04, 0.07], [0.04, 0.1], [0.27, 0.215], [0.3, 0.2]].map(([x, y]) => [sx * x, y]);
-      const edge: [number, number][] = [[0, 0.108], [0, 0.128], [0.3, 0.278], [0.36, 0.278], [0.36, 0.264], [0.3, 0.262]].map(([x, y]) => [sx * x, y]);
-      const xf: Xf = { p: [sx * 0.07, 0.22, -0.245], r: [-0.3, sx * 0.7, sx * 0.55] };
-      T.add('shell', extrude(wing, 0.016, 0.006), xf);
-      T.add('secondary', extrude(stripe, 0.03, 0.002), xf);
-      T.add('glow', extrude(edge, 0.024, 0.003), xf);
+      const at: V3 = [sx * 0.11, 0.235, -0.215];
+      const span: V3 = [sx * 0.74, 0.6, -0.3];
+      const chord: V3 = [0, -0.3, -1];
+      // (both wings share one outline: with a right-handed basis per side they come out mirror images)
+      T.add('shell', placedExtrude([[0, -0.01], [0.27, 0.085], [0.33, 0.115], [0.33, 0.155], [0.17, 0.15], [0, 0.18]], 0.022, 0.007, at, span, chord));
+      T.add('accent', placedExtrude([[0.03, 0.075], [0.25, 0.118], [0.3, 0.14], [0.03, 0.15]], 0.036, 0.002, at, span, chord));
+      const S = new THREE.Vector3(...span).normalize();
+      const C = new THREE.Vector3(...chord);
+      C.addScaledVector(S, -C.dot(S)).normalize();
+      const p0 = new THREE.Vector3(...at).addScaledVector(S, 0.02).addScaledVector(C, -0.004);
+      const p1 = new THREE.Vector3(...at).addScaledVector(S, 0.3).addScaledVector(C, 0.094);
+      const d = p1.clone().sub(p0);
+      const edge = capsule(0.011, d.length());
+      edge.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
+      edge.translate((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2);
+      T.add('glow', edge);
       // swept fins on the ear pods
       H.add('accent', extrude([[0, 0], [-0.17, 0.16], [-0.12, 0.17], [0.05, 0.05]], 0.02), { p: [sx * 0.385, 0.03, -0.02], r: [0, -Math.PI / 2, 0] });
     }
@@ -494,6 +572,15 @@ export class RobotView {
   private legL = new THREE.Group();
   private legR = new THREE.Group();
   private handR = new THREE.Object3D();
+  private handL = new THREE.Object3D();
+  /** Which arm holds the rope during the current swing (+1: armR on local +x, -1: armL). */
+  private ropeArm = 0;
+  /** 0..1 blend into the celebration (hop, spin) so it never pops in or out. */
+  private cheer = 0;
+  private spinAngle = 0;
+  private spinVel = 0;
+  private legLz = 0;
+  private legRz = 0;
   private jersey: THREE.Mesh;
   private visor: THREE.Mesh;
   private flame: THREE.Mesh;
@@ -560,6 +647,8 @@ export class RobotView {
     this.torso.add(this.flame);
     this.handR.position.set(0, -0.34, 0);
     this.armR.add(this.handR);
+    this.handL.position.set(0, -0.34, 0);
+    this.armL.add(this.handL);
     this.head.add(this.topper);
     this.topper.add(this.topperMover);
     this.setLook(look);
@@ -607,16 +696,19 @@ export class RobotView {
     const prevLook = this.look;
     this.look = { ...look };
     const primary = look.primary;
+    const trim = trimColor(primary, look.secondary);
     const accent = this.mats.accent as THREE.MeshStandardMaterial;
-    accent.color.set(primary);
-    accent.emissive.set(primary);
+    accent.color.set(trim);
+    accent.emissive.set(trim);
     accent.emissiveIntensity = 0.14;
     (this.mats.secondary as THREE.MeshStandardMaterial).color.set(look.secondary);
-    // Glow parts: a light, saturated version of the club colour pushed above 1 so it reads as light.
-    this.glowBase.set(shade(primary, 0.25)).multiplyScalar(1.7);
+    // Glow parts: a vivid light version of the club colour pushed above 1 so it reads as light, also for
+    // dark or greyish club colours (which used to give dull grey eyes and belts).
+    const vivid = vividColor(primary);
+    this.glowBase.set(vivid).multiplyScalar(1.7);
     (this.mats.glow as THREE.MeshBasicMaterial).color.copy(this.glowBase);
-    this.flameMat.color.set(shade(primary, 0.2));
-    this.eyeColor = shade(primary, 0.45);
+    this.flameMat.color.set(shade(vivid, 0.1));
+    this.eyeColor = '#' + new THREE.Color(vivid).lerp(WHITE_C, 0.4).getHexString();
     this.jerseyMat.map = jerseyTexture(look.pattern, primary, look.secondary, look.number);
     this.jerseyMat.needsUpdate = true;
     this.applyFace(true);
@@ -718,9 +810,9 @@ export class RobotView {
     }
   }
 
-  /** World position of the tether hand (rope start). */
+  /** World position of the tether hand (rope start): the hand on the anchor's side during a swing. */
   handWorld(out: THREE.Vector3): THREE.Vector3 {
-    return this.handR.getWorldPosition(out);
+    return (this.ropeArm < 0 ? this.handL : this.handR).getWorldPosition(out);
   }
 
   /** Height the body is currently lifted off the ground (for shadow scaling). */
@@ -731,7 +823,8 @@ export class RobotView {
   update(dt: number, p: RobotPose): void {
     this.time += dt;
     const speed = Math.hypot(p.vx, p.vz);
-    const stride = Math.min(1.25, speed / 5.2);
+    // Stride grows with speed so the feet roughly keep pace with the ground from a jog to a sprint.
+    const stride = Math.min(1.25, speed / 4.6);
     const moving = speed > 0.35;
     if (moving) this.phase += dt * (5 + speed * 1.9);
     const swing = Math.sin(this.phase);
@@ -774,40 +867,54 @@ export class RobotView {
     let armRz = 0.12;
     let legLx = swing * 0.95 * stride;
     let legRx = -swing * 0.95 * stride;
+    let legLz = 0;
+    let legRz = 0;
     let headX = 0;
     let headY = 0;
     let y = Math.abs(swing) * 0.05 * stride + this.air;
-    let spin = 0;
     let thrustTarget = p.tethered ? 1 : Math.max(0, Math.min(1, (speed - 4.6) / 4.2));
 
+    // Anchor in the robot's own frame (x: its +x side, where armR hangs).
+    let anchorX = 0;
+    let anchorZ = 0;
     if (p.tethered) {
-      // Lean away from the anchor, tether arm up along the rope, legs trailing.
+      const th = Math.PI / 2 - this.yaw + this.spinAngle;
       const dx = p.ax - p.x;
       const dz = p.az - p.z;
-      const fx = Math.cos(p.facing);
-      const fz = Math.sin(p.facing);
-      const side = fx * dz - fz * dx > 0 ? 1 : -1; // anchor on the robot's right (+) or left (-)
-      rollTarget = side * 0.5;
+      anchorX = dx * Math.cos(th) - dz * Math.sin(th);
+      anchorZ = dx * Math.sin(th) + dz * Math.cos(th);
+      // The hand on the anchor's side takes the rope and keeps it for the swing (switching only if the anchor
+      // ends up clearly on the other side), so the rope never crosses the body or the face.
+      if (this.ropeArm === 0 || anchorX * this.ropeArm < -0.35 * Math.hypot(anchorX, anchorZ)) this.ropeArm = anchorX >= 0 ? 1 : -1;
+      const side = this.ropeArm;
+      // Lean into the swing (toward the anchor), free arm out for balance, legs trailing.
+      rollTarget = -side * 0.42;
       pitch = 0.3;
-      armRx = -2.5;
-      armRz = side * 0.9 - 0.2;
-      armLx = 0.5;
-      armLz = -0.5;
+      if (side > 0) {
+        armLx = 0.5;
+        armLz = -0.6;
+      } else {
+        armRx = 0.5;
+        armRz = 0.6;
+      }
       legLx = 0.55 + swing * 0.15;
       legRx = 0.3 - swing * 0.15;
-    } else if (fast) {
-      pitch = 0.55;
-      armLx = 0.9;
-      armRx = 0.9;
-      armLz = -0.35;
-      armRz = 0.35;
+    } else {
+      this.ropeArm = 0;
+      if (fast) {
+        pitch = 0.55;
+        armLx = 0.9;
+        armRx = 0.9;
+        armLz = -0.35;
+        armRz = 0.35;
+      }
     }
 
     if (p.kickAge < 0.26) {
       const t = p.kickAge / 0.26;
       legRx = -1.5 * Math.sin(Math.PI * Math.min(1, t * 1.15));
-      armLx = -0.8;
-      armRx = 0.6;
+      if (this.ropeArm >= 0) armLx = -0.8;
+      if (this.ropeArm <= 0) armRx = 0.6;
       pitch = -0.12;
     }
     if (p.bumpAge < 0.3) {
@@ -817,42 +924,55 @@ export class RobotView {
     }
 
     const t = this.time;
-    if (p.mood === 'celebrate') {
-      const cel = this.look.celebration;
+    const celebrating = p.mood === 'celebrate';
+    const cel = this.look.celebration;
+    // Celebrations blend in and out (hop height, spin) instead of starting mid-bounce or mid-turn.
+    this.cheer += ((celebrating ? 1 : 0) - this.cheer) * Math.min(1, dt * 6);
+    const spinning = celebrating && cel === 'celebration_spin' && !reduced;
+    this.spinVel += ((spinning ? 7 : 0) - this.spinVel) * Math.min(1, dt * 4);
+    this.spinAngle += this.spinVel * dt;
+    if (spinning) this.spinAngle %= Math.PI * 2;
+    else {
+      const rest = Math.round(this.spinAngle / (Math.PI * 2)) * Math.PI * 2;
+      this.spinAngle += (rest - this.spinAngle) * Math.min(1, dt * 3);
+    }
+    if (celebrating) {
+      // Raised arms stay wide of the head and ear pods (hands used to sink into them).
       const hop = reduced ? 0 : Math.abs(Math.sin(t * 6.5)) * 0.28;
-      y = hop;
+      let lift = hop;
       pitch = 0;
       rollTarget = 0;
       thrustTarget = reduced ? 0.3 : 0.35 + Math.max(0, Math.cos(t * 6.5)) * 0.5;
       if (cel === 'celebration_spin') {
-        spin = reduced ? 0 : t * 7;
-        armLx = armRx = -2.9;
-        armLz = -0.5;
-        armRz = 0.5;
+        armLx = armRx = -2.75;
+        armLz = -0.85;
+        armRz = 0.85;
       } else if (cel === 'celebration_jacks') {
-        const s = (Math.sin(t * 9) + 1) / 2;
+        const s = reduced ? 0.5 : (Math.sin(t * 9) + 1) / 2;
         armLx = armRx = 0;
-        armLz = -0.4 - s * 2.2;
-        armRz = 0.4 + s * 2.2;
+        armLz = -0.4 - s * 1.75;
+        armRz = 0.4 + s * 1.75;
         legLx = legRx = 0;
-        this.legL.rotation.z = -s * 0.5;
-        this.legR.rotation.z = s * 0.5;
+        legLz = -s * 0.42;
+        legRz = s * 0.42;
       } else if (cel === 'celebration_dance') {
-        const s = Math.sin(t * 7);
+        const s = reduced ? 0 : Math.sin(t * 7);
         rollTarget = s * 0.3;
         armLx = -1.4 + s * 0.6;
         armRx = -1.4 - s * 0.6;
-        armLz = -0.6;
-        armRz = 0.6;
+        armLz = -0.65;
+        armRz = 0.65;
         legLx = s * 0.35;
         legRx = -s * 0.35;
-        y = Math.abs(s) * 0.1;
+        lift = Math.abs(s) * 0.1;
       } else {
-        armLx = armRx = -2.7;
-        armLz = -0.45 + Math.sin(t * 11) * 0.35;
-        armRz = 0.45 - Math.sin(t * 11 + 1) * 0.35;
+        armLx = armRx = -2.6;
+        const w = reduced ? 0 : Math.sin(t * 11);
+        armLz = -0.9 - w * 0.25;
+        armRz = 0.9 - (reduced ? 0 : Math.sin(t * 11 + 1)) * 0.25;
         legLx = legRx = 0;
       }
+      y = y * (1 - this.cheer) + lift * this.cheer;
       headX = -0.18;
     } else if (p.mood === 'sad') {
       headX = 0.38;
@@ -865,8 +985,8 @@ export class RobotView {
       y += reduced ? 0 : breathe * 0.012 + 0.012;
       armLx += breathe * 0.05;
       armRx -= breathe * 0.05;
-      headY = Math.sin(t * 0.7) * 0.18;
-      headX = Math.sin(t * 0.9 + 1) * 0.04;
+      headY = reduced ? 0 : Math.sin(t * 0.7) * 0.18;
+      headX = reduced ? 0 : Math.sin(t * 0.9 + 1) * 0.04;
       if (p.mood === 'ready') {
         // confident garage stance
         armLz = -0.55;
@@ -875,13 +995,9 @@ export class RobotView {
         armRx = -0.35;
         legLx = -0.12;
         legRx = 0.12;
-        this.legL.rotation.z = -0.16;
-        this.legR.rotation.z = 0.16;
+        legLz = -0.16;
+        legRz = 0.16;
       }
-    }
-    if (p.mood !== 'celebrate' && p.mood !== 'ready') {
-      this.legL.rotation.z *= 0.8;
-      this.legR.rotation.z *= 0.8;
     }
 
     this.roll += (rollTarget - this.roll) * k;
@@ -889,17 +1005,47 @@ export class RobotView {
     const b = this.body;
     b.rotation.x += (pitch - b.rotation.x) * kk;
     b.rotation.z = this.roll;
+
+    if (this.ropeArm !== 0) {
+      // Aim the rope arm at the anchor: its direction in body space gives the two shoulder angles
+      // (arm hangs along -y; rotation order XYZ, so dir = (sin z, -cos z cos x, -cos z sin x)).
+      const side = this.ropeArm;
+      const arm = side > 0 ? this.armR : this.armL;
+      const sc = this.scale || 1;
+      const v = tmpV.set(anchorX / sc, ((p.ay ?? ANCHOR_Y) - y * sc) / sc - b.position.y, anchorZ / sc);
+      v.applyQuaternion(_q.setFromEuler(b.rotation).invert());
+      v.sub(arm.position).normalize();
+      // keep the arm on its own side and raised
+      v.x = side > 0 ? Math.max(0.12, v.x) : Math.min(-0.12, v.x);
+      v.y = Math.max(0.15, v.y);
+      v.normalize();
+      const az = Math.asin(Math.max(-1, Math.min(1, v.x)));
+      let ax = Math.atan2(-v.z, -v.y);
+      if (ax > Math.PI / 2) ax -= Math.PI * 2; // continuous through "straight up" (no wrap at +-PI)
+      if (side > 0) {
+        armRx = ax;
+        armRz = az;
+      } else {
+        armLx = ax;
+        armLz = az;
+      }
+    }
+
     this.armL.rotation.x += (armLx - this.armL.rotation.x) * kk;
     this.armR.rotation.x += (armRx - this.armR.rotation.x) * kk;
     this.armL.rotation.z += (armLz - this.armL.rotation.z) * kk;
     this.armR.rotation.z += (armRz - this.armR.rotation.z) * kk;
     this.legL.rotation.x += (legLx - this.legL.rotation.x) * kk;
     this.legR.rotation.x += (legRx - this.legR.rotation.x) * kk;
+    this.legLz += (legLz - this.legLz) * kk;
+    this.legRz += (legRz - this.legRz) * kk;
+    this.legL.rotation.z = this.legLz;
+    this.legR.rotation.z = this.legRz;
     this.head.rotation.x += (headX - this.head.rotation.x) * kk;
     this.head.rotation.y += (headY - this.head.rotation.y) * kk;
 
     this.root.position.set(p.x, y * this.scale, p.z);
-    this.root.rotation.y = Math.PI / 2 - this.yaw + spin;
+    this.root.rotation.y = Math.PI / 2 - this.yaw + this.spinAngle;
     this.root.scale.setScalar(this.scale);
 
     this.animateLights(dt, t, thrustTarget, reduced);
@@ -911,6 +1057,8 @@ export class RobotView {
     this.thrust += (thrustTarget - this.thrust) * Math.min(1, dt * (thrustTarget > this.thrust ? 9 : 4));
     const th = this.thrust;
     const flick = reduced ? 1 : 0.86 + 0.14 * Math.sin(t * 53 + this.phase) * Math.sin(t * 31);
+    // No idle pilot flame: the jets only light when the robot sprints, swings or celebrates.
+    this.flame.visible = th > 0.03;
     this.flame.scale.set(1, 0.035 + th * 0.4 * flick, 1);
     this.flameMat.opacity = 0.32 + 0.68 * th;
     const pulse = reduced ? 1 : 1 + Math.sin(t * 2.4) * 0.1;

@@ -33,6 +33,28 @@ export type Expression = 'neutral' | 'happy' | 'focus' | 'wow' | 'sad' | 'blink'
 
 const faceCache = new Map<string, THREE.Texture>();
 
+/**
+ * Cache lookup with least-recently-used eviction: new club colours, numbers and expressions would otherwise
+ * keep adding GPU textures for the whole session. An evicted texture still referenced by a material is simply
+ * uploaded again by three.js the next time it is drawn.
+ */
+function cached(cache: Map<string, THREE.Texture>, key: string, cap: number, make: () => THREE.Texture): THREE.Texture {
+  let t = cache.get(key);
+  if (t) {
+    cache.delete(key);
+    cache.set(key, t);
+    return t;
+  }
+  t = make();
+  cache.set(key, t);
+  while (cache.size > cap) {
+    const [oldKey, old] = cache.entries().next().value as [string, THREE.Texture];
+    cache.delete(oldKey);
+    old.dispose();
+  }
+  return t;
+}
+
 function star(g: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
   g.beginPath();
   for (let i = 0; i < 10; i++) {
@@ -170,15 +192,12 @@ export function drawFace(g: CanvasRenderingContext2D, W: number, H: number, face
 }
 
 export function faceTexture(face: string, exp: Expression, color: string): THREE.Texture {
-  const key = `${face}|${exp}|${color}`;
-  let t = faceCache.get(key);
-  if (!t) {
-    const [c, g] = makeCanvas(256, 128);
-    drawFace(g, 256, 128, face, exp, color);
-    t = tex(c);
-    faceCache.set(key, t);
-  }
-  return t;
+  // 512 x 256 keeps the eyes crisp on the menu podium close-ups.
+  return cached(faceCache, `${face}|${exp}|${color}`, 48, () => {
+    const [c, g] = makeCanvas(512, 256);
+    drawFace(g, 512, 256, face, exp, color);
+    return tex(c);
+  });
 }
 
 export function drawJersey(g: CanvasRenderingContext2D, W: number, H: number, pattern: string, primary: string, secondary: string, number: number): void {
@@ -248,7 +267,9 @@ export function drawJersey(g: CanvasRenderingContext2D, W: number, H: number, pa
   g.fillRect(0, H * 0.07, W, H * 0.012);
   g.fillRect(0, H * 0.888, W, H * 0.012);
   // numbers: front at u=0.5, back at the seam; bold outline keeps them readable from the match camera
-  const light = luminance(primary) > 0.62;
+  // Navy ink from mid-light colours up (Sun Yellow, Mint, Chrome, Ivory): white ink on them read poorly even
+  // with the outline. Luminance here is linear, so 0.45 sits around sRGB mid-grey 0.7.
+  const light = luminance(primary) > 0.45;
   const ink = light ? '#17273E' : '#ffffff';
   const rim = light ? 'rgba(255,255,255,0.75)' : 'rgba(15,26,44,0.85)';
   g.textAlign = 'center';
@@ -269,17 +290,14 @@ export function drawJersey(g: CanvasRenderingContext2D, W: number, H: number, pa
 const jerseyCache = new Map<string, THREE.Texture>();
 
 export function jerseyTexture(pattern: string, primary: string, secondary: string, number: number): THREE.Texture {
-  const key = `${pattern}|${primary}|${secondary}|${number}`;
-  let t = jerseyCache.get(key);
-  if (!t) {
+  return cached(jerseyCache, `${pattern}|${primary}|${secondary}|${number}`, 24, () => {
     const [c, g] = makeCanvas(1024, 256);
     drawJersey(g, 1024, 256, pattern, primary, secondary, number);
-    t = tex(c);
+    const t = tex(c);
     t.wrapS = THREE.RepeatWrapping;
     t.anisotropy = 8;
-    jerseyCache.set(key, t);
-  }
-  return t;
+    return t;
+  });
 }
 
 /** Jersey numbers depend on the display font; drop cached textures once web fonts have loaded. */

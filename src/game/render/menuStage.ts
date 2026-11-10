@@ -212,6 +212,12 @@ export class MenuStage {
   }
 
   setLooks(looks: RobotLook[]): void {
+    // An empty list (App.syncStage(true)) forgets the applied looks so the next call re-applies them, e.g.
+    // to pick up jersey textures redrawn once the number font has loaded.
+    if (!looks.length) {
+      this.looks = [];
+      return;
+    }
     const shadows = this.gfx.quality === 'high';
     looks.forEach((look, i) => {
       if (!this.robots[i]) {

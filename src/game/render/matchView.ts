@@ -718,6 +718,7 @@ export class MatchView {
         const an = w.arena.anchors[r.tAnchor];
         pose.ax = an.x;
         pose.az = an.z;
+        pose.ay = this.arenaView.anchors[r.tAnchor]?.head.y;
       }
       pose.kickAge = (tick - r.lastKickTick) / hz;
       pose.kickDir = Math.atan2(r.lastKickDirZ, r.lastKickDirX);
