@@ -38,13 +38,13 @@ export const TRIALS: Record<TrialId, TrialDef> = {
     id: 'bank_shot', name: 'Bank Shot', skill: 'Wall play', icon: 'ball', arena: 'foundry_court',
     objective: 'Score three goals. Each one must bounce off the glowing wall section first.',
     scoring: 'Time to three valid goals.',
-    unit: 'time', bronze: 40, silver: 24, gold: 15, rulesVersion: 1,
+    unit: 'time', bronze: 30, silver: 16, gold: 10.5, rulesVersion: 1,
   },
   pass_window: {
     id: 'pass_window', name: 'Pass Window', skill: 'Passing', icon: 'pass', arena: 'harbor_park',
-    objective: 'Pass the ball through the gate to your moving teammate. They knock it back for the next one.',
+    objective: 'Pass the ball through the gate to your moving teammate. They knock it back to your half for the next one.',
     scoring: 'Completed passes in 45 seconds.',
-    unit: 'count', bronze: 4, silver: 7, gold: 10, rulesVersion: 1,
+    unit: 'count', bronze: 5, silver: 9, gold: 13, rulesVersion: 1,
   },
   last_second_save: {
     id: 'last_second_save', name: 'Last-Second Save', skill: 'Defending', icon: 'save', arena: 'skyline_stadium',
@@ -56,7 +56,7 @@ export const TRIALS: Record<TrialId, TrialDef> = {
     id: 'counterattack', name: 'Counterattack', skill: 'Transition', icon: 'intercept', arena: 'championship_dome',
     objective: 'Cut out the opponents\' pass, then carry the ball up the pitch and score before they recover.',
     scoring: 'Fastest time from the pass to your goal.',
-    unit: 'time', bronze: 18, silver: 12, gold: 8.5, rulesVersion: 1,
+    unit: 'time', bronze: 12, silver: 7.5, gold: 5.5, rulesVersion: 1,
   },
 };
 

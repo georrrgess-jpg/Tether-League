@@ -22,9 +22,10 @@ export const RELEASES: { start: [number, number]; gate: Gate }[] = [
 ];
 
 export const BANKS: { ball: [number, number]; player: [number, number]; wall: 1 | -1; seg: [number, number] }[] = [
-  { ball: [2, 2], player: [-1, 3.2], wall: -1, seg: [5.5, 10] },
-  { ball: [0, -3], player: [-2.5, -4], wall: 1, seg: [4.8, 9.6] },
-  { ball: [-4, 0], player: [-6.5, 0.6], wall: -1, seg: [2.2, 7] },
+  // Spawns chosen with tools/bank.ts so an ordinary running kick can complete each bank.
+  { ball: [7, -4], player: [4.5, -3], wall: -1, seg: [8, 10] },
+  { ball: [7, 4], player: [4.5, 3], wall: 1, seg: [8, 10] },
+  { ball: [5, -4], player: [2.5, -3], wall: -1, seg: [6.4, 8.8] },
 ];
 
 export const WAYPOINTS: [number, number][] = [[8, -5], [9, 4.5], [4, 6.5], [10.5, 0], [5, -6.5], [11, 5.5], [7, 2], [3.5, -5], [10, -6], [6, 6]];

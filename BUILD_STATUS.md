@@ -65,10 +65,13 @@ scored; a soft-lock after a damaged season was rebuilt; free picks accepting ids
 still-ball streak under 2 s) or deadlocks. Goals per three-minute match: Rookie about 3.4, Club about
 5.0, Pro about 6.8. Pro beats Rookie 8 of 8. With a stand-in player, a Rookie-level player plus the
 teammate wins 6 of 8 in the Rookie League; a passive player loses every match. Every tether trial
-layout was confirmed achievable by brute-force input search.
+lane and gate, and every Bank Shot, was confirmed achievable by brute-force input search; that
+search led to three layout fixes (a lane that almost nothing could reach, bank shots that needed
+swing-kick power, and starting spots that saved shots without moving).
 
-**Browser, automated input (headless Chromium, software GL)**: first run, club creation, the three
-onboarding lessons completed through the real input path, a career match from pre-match to committed
+**Browser, automated input (headless Chromium, software GL)**: first run, club creation, all five
+lessons and the Pass Window, Bank Shot and Counterattack trials completed through the real input
+path by a scripted autopilot, a career match from pre-match to committed
 results, reload on the results page (no second payout), a full season through the real commit path
 (champion, trophy, promotion, next season), garage purchase and equip, customisation preview / free
 pick / purchase / save / cancel, a trial run to its result screen, key rebinding, export, import,
@@ -79,8 +82,10 @@ growth across repeated matches.
 **Emulated viewports**: 1366x768, 1920x1080, 844x390 (touch, landscape), 390x844 (portrait menus).
 Screenshots are in `docs/screenshots/`.
 
-**Not verified**: no human has played this build. Feel, difficulty and trial medal thresholds come
-from simulation and reasoning, not playtests. No real phone, Chromebook or gamepad was available, so
+**Not verified**: no human has played this build. Feel and difficulty come from simulation and
+reasoning, not playtests. Trial gold thresholds sit near what the scripted autopilot scored (Pass
+Window 14, Bank Shot 8.97 s, Counterattack 5.55 s); Swing School, Clean Release and Last-Second Save
+thresholds are estimates. No real phone, Chromebook or gamepad was available, so
 device performance, touch comfort and gamepad mapping are untested. Frame rate was not measured on
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.

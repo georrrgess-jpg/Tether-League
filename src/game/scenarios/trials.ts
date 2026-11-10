@@ -186,11 +186,12 @@ export class TrialMode extends Scenario {
       if (this.phase === 2) {
         // Returning the ball: get to it and knock it back toward the player's zone.
         runTo(c, b.x, b.z, mate.x, mate.z, 0.3);
-        c.ax = w.robots[0].x;
-        c.az = w.robots[0].z;
+        // Always back to the home zone, so the next pass has to travel through the next gate.
+        c.ax = PASS_HOME[0];
+        c.az = PASS_HOME[1];
         if (bd < TUNING.kick.range - 0.1 && mate.kickCd <= 0) {
           c.kick = true;
-          c.power = Math.max(0.5, Math.min(0.9, (5.5 + 0.55 * Math.hypot(c.ax - b.x, c.az - b.z)) / TUNING.kick.baseSpeed));
+          c.power = Math.max(0.55, Math.min(1, (5.5 + 0.62 * Math.hypot(c.ax - b.x, c.az - b.z)) / TUNING.kick.baseSpeed));
         }
       } else if (this.phase === 1 && bd < 4.5) {
         runTo(c, b.x + b.vx * 0.25, b.z + b.vz * 0.25, mate.x, mate.z, 0.2);

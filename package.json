@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
-    "feasibility": "vite-node tools/feasibility.ts",
+    "feasibility": "vite-node tools/feasibility.ts && vite-node tools/bank.ts",
     "sim": "vite-node tools/simulate.ts"
   },
   "dependencies": {
