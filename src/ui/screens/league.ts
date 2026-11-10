@@ -8,7 +8,7 @@ import { startNextSeason } from '../../progression/progression';
 import { badgeSvg } from '../badge';
 import { h, icon } from '../dom';
 import { shell } from '../shell';
-import { ordinal } from './home';
+import { comebackChip, ordinal } from './home';
 
 export function clubName(app: App, id: string): string {
   return id === PLAYER_ID ? app.save.club.name : (CLUBS[id]?.name ?? id);
@@ -62,7 +62,7 @@ export function leagueScreen(app: App): ScreenView {
   const rows = table.map((r, i) =>
     h('tr', { class: `${r.club === PLAYER_ID ? 'is-me' : ''}${i < 4 ? ' is-top' : ''}` },
       h('td', { class: 'rank' }, String(i + 1)),
-      h('td', { class: 'club' }, clubBadgeFor(app, r.club), h('span', null, clubName(app, r.club))),
+      h('td', { class: 'club' }, h('div', { class: 'tclub' }, clubBadgeFor(app, r.club), h('span', null, clubName(app, r.club)))),
       h('td', null, String(r.played)),
       h('td', null, String(r.wins)),
       h('td', null, String(r.losses)),
@@ -71,12 +71,11 @@ export function leagueScreen(app: App): ScreenView {
     ),
   );
   const standingsPanel = h('section', { class: 'panel-dark league-standings' },
-    h('h2', { class: 'section-head' }, icon('trophy'), 'Standings'),
+    h('h2', { class: 'section-head' }, icon('trophy'), 'Standings', h('small', { class: 'muted' }, 'Top four reach the playoffs')),
     h('table', { class: 'table' },
       h('thead', null, h('tr', null, h('th', null, '#'), h('th', { class: 'club' }, 'Club'), h('th', { title: 'Played' }, 'P'), h('th', { title: 'Wins' }, 'W'), h('th', { title: 'Losses' }, 'L'), h('th', { title: 'Goal difference' }, 'GD'), h('th', { title: 'Points' }, 'Pts'))),
       h('tbody', null, rows),
     ),
-    h('p', { class: 'muted' }, 'Top four reach the playoffs.'),
   );
 
   let center: HTMLElement;
@@ -89,7 +88,8 @@ export function leagueScreen(app: App): ScreenView {
         h('span', { class: 'vs' }, 'VS'),
         h('div', { class: 'vs-team' }, clubBadgeFor(app, opp.id, 'big'), h('b', null, opp.name)),
       ),
-      h('div', { class: 'ln-meta' }, h('span', { class: 'chip' }, ARENAS[info.arena].name), h('span', { class: 'chip' }, info.next.home ? 'Home' : 'Away'), h('span', { class: 'chip' }, opp.styleLabel)),
+      h('div', { class: 'ln-meta' }, h('span', { class: 'chip' }, icon('map'), ARENAS[info.arena].name), h('span', { class: 'chip' }, info.next.home ? 'Home' : 'Away'), h('span', { class: 'chip' }, opp.styleLabel)),
+      comebackChip(info.ease),
       h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.navigate('prematch?mode=career') }, icon('play'), 'Play match'),
     );
   } else if (s.phase === 'complete' && s.result) {
@@ -170,7 +170,7 @@ export function leagueScreen(app: App): ScreenView {
   );
 
   const el = shell(app, { nav: 'play', title: 'Season hub', subtitle: `${div.name} · Season ${s.seasonNo}`, back: 'home', dim: true, cls: 'league' },
-    h('div', { class: 'league-grid' }, standingsPanel, h('div', { class: 'league-mid' }, center, promo), h('div', { class: 'league-right' }, schedule, playoffs), h('div', { class: 'league-foot' }, rules, history)),
+    h('div', { class: 'league-grid' }, h('div', { class: 'league-left' }, standingsPanel, playoffs), h('div', { class: 'league-mid' }, center, promo), h('div', { class: 'league-right' }, schedule), h('div', { class: 'league-foot' }, rules, history)),
   );
   return { el };
 }

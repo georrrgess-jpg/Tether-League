@@ -194,6 +194,10 @@ export class PlaySession {
     const s = this.ctx.settings();
     const k = s.keys;
     const row = (label: string, keys: string) => h('div', { class: 'kv' }, h('span', null, label), h('b', null, keys));
+    // Touch players see touch controls; keyboard and mouse players see their key bindings.
+    const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+    const dev = this.input.device;
+    const touch = dev === 'touch' || ((coarse || this.input.touchSeen) && dev !== 'keys' && dev !== 'pad');
     const muteBtn = h('button', { class: 'btn btn-ghost', onclick: () => {
       const st = this.ctx.settings();
       st.muted = !st.muted;
@@ -211,17 +215,27 @@ export class PlaySession {
           muteBtn,
           h('button', { class: 'btn btn-ghost', onclick: () => confirmView('leave') }, icon('home'), 'Leave'),
         ),
-        h('div', { class: 'pause-controls' },
-          h('h3', null, 'Controls'),
-          row('Move / steer swing', `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])} or arrows`),
-          row('Swing: tap = auto launch toward your aim', `Right mouse or ${keyLabel(k.tether[0])}`),
-          row('Swing: tap again = let go now; hold = let go yourself (rope glows green when lined up)', 'same button'),
-          row('Kick toward aim (one press; mashing scuffs the shot)', `Left mouse or ${keyLabel(k.kick[0])}`),
-          row('Pass to teammate (without the ball: call for it)', `${keyLabel(k.pass[0])} / ${keyLabel(k.pass[1])}`),
-          row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
-          row('Pause', keyLabel(k.pause[0])),
-          h('p', { class: 'muted' }, 'Touch: left thumb moves, tap SWING, tap KICK (drag to aim), tap PASS. Gamepad: left stick, right stick aim, trigger swing, A kick, B pass. Swings go the way you are moving (standing still: toward the cursor).'),
-        ),
+        touch
+          ? h('div', { class: 'pause-controls' },
+              h('h3', null, 'Touch controls'),
+              row('Move', 'Hold or drag the stick (bottom left)'),
+              row('SWING', 'Tap = auto launch, tap again = let go, hold = let go yourself'),
+              row('KICK', 'Tap, or drag to aim (one tap per kick; mashing scuffs the shot)'),
+              row('PASS', 'Tap (without the ball: call for it)'),
+              row('Pause', 'II button'),
+              h('p', { class: 'muted' }, 'Walls are lively: bank passes and crosses off them. PASS bends round a blocked lane off the side wall, and a first-time shot off a teammate\'s pass is a one-touch strike.'),
+            )
+          : h('div', { class: 'pause-controls' },
+              h('h3', null, 'Controls'),
+              row('Move / steer swing', `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])} or arrows`),
+              row('Swing: tap = auto launch toward your aim', `Right mouse or ${keyLabel(k.tether[0])}`),
+              row('Swing: tap again = let go now; hold = let go yourself (rope glows green when lined up)', 'same button'),
+              row('Kick toward aim (one press; mashing scuffs the shot)', `Left mouse or ${keyLabel(k.kick[0])}`),
+              row('Pass to teammate (without the ball: call for it)', `${keyLabel(k.pass[0])} / ${keyLabel(k.pass[1])}`),
+              row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
+              row('Pause', keyLabel(k.pause[0])),
+              h('p', { class: 'muted' }, 'Gamepad: left stick, right stick aim, trigger swing, A kick, B pass. Swings go the way you are moving (standing still: toward the cursor). Walls are lively, a blocked pass banks off the side wall, and a first-time shot off a pass is a one-touch strike.'),
+            ),
       );
       (body.querySelector('.btn-primary') as HTMLElement | null)?.focus();
     };

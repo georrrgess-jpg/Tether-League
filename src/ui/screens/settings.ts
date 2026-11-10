@@ -60,7 +60,7 @@ export function settingsScreen(app: App): ScreenView {
   window.addEventListener('keydown', onKey, true);
 
   const controls = () =>
-    h('section', { class: 'panel settings-card controls-card' },
+    h('section', { class: 'panel settings-card controls-card', id: 'set-controls' },
       h('h2', { class: 'section-head' }, icon('edit'), 'Controls'),
       h('p', { class: 'muted' }, 'Mouse: move to aim, left button kicks, right button swings. Click a key to rebind it, then press the new key.'),
       h('div', { class: 'bind-table' },
@@ -143,10 +143,10 @@ export function settingsScreen(app: App): ScreenView {
       const ok = await app.confirm({ title: 'Paste save code', body: h('div', { class: 'stack' }, h('p', null, 'Paste a save code from “Copy save code”. You will be asked before your current club is replaced.'), box), confirm: 'Load code' });
       if (ok && box.value.trim()) await applyImport(box.value.trim(), 'code');
     };
-    return h('section', { class: 'panel settings-card' },
+    return h('section', { class: 'panel settings-card', id: 'set-data' },
       h('h2', { class: 'section-head' }, icon('save'), 'Save data'),
       h('p', { class: 'muted' }, app.storage ? (app.saveFailed ? 'Saving is currently failing in this browser. Export a copy to keep your progress.' : 'Progress saves automatically in this browser after every result, purchase and change.') : 'Browser storage is blocked, so nothing can be saved automatically. Export a copy to keep your progress.'),
-      h('div', { class: 'stack' },
+      h('div', { class: 'data-actions' },
         h('button', { class: 'btn', onclick: () => {
           const blob = new Blob([exportSave(app.save)], { type: 'application/json' });
           const a = h('a', { href: URL.createObjectURL(blob), download: `tether-league-${app.save.club.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json` });
@@ -176,7 +176,7 @@ export function settingsScreen(app: App): ScreenView {
 
   const render = () => {
     root.replaceChildren(
-      h('section', { class: 'panel settings-card' },
+      h('section', { class: 'panel settings-card', id: 'set-audio' },
         h('h2', { class: 'section-head' }, icon('sound'), 'Audio'),
         toggle('Mute all sound', 'muted'),
         slider('Master volume', 'masterVolume', 0, 1),
@@ -184,7 +184,7 @@ export function settingsScreen(app: App): ScreenView {
         slider('Effects', 'effectsVolume', 0, 1, () => audio.play('kick', { intensity: 0.5 })),
         h('p', { class: 'muted' }, 'All sound and music is synthesised live by the game.'),
       ),
-      h('section', { class: 'panel settings-card' },
+      h('section', { class: 'panel settings-card', id: 'set-graphics' },
         h('h2', { class: 'section-head' }, icon('settings'), 'Graphics & comfort'),
         choice('Quality', 'quality', [{ value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }], `Currently rendering at ${app.gfx.quality} quality. Low removes shadows and thins the crowd; the pitch, anchors and ball stay clear.`),
         toggle('Reduced motion', 'reducedMotion', 'Removes confetti, camera shake, hops and decorative animation.'),
@@ -192,7 +192,7 @@ export function settingsScreen(app: App): ScreenView {
         toggle('High contrast panels', 'highContrast', 'Stronger outlines on menus and a permanent ring around the ball.'),
         choice('Text size', 'textScale', [{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }]),
       ),
-      h('section', { class: 'panel settings-card' },
+      h('section', { class: 'panel settings-card', id: 'set-assist' },
         h('h2', { class: 'section-head' }, icon('target'), 'Assistance'),
         choice('Aim assist', 'aimAssistance', [{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'strong', label: 'Strong' }], 'Nudges kicks that are already close to the goal or a teammate. It never moves the ball for you.'),
         toggle('Smart swing', 'swingAssist', 'A quick tap swings round the highlighted anchor and lets go automatically toward your aim. Tap again to let go early. Holding the button gives full manual control.'),
@@ -206,6 +206,16 @@ export function settingsScreen(app: App): ScreenView {
   };
   render();
 
-  const el = shell(app, { nav: 'settings', title: 'Settings', dim: true, cls: 'settings' }, root);
+  const jump = (id: string, label: string, ic: string) => h('button', { onclick: () => {
+    const card = root.querySelector<HTMLElement>(`#${id}`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: document.body.classList.contains('reduced-motion') ? 'auto' : 'smooth', block: 'start' });
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
+  } }, icon(ic), label);
+  const jumps = h('nav', { class: 'settings-jump', 'aria-label': 'Settings sections' },
+    jump('set-audio', 'Audio', 'sound'), jump('set-graphics', 'Graphics', 'settings'), jump('set-assist', 'Assistance', 'target'), jump('set-controls', 'Controls', 'edit'), jump('set-data', 'Save data', 'save'));
+  const el = shell(app, { nav: 'settings', title: 'Settings', subtitle: 'Sound, comfort, controls and saves', dim: true, cls: 'settings' }, jumps, root);
   return { el, dispose: () => window.removeEventListener('keydown', onKey, true) };
 }

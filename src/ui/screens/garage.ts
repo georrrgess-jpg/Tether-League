@@ -1,6 +1,6 @@
 import type { App, ScreenView } from '../../app';
 import { CHASSIS, CHASSIS_ORDER, chassisBars, type ChassisId } from '../../content/chassis';
-import { LESSONS, TRIALS, TRIAL_ORDER, type TrialId } from '../../content/trials';
+import { LESSONS, MEDAL_NAMES, TRIALS, TRIAL_ORDER, type TrialId } from '../../content/trials';
 import { playerLooks } from '../../game/setup';
 import { levelFor, purchase } from '../../progression/progression';
 import { fmtTime, h, icon } from '../dom';
@@ -31,7 +31,7 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
         const c = CHASSIS[id];
         const isOwned = owned(id);
         const equipped = save.club.chassis === id || save.club.mateChassis === id;
-        return h('button', { class: `chassis-item${id === selected ? ' is-selected' : ''}${isOwned ? '' : ' is-locked'}`, role: 'option', 'aria-selected': String(id === selected), onclick: () => {
+        return h('button', { class: `chassis-item tilt${id === selected ? ' is-selected' : ''}${isOwned ? '' : ' is-locked'}`, role: 'option', 'aria-selected': String(id === selected), onclick: () => {
           selected = id;
           render();
         } },
@@ -127,7 +127,7 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
   slot.addEventListener('pointerup', () => (dragX = null));
   slot.addEventListener('pointercancel', () => (dragX = null));
 
-  const el = shell(app, { nav: 'garage', title: 'Garage', subtitle: 'Robot selection', cls: 'garage' }, list, slot, detail, actions);
+  const el = shell(app, { nav: 'garage', title: 'Garage', subtitle: 'Robot selection', cls: 'garage', dock: actions }, list, slot, detail);
   queueMicrotask(render);
   return { el, stage: { shot: 'solo', moods: ['ready', 'idle'] }, dispose: () => app.syncStage(true) };
 }
@@ -137,6 +137,7 @@ export function academyScreen(app: App): ScreenView {
   let selected: TrialId = TRIAL_ORDER.find((t) => (save.trials[t]?.medal ?? 0) < 3) ?? 'swing_school';
   const detail = h('section', { class: 'panel trial-detail' });
   const trialList = h('div', { class: 'trial-list' });
+  const dock = h('div', { class: 'dock-row' });
 
   const render = () => {
     trialList.replaceChildren(
@@ -166,7 +167,10 @@ export function academyScreen(app: App): ScreenView {
         h('span', { class: 'th m3' }, icon('star'), `Gold ${thr(t.gold)}`),
       ),
       h('div', { class: 'best-line' }, icon('timer'), h('span', null, 'Best'), h('b', { class: 'display' }, formatTrialScore(selected, rec?.best ?? null)), rec?.attempts ? h('small', null, `${rec.attempts} attempt${rec.attempts === 1 ? '' : 's'}`) : h('small', null, 'Not attempted yet')),
-      h('button', { class: 'btn btn-cyan btn-big', onclick: () => app.startTrial(selected) }, icon('play'), 'Start trial'),
+    );
+    dock.replaceChildren(
+      h('div', { class: 'dock-info' }, h('b', null, t.name), h('small', null, `${t.skill} · ${rec?.medal ? `${MEDAL_NAMES[rec.medal]} medal won` : 'No medal yet'}`)),
+      h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.startTrial(selected) }, icon('play'), 'Start trial'),
     );
   };
   render();
@@ -176,7 +180,7 @@ export function academyScreen(app: App): ScreenView {
     h('div', { class: 'lesson-list' },
       LESSONS.map((l, i) => {
         const done = save.lessons.includes(l.id);
-        return h('button', { class: `lesson-item${done ? ' is-done' : ''}`, onclick: () => app.startLesson(l.id) },
+        return h('button', { class: `lesson-item${done ? ' is-done' : ''}`, onclick: () => app.startLesson(l.id), 'aria-label': `${done ? 'Replay' : 'Play'} lesson ${i + 1}: ${l.name}` },
           h('span', { class: 'li-num' }, done ? icon('check') : String(i + 1)),
           h('span', { class: 'li-text' }, h('b', null, l.name), h('small', null, l.summary)),
           h('span', { class: 'li-go' }, done ? 'Replay' : 'Try it'),
@@ -186,9 +190,9 @@ export function academyScreen(app: App): ScreenView {
     h('p', { class: 'muted' }, 'Every lesson is played, one skill per step. First completion pays a small reward.'),
   );
 
-  const el = shell(app, { nav: 'academy', title: 'Academy', subtitle: 'Learn. Improve. Master.', dim: true, cls: 'academy' },
+  const el = shell(app, { nav: 'academy', title: 'Academy', subtitle: 'Learn. Improve. Master.', dim: true, cls: 'academy', dock },
     lessons,
-    h('section', { class: 'panel-dark trials' }, h('h2', { class: 'section-head' }, icon('target'), 'Skill trials'), trialList),
+    h('section', { class: 'panel-dark trials' }, h('h2', { class: 'section-head' }, icon('target'), 'Skill trials', h('small', { class: 'muted' }, 'Pick one, then Start')), trialList),
     detail,
   );
   return { el };

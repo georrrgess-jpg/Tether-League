@@ -10,6 +10,7 @@ import { controlsStrip } from '../controls';
 import { standings } from '../../career/career';
 import { REWARDS } from '../../progression/progression';
 import { clubBadge, shell } from '../shell';
+import { comebackChip } from './home';
 import { clubBadgeFor } from './league';
 
 export function seg<T extends string | number>(options: { value: T; label: string; title?: string }[], current: T, onPick: (v: T) => void, label: string): HTMLElement {
@@ -114,14 +115,15 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
   );
 
   const oppPick = mode === 'quick'
-    ? h('label', { class: 'field inline' }, h('span', null, 'Opponent'),
-        (() => {
-          const sel = h('select', { class: 'select', 'aria-label': 'Opponent club' }, Object.values(CLUBS).map((c) => h('option', { value: c.id, selected: c.id === oppId }, c.name))) as HTMLSelectElement;
-          sel.addEventListener('change', () => change(() => (prefs.quickOpponent = sel.value))());
-          return sel;
-        })())
+    ? row('Opponent', (() => {
+        const sel = h('select', { class: 'select', 'aria-label': 'Opponent club' }, Object.values(CLUBS).map((c) => h('option', { value: c.id, selected: c.id === oppId }, c.name))) as HTMLSelectElement;
+        sel.addEventListener('change', () => change(() => (prefs.quickOpponent = sel.value))());
+        return sel;
+      })(), `${opp.styleLabel}.`)
     : null;
+  if (oppPick) options.insertBefore(oppPick, options.children[1]);
 
+  const pay = (credits: number) => Math.round(credits * (mode === 'quick' ? REWARDS.quickFactor : 1));
   const matchup = h('section', { class: 'panel-dark prematch-matchup' },
     h('div', { class: 'ln-tag display' }, info ? info.label : 'Quick match'),
     h('div', { class: 'versus on-dark' },
@@ -129,25 +131,33 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
       h('span', { class: 'vs' }, 'VS'),
       h('div', { class: 'vs-team' }, clubBadgeFor(app, oppId, 'big'), h('b', null, opp.name), h('small', null, opp.styleLabel)),
     ),
+    info ? comebackChip(info.ease) : null,
     kit.awayKit ? h('p', { class: 'muted center' }, `${opp.name} wear their away kit so the teams are easy to tell apart.`) : null,
     info ? scouting() : null,
     h('div', { class: 'stakes' },
-      h('span', { class: 'chip' }, icon('coin'), `Play: +${Math.round(REWARDS.matchComplete.credits * (mode === 'quick' ? REWARDS.quickFactor : 1))}`),
-      h('span', { class: 'chip chip-yellow' }, icon('trophy'), `Win: +${Math.round((REWARDS.matchComplete.credits + REWARDS.winBonus.credits) * (mode === 'quick' ? REWARDS.quickFactor : 1))} credits`),
+      h('span', { class: 'chip' }, icon('coin'), `Play: +${pay(REWARDS.matchComplete.credits)}`),
+      h('span', { class: 'chip chip-yellow' }, icon('trophy'), `Win: +${pay(REWARDS.matchComplete.credits + REWARDS.winBonus.credits)} credits`),
       h('span', { class: 'chip' }, icon('star'), 'Passes, saves and goals add a bonus'),
     ),
-    oppPick,
-    h('div', { class: 'arena-line' },
-      arenaDiagram(arena),
-      h('div', null, h('b', { class: 'display' }, ARENAS[arena].name), h('span', { class: 'chip' }, ARENAS[arena].tag), h('p', { class: 'muted' }, ARENAS[arena].blurb),
-        mode === 'quick' ? h('button', { class: 'btn btn-small btn-ghost on-dark', onclick: () => app.navigate('arenas') }, 'Change arena') : null),
-    ),
-    h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: start }, icon('play'), 'Start match'),
-    h('p', { class: 'muted center' }, mode === 'career' ? 'Three minutes. Leaving mid-match keeps the fixture unplayed.' : 'Quick matches pay 60% rewards and never change the league.'),
-    controlsStrip(save.settings),
   );
 
-  const el = shell(app, { nav: 'play', title: 'Pre-match', subtitle: info ? info.label : 'Quick match', back: mode === 'career' ? 'league' : 'home', dim: true, cls: 'prematch' }, h('div', { class: 'prematch-grid' }, matchup, options));
+  const arenaCard = h('section', { class: 'panel prematch-arena' },
+    h('div', { class: 'arena-line' },
+      arenaDiagram(arena),
+      h('div', null, h('b', { class: 'display' }, ARENAS[arena].name), h('br'), h('span', { class: 'chip' }, ARENAS[arena].tag), h('p', { class: 'muted' }, ARENAS[arena].blurb),
+        mode === 'quick' ? h('button', { class: 'btn btn-small btn-cyan', onclick: () => app.navigate('arenas') }, icon('map'), 'Change arena') : null),
+    ),
+  );
+
+  const controls = h('section', { class: 'panel-dark prematch-controls' }, h('h2', { class: 'section-head' }, icon('info'), 'Controls'), controlsStrip(save.settings));
+
+  const dock = h('div', { class: 'dock-row' },
+    h('div', { class: 'dock-info' }, h('b', null, `${save.club.name} v ${opp.name}`), h('small', null, mode === 'career' ? 'Three minutes. Leaving mid-match keeps the fixture unplayed.' : `${prefs.quickMinutes} minutes. Quick matches pay ${Math.round(REWARDS.quickFactor * 100)}% rewards and never change the league.`)),
+    h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: start }, icon('play'), 'Start match'),
+  );
+
+  const el = shell(app, { nav: 'play', title: 'Pre-match', subtitle: info ? info.label : 'Quick match', back: mode === 'career' ? 'league' : 'home', dim: true, cls: 'prematch', dock },
+    h('div', { class: 'prematch-grid' }, h('div', { class: 'prematch-left' }, matchup, arenaCard), h('div', { class: 'prematch-left' }, options, controls)));
   return { el };
 }
 
@@ -156,13 +166,13 @@ export function arenasScreen(app: App): ScreenView {
   const unlocked = unlockedArenas(save);
   let selected: ArenaId = unlocked.includes(save.prefs.quickArena) ? save.prefs.quickArena : 'harbor_park';
   const grid = h('div', { class: 'arena-grid' });
-  const foot = h('div', { class: 'panel-dark arena-foot' });
+  const foot = h('div', { class: 'arena-foot' });
   const render = () => {
     grid.replaceChildren(
       ...ARENA_ORDER.map((id) => {
         const a = ARENAS[id];
         const open = unlocked.includes(id);
-        return h('button', { class: `arena-card${id === selected ? ' is-selected' : ''}${open ? '' : ' is-locked'}`, 'aria-pressed': String(id === selected), onclick: () => {
+        return h('button', { class: `arena-card tilt${id === selected ? ' is-selected' : ''}${open ? '' : ' is-locked'}`, 'aria-pressed': String(id === selected), onclick: () => {
           selected = id;
           render();
         } },
@@ -175,10 +185,10 @@ export function arenasScreen(app: App): ScreenView {
     const a = ARENAS[selected];
     const open = unlocked.includes(selected);
     foot.replaceChildren(
-      h('div', null, h('b', { class: 'display' }, `${a.name} · `), h('span', { class: 'accent' }, a.tag), h('p', { class: 'muted' }, `${a.blurb} ${a.length} × ${a.width} units, ${a.anchors.length} anchors.`),
+      h('div', { class: 'dock-info' }, h('b', null, a.name, ' · ', h('span', { class: 'accent' }, a.tag)), h('p', { class: 'muted' }, `${a.blurb} ${a.length} × ${a.width} units, ${a.anchors.length} anchors.`),
         open ? null : h('p', { class: 'locked-note' }, icon('lock'), `Locked: ${a.unlockHint}`)),
       open
-        ? h('button', { class: 'btn btn-cyan btn-big', onclick: () => {
+        ? h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => {
             save.prefs.quickArena = selected;
             app.persist();
             app.navigate('prematch?mode=quick');
@@ -187,6 +197,6 @@ export function arenasScreen(app: App): ScreenView {
     );
   };
   render();
-  const el = shell(app, { nav: 'play', title: 'Arena selection', subtitle: 'Quick match venue', back: 'prematch?mode=quick', dim: true, cls: 'arenas' }, grid, foot);
+  const el = shell(app, { nav: 'play', title: 'Arena selection', subtitle: 'Quick match venue', back: 'prematch?mode=quick', dim: true, cls: 'arenas', dock: foot }, grid);
   return { el };
 }

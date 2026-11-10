@@ -51,8 +51,21 @@
 }
 .road-panel {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
+  border-top: 5px solid var(--violet);
+}
+.objectives-panel {
+  border-top: 5px solid var(--pink);
+}
+.mastery-panel {
+  border-top: 5px solid var(--orange);
+}
+.achievements-panel {
+  border-top: 5px solid var(--yellow);
+}
+.road-panel .bar.yellow > i {
+  background: linear-gradient(90deg, var(--violet), var(--pink), var(--yellow));
 }
 .road-head {
   display: flex;
@@ -62,17 +75,21 @@
 .road-level {
   display: grid;
   justify-items: center;
-  padding: 6px 14px;
-  border-radius: 14px;
-  background: var(--ink);
+  align-content: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #4a3a9a, var(--ink) 70%);
   color: var(--on-dark);
   flex: none;
+  box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--violet), 0 0 26px rgba(155, 123, 255, 0.55);
+  animation: pop-in 0.5s var(--ease-back) both;
 }
 .road-level small {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
   text-transform: uppercase;
-  color: #a9b8cf;
+  color: var(--on-dark-muted);
 }
 .road-level b {
   font-size: 2.1rem;
@@ -173,10 +190,17 @@
 }
 .road-step.is-next {
   background: #fff;
-  box-shadow: 0 0 0 3px var(--yellow), 0 6px 14px rgba(10, 22, 40, 0.18);
+  box-shadow: 0 0 0 3px var(--violet), 0 8px 22px rgba(155, 123, 255, 0.4);
+  animation: next-bob 2.4s ease-in-out infinite;
+}
+@keyframes next-bob {
+  50% {
+    transform: translateY(-3px);
+  }
 }
 .road-step.is-next .rs-level {
-  background: var(--yellow);
+  background: var(--violet);
+  color: #fff;
 }
 .road-step.is-next .rs-state {
   color: var(--ink);
@@ -355,9 +379,16 @@
   gap: 3px;
   color: var(--muted);
 }
+.ach-card {
+  transition: transform 0.18s var(--ease-out), box-shadow 0.18s ease;
+}
+.ach-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px rgba(10, 22, 40, 0.14);
+}
 .ach-card.is-done {
-  background: rgba(246, 197, 66, 0.22);
-  box-shadow: inset 0 0 0 2px rgba(217, 154, 18, 0.45);
+  background: linear-gradient(160deg, #fff4cf, #ffe39a);
+  box-shadow: inset 0 0 0 2px rgba(217, 154, 18, 0.5);
 }
 .ach-card.is-done .bar > i {
   background: linear-gradient(90deg, var(--yellow), #ffe08a);
@@ -376,6 +407,9 @@
 .ng-next .icon {
   color: var(--yellow);
 }
+.ng-next b {
+  color: #fff;
+}
 .ng-objective {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -387,12 +421,13 @@
   font-size: 0.84rem;
   text-align: left;
   color: var(--on-dark);
+  transition: background 0.15s ease;
 }
 .ng-objective:hover {
   background: rgba(255, 255, 255, 0.14);
 }
 .ng-objective .icon {
-  color: var(--cyan);
+  color: var(--cyan-hi);
 }
 .ng-objective .bar {
   grid-column: 1 / -1;
@@ -497,31 +532,8 @@
   justify-self: center;
 }
 
-@media not all and (max-width: 820px) {
-  @media not all and (orientation: portrait) and (max-width: 1000px) {
-    .results .content {
-      grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-      grid-template-areas: 'head head head' 'stats slot rewards' 'stats prog rewards' 'rec rec rec' 'act act act';
-    }
-    .results-stats {
-      max-height: 100%;
-      overflow: auto;
-    }
-    .results-rewards {
-      max-height: 100%;
-      overflow: auto;
-    }
-    .results .ps-list {
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    }
-  }
-}
-/* Short landscape phones: one compact strip between the panels and the buttons. */
+/* Short landscape phones: progress becomes one compact strip under the panels. */
 @media (max-height: 560px) and (orientation: landscape) {
-  .results .content {
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-    grid-template-areas: 'head head head' 'stats slot rewards' 'prog prog prog' 'act act act';
-  }
   .results .progress-summary {
     display: flex;
     align-items: center;
@@ -531,6 +543,7 @@
   .results .progress-summary .section-head {
     flex: none;
     font-size: 0.8rem;
+    margin: 0;
   }
   .results .progress-summary .section-head .btn {
     display: none;
@@ -551,10 +564,15 @@
     display: none;
   }
 }
+@media (min-height: 561px) and (min-width: 821px) {
+  .results .ps-list {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
+}
 
 /* ---------- club customisation additions ---------- */
 .chip-earn {
-  background: rgba(138, 92, 240, 0.2);
+  background: #ece5ff;
   color: #4b2a9a;
 }
 .item.is-earned.is-locked .thumb {
@@ -577,9 +595,16 @@
   font-weight: 800;
   font-size: 0.86rem;
 }
+.title-pick {
+  color: var(--ink);
+  transition: transform 0.18s var(--ease-back);
+}
+.title-pick:hover {
+  transform: translateY(-2px);
+}
 .title-pick.is-selected {
   background: #fff;
-  box-shadow: 0 0 0 3px var(--yellow);
+  box-shadow: 0 0 0 3px var(--pink), 0 6px 14px rgba(255, 95, 162, 0.3);
 }
 .earned-colors {
   display: grid;
@@ -628,10 +653,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-@media (max-width: 820px), (orientation: portrait) and (max-width: 1000px) {
-  .results .content {
-    grid-template-areas: none;
-  }
+@media (max-width: 820px) and (min-height: 561px), (orientation: portrait) and (max-width: 1000px) {
   .road-head {
     flex-wrap: wrap;
     gap: 10px;

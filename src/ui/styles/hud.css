@@ -515,6 +515,10 @@
     top: calc(62px + var(--safe-t));
     transform: translate(-50%, 0);
   }
+  /* toasts sit under the hint card instead of on top of it */
+  .toasts {
+    top: calc(120px + var(--safe-t));
+  }
   .task {
     gap: 8px;
     padding: 6px 12px;
@@ -536,14 +540,25 @@
   }
 }
 
+/* short landscape: toasts go to the free space between the stick and the buttons */
+@media (max-height: 480px) and (orientation: landscape) {
+  .toasts {
+    top: auto;
+    bottom: calc(18px + var(--safe-b));
+  }
+}
+
 /* Portrait play is supported but small: suggest rotating without blocking anything. */
 @media (orientation: portrait) and (max-width: 700px) {
   .play-layer::after {
     content: 'Tip: turn your device sideways for a bigger pitch';
     position: absolute;
     left: 50%;
-    top: calc(64px + var(--safe-t));
+    /* sits above the touch controls, clear of the hint, coach card and toasts near the top */
+    bottom: calc(222px * var(--touch-scale, 1) + var(--safe-b));
     transform: translateX(-50%);
+    animation: tip-life 10s 1.5s ease forwards;
+    opacity: 0;
     padding: 4px 12px;
     border-radius: 999px;
     background: rgba(23, 39, 62, 0.8);
@@ -552,6 +567,62 @@
     font-weight: 800;
     white-space: nowrap;
     pointer-events: none;
+  }
+}
+
+@keyframes tip-life {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.reduced-motion .play-layer::after {
+  animation: none;
+  opacity: 1;
+}
+
+/* Narrow portrait phones (360-430 px): the action buttons stack up the right edge so none of
+   them reaches the movement stick on the left. */
+@media (orientation: portrait) and (max-width: 520px) {
+  .stick-base {
+    left: calc(92px + var(--safe-l));
+    top: calc(100% - 124px - var(--safe-b));
+  }
+  .touch-ui.swap .stick-base {
+    left: calc(100% - 92px - var(--safe-r));
+  }
+  .tbtn-kick {
+    right: calc(16px + var(--safe-r));
+    bottom: calc(24px + var(--safe-b));
+    width: calc(96px * var(--touch-scale));
+    height: calc(96px * var(--touch-scale));
+  }
+  .tbtn-tether {
+    right: calc(16px + 88px * var(--touch-scale) + var(--safe-r));
+    bottom: calc(24px + 88px * var(--touch-scale) + var(--safe-b));
+    width: calc(84px * var(--touch-scale));
+    height: calc(84px * var(--touch-scale));
+  }
+  .tbtn-pass {
+    right: calc(16px + 10px * var(--touch-scale) + var(--safe-r));
+    bottom: calc(24px + 118px * var(--touch-scale) + var(--safe-b));
+    width: calc(74px * var(--touch-scale));
+    height: calc(74px * var(--touch-scale));
+  }
+  .touch-ui.swap .tbtn-kick {
+    left: calc(16px + var(--safe-l));
+  }
+  .touch-ui.swap .tbtn-tether {
+    left: calc(16px + 88px * var(--touch-scale) + var(--safe-l));
+  }
+  .touch-ui.swap .tbtn-pass {
+    left: calc(16px + 10px * var(--touch-scale) + var(--safe-l));
   }
 }
 

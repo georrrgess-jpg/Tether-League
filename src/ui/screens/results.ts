@@ -6,7 +6,7 @@ import { MEDAL_NAMES, TRIALS, type TrialId } from '../../content/trials';
 import { masteryProgress } from '../../progression/mastery';
 import { describeLevelReward, levelProgress } from '../../progression/progression';
 import type { Grant, ProgressReport, RewardLine } from '../../storage/save';
-import { fmtTime, h, icon } from '../dom';
+import { countUp, fmtTime, h, icon } from '../dom';
 import { shell } from '../shell';
 import { TIER_LABEL } from './progress';
 
@@ -69,7 +69,7 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
   const lp = levelProgress(save.xp);
   const leveled = r.progress.levelAfter > r.progress.levelBefore;
 
-  const stat = (ic: string, label: string, value: number) => h('div', { class: 'stat' }, icon(ic), h('span', null, label), h('b', null, String(value)));
+  const stat = (ic: string, label: string, value: number) => h('div', { class: 'stat' }, icon(ic), h('span', null, label), countUp(h('b', null), value, { ms: 700, delay: 300 }));
   const stats = h('section', { class: 'panel results-stats' },
     stat('ball', 'Goals', r.stats.goals),
     stat('assist', 'Assists', r.stats.assists),
@@ -84,7 +84,9 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
   const rewards = h('section', { class: 'panel-dark results-rewards' },
     h('h2', { class: 'section-head' }, icon('gift'), 'Match rewards'),
     r.rewards.length ? lineList(r.rewards) : h('p', { class: 'muted' }, 'Rewards for this match were already collected.'),
-    h('div', { class: 'reward-total' }, h('span', null, icon('coin'), `+${r.credits} credits`), h('span', null, `+${r.xp} club XP`)),
+    h('div', { class: 'reward-total' },
+      h('span', null, icon('coin'), countUp(h('span'), r.credits, { delay: 400, format: (n) => `+${Math.round(n)}` }), ' credits'),
+      h('span', null, countUp(h('span'), r.xp, { delay: 400, format: (n) => `+${Math.round(n)}` }), ' club XP')),
     h('div', { class: 'gc-row' }, h('b', null, `Club level ${r.progress.levelAfter || lp.level}${leveled ? ' · level up!' : ''}`), h('span', null, `${save.xp - lp.from} / ${lp.to - lp.from}`)),
     h('div', { class: 'bar yellow' }, h('i', { style: `width:${Math.round(lp.frac * 100)}%` })),
     h('p', { class: 'muted' }, `Next: ${describeLevelReward(lp.level + 1)}`),
@@ -94,21 +96,21 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
   const records = r.newRecords.length ? h('div', { class: 'record-strip' }, icon('star'), r.newRecords.join(' · ')) : null;
 
   const actions = h('div', { class: 'results-actions' },
+    h('button', { class: 'btn btn-dark', onclick: () => app.navigate('home', true) }, icon('home'), 'Club home'),
+    save.picks > 0 ? h('button', { class: 'btn btn-cyan', onclick: () => app.navigate('club') }, icon('gift'), 'Use free pick') : null,
     career
-      ? h('button', { class: 'btn btn-cyan btn-big', 'data-autofocus': true, onclick: () => app.navigate('league', true) }, icon('play'), r.seasonComplete ? 'Season review' : 'Continue season')
-      : h('button', { class: 'btn btn-cyan btn-big', 'data-autofocus': true, onclick: () => app.navigate('prematch?mode=quick', true) }, icon('retry'), 'Rematch'),
-    h('button', { class: 'btn', onclick: () => app.navigate('home', true) }, icon('home'), 'Club home'),
-    save.picks > 0 ? h('button', { class: 'btn btn-primary', onclick: () => app.navigate('club') }, icon('gift'), 'Use free pick') : null,
+      ? h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.navigate('league', true) }, icon('play'), r.seasonComplete ? 'Season review' : 'Continue season')
+      : h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.navigate('prematch?mode=quick', true) }, icon('retry'), 'Rematch'),
   );
 
   const head = h('div', { class: `results-head ${r.won ? 'won' : 'lost'}` },
     h('h1', { class: 'display' }, r.won ? 'Victory' : 'Defeat'),
-    h('div', { class: 'final-score' }, h('b', { class: 'us' }, String(r.score[0])), h('span', null, '–'), h('b', { class: 'them' }, String(r.score[1]))),
+    h('div', { class: 'final-score', 'aria-label': `Final score ${r.score[0]} to ${r.score[1]}` }, h('b', { class: 'us' }, String(r.score[0])), h('span', { 'aria-hidden': 'true' }, '–'), h('b', { class: 'them' }, String(r.score[1]))),
     h('p', null, `${r.label} · v ${r.opponent}${r.overtime ? ' · after overtime' : ''}`),
     r.won ? null : h('p', { class: 'muted on-dark-text' }, 'Completion rewards are yours either way. The Academy has drills for whatever went wrong.'),
   );
 
-  const el = shell(app, { nav: 'play', cls: 'results' }, head, stats, h('div', { class: 'stage-slot' }), rewards, progressSummary(app, r.progress, 'Progress this match', r.grants), records, actions);
+  const el = shell(app, { nav: 'play', cls: `results ${r.won ? 'is-won' : 'is-lost'}`, dock: actions }, head, stats, h('div', { class: 'stage-slot' }), rewards, progressSummary(app, r.progress, 'Progress this match', r.grants), records);
   return { el, stage: { shot: 'duo', moods: r.won ? ['celebrate', 'celebrate'] : ['sad', 'sad'] } };
 }
 
@@ -132,7 +134,11 @@ export function trialResultScreen(app: App, params: URLSearchParams): ScreenView
   const rec = app.save.trials[id];
   const o = rep.outcome;
   const next = o.medal < 3 ? (def.unit === 'time' ? `${MEDAL_NAMES[o.medal + 1]}: ${fmtTime([def.bronze, def.silver, def.gold][o.medal])} or faster` : `${MEDAL_NAMES[o.medal + 1]}: ${[def.bronze, def.silver, def.gold][o.medal]} or more`) : 'Gold standard reached. Chase your personal best.';
-  const el = shell(app, { nav: 'academy', title: def.name, subtitle: 'Trial result', back: 'academy', dim: true, cls: 'trial-result' },
+  const dock = h('div', { class: 'results-actions' },
+    h('button', { class: 'btn btn-dark', onclick: () => app.navigate('academy', true) }, icon('academy'), 'Back to academy'),
+    h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.startTrial(id) }, icon('retry'), 'Retry'),
+  );
+  const el = shell(app, { nav: 'academy', title: def.name, subtitle: 'Trial result', back: 'academy', dim: true, cls: 'trial-result', dock },
     h('section', { class: 'panel trial-panel' },
       h('div', { class: 'trial-score' }, h('small', null, rep.score === null ? 'No score' : 'Your score'), h('b', { class: 'display' }, formatTrialScore(id, rep.score)), medalIcons(o.medal, 'big'),
         h('span', { class: 'chip' }, o.medal ? `${MEDAL_NAMES[o.medal]} medal` : 'No medal this time')),
@@ -142,10 +148,6 @@ export function trialResultScreen(app: App, params: URLSearchParams): ScreenView
       o.bonus.length ? lineList(o.bonus) : null,
       grantList(o.grants),
       h('p', { class: 'muted' }, def.objective),
-      h('div', { class: 'dialog-actions' },
-        h('button', { class: 'btn', onclick: () => app.navigate('academy', true) }, 'Back to academy'),
-        h('button', { class: 'btn btn-cyan btn-big', 'data-autofocus': true, onclick: () => app.startTrial(id) }, icon('retry'), 'Retry'),
-      ),
     ),
     progressSummary(app, o.progress, 'Progress from this attempt', o.grants),
   );

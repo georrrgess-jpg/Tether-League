@@ -62,7 +62,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
   let busy = false;
   const body = h('div', { class: 'club-body' });
   const tabs = h('div', { class: 'club-tabs', role: 'tablist', 'aria-label': 'Customise' });
-  const foot = h('div', { class: 'panel-dark club-foot' });
+  const foot = h('div', { class: 'club-foot' });
 
   const dirty = () => JSON.stringify(draft) !== JSON.stringify(save.club);
   const fieldOf = (kind: CosmeticKind): keyof ClubProfile => ((kind === 'pattern' ? 'pattern' : kind) as keyof ClubProfile);
@@ -178,7 +178,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
     foot.replaceChildren(
       buy ?? h('span', { class: 'foot-note' }, save.picks > 0 ? h('span', { class: 'chip chip-yellow' }, icon('gift'), `${save.picks} free pick${save.picks > 1 ? 's' : ''}: choose any shop item`) : h('span', { class: 'muted' }, dirty() ? 'Unsaved changes' : 'Earn credits and free picks by playing matches and trials.')),
       h('div', { class: 'foot-actions' },
-        h('button', { class: 'btn btn-ghost on-dark', disabled: !dirty(), onclick: () => {
+        h('button', { class: 'btn btn-ghost', disabled: !dirty(), onclick: () => {
           draft = JSON.parse(JSON.stringify(save.club));
           render();
         } }, 'Cancel'),
@@ -194,7 +194,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
   };
 
   const render = () => {
-    tabs.replaceChildren(...TABS.map((t) => h('button', { class: `tab${t.id === tab ? ' is-active' : ''}`, role: 'tab', 'aria-selected': String(t.id === tab), onclick: () => {
+    tabs.replaceChildren(...TABS.map((t) => h('button', { class: `tab${t.id === tab ? ' is-active' : ''}`, role: 'tab', 'aria-selected': String(t.id === tab), title: t.label, 'aria-label': t.label, onclick: () => {
       tab = t.id;
       render();
     } }, icon(t.icon), h('span', null, t.label))));
@@ -241,7 +241,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
     preview();
   };
 
-  const el = shell(app, { nav: 'club', title: save.club.name, subtitle: 'Club customisation', cls: 'club' }, tabs, h('div', { class: 'stage-slot' }), body, foot);
+  const el = shell(app, { nav: 'club', title: save.club.name, subtitle: 'Club customisation', cls: 'club', dock: foot }, tabs, h('div', { class: 'stage-slot' }), body);
   queueMicrotask(render);
   return { el, stage: { shot: 'duo', moods: ['idle', 'idle'] }, dispose: () => app.syncStage(true) };
 }

@@ -53,7 +53,7 @@ export function setupScreen(app: App): ScreenView {
       club.name = cleanClubName(name.value);
       app.hasClub = true;
       app.persist();
-      root.replaceChildren(top, welcome(), slot);
+      root.replaceChildren(top, welcome(), slot, tag);
     };
     let panel = h('div', { class: 'panel setup-panel' },
       h('div', { class: 'panel-title' }, 'Create your club', h('small', null, 'Everything can be changed later')),
@@ -80,7 +80,7 @@ export function setupScreen(app: App): ScreenView {
           ),
         ),
       ),
-      h('button', { class: 'btn btn-primary btn-big', onclick: create, 'data-autofocus': true }, icon('play'), 'Create club'),
+      h('div', { class: 'setup-create stack' }, h('button', { class: 'btn btn-primary btn-big', onclick: create, 'data-autofocus': true }, icon('play'), 'Create club')),
     );
     return panel;
   };
@@ -88,7 +88,12 @@ export function setupScreen(app: App): ScreenView {
   const welcome = () =>
     h('div', { class: 'panel setup-panel' },
       h('div', { class: 'panel-title' }, `Welcome, ${club.name}!`),
-      h('p', null, 'Tether League is 2v2 robot football with a twist: hold a tether to swing from an anchor, then let go to launch with your momentum.'),
+      h('p', { class: 'setup-intro' }, 'Tether League is 2v2 robot football with a twist: hold a tether to swing from an anchor, then let go to launch with your momentum.'),
+      h('ul', { class: 'setup-steps' },
+        h('li', null, icon('swing'), 'Swing from the glowing anchors to build speed'),
+        h('li', null, icon('pass'), 'Pass to your teammate: walls are lively, so bank it'),
+        h('li', null, icon('ball'), 'Strike first time off a pass for a one-touch shot'),
+      ),
       h('p', { class: 'muted' }, 'A short practice (about two minutes) teaches moving, swinging and kicking. You can skip it and find it later in the Academy.'),
       h('div', { class: 'stack' },
         h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => app.startLesson('move', 'onboarding') }, icon('academy'), 'Start practice'),
@@ -102,6 +107,7 @@ export function setupScreen(app: App): ScreenView {
 
   const top = h('header', { class: 'topbar' }, wordmark());
   const slot = h('div', { class: 'stage-slot' });
-  root.append(top, form(), slot);
+  const tag = h('p', { class: 'setup-tag' }, h('b', null, '2v2 robot ball. '), 'Swing, launch, pass and score.');
+  root.append(top, form(), slot, tag);
   return { el: root, stage: { shot: 'duo', moods: ['ready', 'idle'] } };
 }
