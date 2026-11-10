@@ -24,13 +24,13 @@ export interface TrialDef {
 export const TRIALS: Record<TrialId, TrialDef> = {
   swing_school: {
     id: 'swing_school', name: 'Swing School', skill: 'Tether movement', icon: 'swing', arena: 'harbor_park',
-    objective: 'Swing through the three glowing gates in order. Each gate only counts while you are faster than running speed. Tip: point past the next gate and tap swing.',
+    objective: 'Swing through the three glowing gates in order. Each gate only counts while you are faster than running speed. Tip: point past the next gate and tap swing; tap again to let go early.',
     scoring: 'Fastest time. Crossing a gate too slowly does not count.',
-    unit: 'time', bronze: 12, silver: 7, gold: 4.8, rulesVersion: 2,
+    unit: 'time', bronze: 14, silver: 9.5, gold: 6.5, rulesVersion: 3,
   },
   clean_release: {
     id: 'clean_release', name: 'Clean Release', skill: 'Release timing', icon: 'target', arena: 'harbor_park',
-    objective: 'Manual release test: smart swing is off here. Hold swing, and let go when the launch line points through the marked lane.',
+    objective: 'Manual release test: smart swing is off here. Point at the lane, hold swing, and let go when the rope glows green.',
     scoring: 'Successful launches out of 8 attempts.',
     unit: 'count', bronze: 3, silver: 5, gold: 7, rulesVersion: 2,
   },

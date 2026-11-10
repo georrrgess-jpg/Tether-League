@@ -122,7 +122,7 @@ export class LessonMode extends Scenario {
         this.steps = [
           {
             text: this.touch ? 'Move toward the glowing circle and tap SWING.' : `Point at the glowing circle and tap ${k.tether}.`,
-            sub: 'Your robot picks an anchor, swings round it and lets go so the launch carries you there. Green arc = faster than running.',
+            sub: 'The glowing anchor is the one you will swing from. Your robot lets go by itself so the launch carries you there.',
             enter: () => {
               this.place(0, -9, 5, 0);
               this.ball(PARK[0], PARK[1]);
@@ -144,8 +144,8 @@ export class LessonMode extends Scenario {
             check: () => this.gate(1, 1.4, 1, 7),
           },
           {
-            text: this.touch ? 'Now hold SWING to steer it yourself. Let go when the line under you turns green.' : `Now hold ${k.tether} to swing yourself. Let go when the line under you turns green.`,
-            sub: 'Holding keeps you on the rope as long as you like (up to the ring timer). Letting go launches you along that line.',
+            text: this.touch ? 'Now hold SWING and let go yourself, when the rope glows green.' : `Now hold ${k.tether} and let go yourself, when the rope glows green.`,
+            sub: 'Green means you are pointing at your aim right now. Letting go launches you straight ahead.',
             enter: () => {
               this.place(0, -8, -5, 0);
               this.setMarkers([{ kind: 'gate', x: 1, z: -7, x2: 1, z2: -1.4, color: YELLOW, width: 0.5 }]);

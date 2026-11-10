@@ -506,7 +506,7 @@ describe('validateSave', () => {
     const current = TRIALS.swing_school.rulesVersion;
     raw.trials = {
       swing_school: { best: 7.5, medal: 3, rewarded: 3, attempts: 12, rulesVersion: current + 1 },
-      clean_release: { best: 5, medal: 2, rewarded: 2, attempts: 4, rulesVersion: current - 1 },
+      clean_release: { best: 5, medal: 2, rewarded: 2, attempts: 4, rulesVersion: TRIALS.clean_release.rulesVersion - 1 },
       bank_shot: { best: 20, medal: 2, rewarded: 2, attempts: 3, rulesVersion: TRIALS.bank_shot.rulesVersion },
       pass_window: { best: -4, medal: 9, rewarded: 9, attempts: -2, rulesVersion: TRIALS.pass_window.rulesVersion },
       made_up_trial: { best: 1, medal: 3, rewarded: 3, attempts: 1, rulesVersion: 1 },

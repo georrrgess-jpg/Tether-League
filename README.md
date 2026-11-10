@@ -48,22 +48,23 @@ module scripts on pages opened straight from disk.
 | Move / steer a swing | WASD or arrows | same | drag the left side | left stick |
 | Aim | mouse pointer | follows movement | drag the KICK button | right stick |
 | Swing: tap = launch toward your aim automatically | right mouse | Space / Left Shift | tap SWING | triggers / bumpers |
-| Swing: hold = steer it yourself, let go on green | hold right mouse | hold Space | hold SWING | hold trigger |
+| Swing: tap again = let go now | tap again | tap again | tap again | tap again |
+| Swing: hold = let go yourself (rope glows green when lined up) | hold right mouse | hold Space | hold SWING | hold trigger |
 | Kick | left mouse | J / Enter | tap KICK | A / X |
 | Override the chosen anchor | Q / E | Q / E | – | – |
 | Pause | Esc / P | Esc / P | pause button | Start |
 
 Your swing target is wherever you point (cursor or right stick), otherwise the way you are moving,
-otherwise the ball. A green arc on the pitch means a swing gets you there faster than running.
+otherwise the ball. The glowing anchor is the one you will swing from.
 Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 
 ## What is in the game
 
 - **The sport**: three-minute 2v2 matches with sudden-death overtime, a free ball, deliberate kicks whose
   power grows with your momentum, soft body touches, saves, passes and interceptions.
-- **Smart swing**: tap to swing round the best anchor and launch toward your aim; hold to swing manually
-  and let go when the launch line turns green. Swings are planned from real rope physics (anchor,
-  direction and release point), shown as an arc before you press, and used by the bots too.
+- **Smart swing**: tap to swing round the highlighted anchor and launch toward your aim (tap again to
+  let go early); hold to swing manually and let go when the rope glows green. Swings are planned from
+  real rope physics (anchor, direction and release point), and the bots use the same planner.
 - **Club career**: five divisions of six clubs, a ten-match double round robin, four-team playoffs,
   promotion by winning the final, trophies and season history.
 - **Quick Match**, **Academy** (five playable lessons), **six Skill Trials** with medals and personal bests,
@@ -82,7 +83,7 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (193 tests) |
+| `npm test` | Rule validation suite (195 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |

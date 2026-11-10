@@ -623,8 +623,8 @@ export class ArenaView {
       hm.opacity += ((target > 0 ? 0.95 : 0) - hm.opacity) * Math.min(1, dt * 16);
       a.halo.visible = hm.opacity > 0.02;
       if (a.halo.visible) {
-        // 1 = previewed, 2 = attached, 3 = previewed and a swing is clearly worth it
-        hm.color.set(target >= 3 ? '#8dffb0' : target >= 2 ? '#7ff3ff' : '#fff3c2');
+        // 1 = the anchor you would grab, 2 = attached
+        hm.color.set(target >= 2 ? '#7ff3ff' : '#fff3c2');
         a.halo.quaternion.copy(camera.quaternion);
         const s = 1.5 + (reduced ? 0 : Math.sin(time * 7) * 0.1);
         a.halo.scale.set(s, s, 1);

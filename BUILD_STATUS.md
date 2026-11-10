@@ -1,6 +1,6 @@
 # Build status
 
-Last updated: 2026-11-10 (smart swing update). Release scope: the complete offline single-player game described in
+Last updated: 2026-11-10 (smart swing, decluttered). Release scope: the complete offline single-player game described in
 `design/docs/08_BUILD_PLAN_AND_ACCEPTANCE.md` (milestones A to D), minus the items listed under
 "Not done".
 
@@ -50,7 +50,7 @@ Production bundle: about 813 kB JS (227 kB gzipped), 46 kB CSS, no image assets.
 Commands used: `npm run check`, `npm run build`, `npm run sim`, `npm run feasibility`, plus
 Playwright scripts against the dev server and the production preview.
 
-**Automated (193 tests, about 1.5 s)**: tether acquisition, no retargeting, release preserving
+**Automated (195 tests, about 1.5 s)**: tether acquisition, no retargeting, release preserving
 velocity, speed cap, auto-release, cooldown, rope stability, pause detach without boost; ball drag
 against the analytic law, prediction against the stepped path, goals scoring once, misses not scoring,
 containment stress on every arena; kickoff resets, overtime, goal and clock on the same tick, own
@@ -92,36 +92,37 @@ heard.
 
 ### Smart swing update (2026-11-10)
 
-Problem reported: the tether was confusing, gave little benefit, and the bots barely used it.
-Measured after the change:
+Problem reported: the tether was confusing, gave little benefit, and the bots barely used it. A first
+version added preview lines, rings and mid-pitch anchors; feedback was that this was more cluttered
+and confusing, so those were removed and the controls simplified. Measured on the current version:
 
-- `tools/swingcheck.ts` (random trips of 7+ units, one tap, no other input): a swing is available
-  for 85% (Harbor Park), 88% (Foundry) and 91% (Skyline) of trips; median launch error 0.5°;
-  the swing beats running in 97–99% of those, by about 1.3–1.5 s on average.
-- Real mouse input in the browser (point, quick right-click): launches at 12.2 u/s within 0.5–0.8°
-  of the cursor; a manual hold shows the green release cue.
-- Bots (`tools/swingstats.ts`, Harbor Park): Club robots swing about 20 times a match each, 88% of
-  releases above 8 u/s, with real swing shots and swing goals. Before the change most bot swings
-  went nowhere useful.
-- Match pace: goals per bot-vs-bot match are now about 4 (Rookie), 8 (Club) and 10 (Pro), up from
-  3.4 / 5.0 / 6.8. A Rookie-level stand-in player plus teammate wins 8 of 8 in the first division
-  and a Club-level one 6 of 8 in the third; a passive player still loses every match.
-- Trials re-measured with smart taps: Swing School 3.6 s (gold moved from 8 s to 4.8 s), Clean
-  Release is now manual-only, Counterattack gold moved to 4.5 s. These three trials have a new
-  rules version, so earlier personal bests are set aside (already-paid medal rewards are kept).
-- The rewritten Swing Basics lesson, the other lessons, Pass Window, Bank Shot, Counterattack and a
-  career match were completed again in the browser with no console errors. 193 automated tests
-  pass, including 14 new swing tests.
+- Real mouse input in the browser (point, quick right-click): launches at 8–12 u/s within 0.2–0.6°
+  of the cursor. A manual hold shows the green rope cue. A second tap during an automatic swing lets
+  go on that tick, and automatic swings never stay on the rope longer than about 1.2 s (tests).
+- `tools/swingcheck.ts` (random trips of 7+ units, one tap, no other input, edge anchors only): a
+  planned swing exists for 47% (Harbor Park), 65% (Foundry) and 75% (Skyline) of trips, median launch
+  error 0.4°, and those swings beat running by about 1.3–1.5 s. Elsewhere a tap still does a short
+  swing from the highlighted anchor.
+- Bots (`tools/swingstats.ts`, Harbor Park): Club robots swing about 17 times a match each, about 90%
+  of releases above 8 u/s, with swing shots and swing goals. Rookie robots swing rarely.
+- Balance: a Rookie-level stand-in player plus teammate wins 16 of 20 in the first division; a
+  passive player loses every match. Goals per bot-vs-bot match: about 2 (Rookie), 5 (Club), 10 (Pro).
+- Trials: Swing School 7.7 s with simple taps (medals now 14 / 9.5 / 6.5 s), Clean Release is
+  manual-only, Counterattack gold 4.5 s. These trials have a new rules version, so older personal
+  bests are set aside; medal rewards already paid are kept.
+- All lessons, Pass Window, Bank Shot, Counterattack and a career match were completed again in the
+  browser with no console errors. 195 automated tests pass, including 16 swing tests.
 
 ## Design decisions and changes from the brief
 
 - **Smaller pitch, larger robots.** Harbor Park is 30x20 (brief: 34x22) and robots are drawn 1.75x
   their collision circle (radius 0.62, brief 0.48). At the fixed camera the brief's proportions made
   robots too small to read, especially on phones.
-- **Sixteen anchors, longer range.** Four end-line anchors beside the goals and four hovering
-  mid-pitch anchor drones were added to the eight sideline anchors (Skyline has a cross of four
-  drones instead), and range is 11.2 (brief 9.5). With edge anchors only, a useful swing existed for
-  about half of all trips across Harbor Park; with the drones it is about 85%.
+- **Twelve anchors, longer range.** Four end-line anchors beside the goals were added to the eight
+  sideline anchors, and range is 11.2 (brief 9.5). Skyline Stadium adds two overhead midfield
+  anchors. Four extra mid-pitch anchors were tried (they raised swing coverage from about 50% to 85%
+  of trips) and removed after player feedback that the extra rings made it hard to tell which anchor
+  you would swing from.
 - **Rope behaviour.** The swing drives itself: movement input never brakes, steers or reverses it.
   Slack is taken up immediately, the rope reels in slowly and conserves angular momentum (the swing
   speeds up as it shortens), the first snap converts 85% of outward speed, and attaching from a
@@ -133,13 +134,18 @@ Measured after the change:
   Robots are hard-capped at 12.2 u/s (swing top speed), the ball at 18.
 - **Smart swing** (`src/game/sim/swing.ts`). For a target T and anchor C, the launch is the tangent
   from the swing circle through T, so the planner tries every anchor in range and both directions,
-  rejects arcs that leave the pitch or exceed the hold time, and picks the fastest arrival. A tap
-  uses the plan and lets go automatically on the tangent; a hold is fully manual with a green
-  "let go now" cue. Target: cursor or aim stick, else movement direction, else the ball. Q / E still
-  override the anchor. The preview arc turns green when the swing beats running by 0.4 s or more.
-  Smart swing can be turned off in Settings; Clean Release always plays manual.
+  rejects arcs that leave the pitch, and picks the fastest arrival. A tap uses the plan and lets go
+  automatically on the tangent; automatic swings are limited to about one second, and a second tap
+  lets go at once. A hold is fully manual. Target: cursor or aim stick, else movement direction, else
+  the ball. Q / E still override the anchor. Smart swing can be turned off in Settings; Clean Release
+  always plays manual.
+- **Swing visuals are deliberately minimal**: the one anchor you would grab is highlighted, the rope
+  shows while you swing, and the rope glows green (with a soft click) when a manual swing is lined up
+  with your aim. A planned-arc preview, a launch line, a target ring and a hold-timer ring were tried
+  and removed after player feedback that they cluttered the pitch. An optional faint anchor line is
+  off by default.
 - **Bots** use the same planner and release rule. A bot swings when it beats running by at least
-  0.55 s and 20%, after a rest of 5–8 s (Rookie), 4–6.5 s (Club) or 3–5 s (Pro).
+  0.55 s and 20%, after a rest of 7–11 s (Rookie), 4–6.5 s (Club) or 3–5 s (Pro).
 - **Corner cuts** on every arena keep the ball out of dead corners.
 - **Bots** guard their goal unless their team clearly reaches the ball first. This took bot-vs-bot
   scoring from about 17 goals a match to about 5 (about 8 at Club since the swing update).

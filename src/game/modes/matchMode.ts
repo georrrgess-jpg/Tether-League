@@ -255,11 +255,8 @@ export class MatchMode implements PlayMode {
       } else if (u.tether < 3) {
         key = 'tether';
         text = touch
-          ? 'Tap SWING to swing round the glowing anchor and launch where you are heading'
-          : `Point where you want to go and tap right mouse (or ${keyLabel(k.tether[0])}): you swing there and launch automatically`;
-      } else if (u.tether < 8 && (session.input.swing.plan?.gain ?? 0) > 0.8 && w.robots[0].tState === 'ready') {
-        key = 'swingcue';
-        text = touch ? 'Green arc: a swing gets you there faster. Tap SWING' : `Green arc: a swing gets you there faster. Tap right mouse or ${keyLabel(k.tether[0])}`;
+          ? 'Tap SWING: you swing from the glowing anchor and launch the way you are heading. Tap again to let go early'
+          : `Tap right mouse (or ${keyLabel(k.tether[0])}): you swing from the glowing anchor and launch toward your cursor. Tap again to let go early`;
       }
     }
     if (key !== this.hintKey) {

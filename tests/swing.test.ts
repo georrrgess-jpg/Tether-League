@@ -41,7 +41,7 @@ describe('swing planner', () => {
       [-9, 5, 6, 5],
       [-9, -5, 8, -2],
       [5, 6, -9, 0],
-      [0, -6, 12, 4],
+      [6, -6, -8, 2],
     ];
     for (const [sx, sz, tx, tz] of cases) {
       const { w, r } = soloWorld({ x: sx, z: sz });
@@ -234,5 +234,47 @@ describe('bots use the tether', () => {
     expect(perRobot).toBeGreaterThan(4);
     expect(perRobot).toBeLessThan(40);
     expect(fast / releases).toBeGreaterThan(0.6);
+  });
+});
+
+describe('smart swing stays short and cancellable', () => {
+  it('a second tap during an automatic swing lets go at once', () => {
+    const { w, r } = soloWorld({ x: -9, z: 5 });
+    const ss = new SmartSwing();
+    const c = emptyCommand();
+    let attachedAt = -1;
+    for (let i = 0; i < 40; i++) {
+      // tap, wait until attached, then tap again 6 ticks later
+      const held = i < 2 || (attachedAt >= 0 && i >= attachedAt + 6 && i < attachedAt + 8);
+      ss.update(w, r, c, { held, tx: 6, tz: 5, anchor: -1, assist: true });
+      if (attachedAt >= 0 && i === attachedAt + 6) {
+        expect(c.tether).toBe(false);
+        stepWorld(w, [c]);
+        expect(r.tState).toBe('cooldown');
+        return;
+      }
+      stepWorld(w, [c]);
+      if (attachedAt < 0 && r.tState === 'attached') attachedAt = i + 1;
+    }
+    throw new Error('never attached');
+  });
+
+  it('automatic swings never last much longer than the short-swing limit, even toward an unreachable target', () => {
+    for (const [tx, tz] of [
+      [-9.5, 6], // right next to the robot: no tangent line exists
+      [14, 9],
+      [-14, -9],
+    ] as [number, number][]) {
+      const { w, r } = soloWorld({ x: -9, z: 5 });
+      const ss = new SmartSwing();
+      const c = emptyCommand();
+      let attachedTicks = 0;
+      for (let i = 0; i < 4 * HZ; i++) {
+        ss.update(w, r, c, { held: i < 2, tx, tz, anchor: -1, assist: true });
+        stepWorld(w, [c]);
+        if (r.tState === 'attached') attachedTicks++;
+      }
+      expect(attachedTicks / HZ).toBeLessThanOrEqual(1.3);
+    }
   });
 });

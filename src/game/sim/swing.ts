@@ -110,6 +110,8 @@ export function clampTarget(w: World, x: number, z: number): { x: number; z: num
 export interface PlanOptions {
   /** Only consider this anchor. */
   anchor?: number;
+  /** Reject swings that would keep the robot on the rope longer than this (seconds). */
+  maxSwingTime?: number;
 }
 
 /** Best swing toward (tx, tz), or null when no anchor in range can launch the robot that way. */
@@ -155,7 +157,7 @@ export function planSwing(w: World, r: Robot, tx: number, tz: number, opts: Plan
       if (!ok) continue;
       const v0 = Math.max(T.startSpeed, Math.abs(vt) * (vt * s > 0 ? 1 : 0), Math.hypot(r.vx, r.vz) * T.snapConvert);
       const sw = swingRun(v0, arc * rr, T.swingAccel * mod.swing);
-      if (sw.t > T.maxHoldSeconds - 0.05) continue;
+      if (sw.t > Math.min(T.maxHoldSeconds - 0.05, opts.maxSwingTime ?? Infinity)) continue;
       const rx = c.x + Math.cos(thr) * rr;
       const rz = c.z + Math.sin(thr) * rr;
       const lx = -Math.sin(thr) * s;
@@ -217,6 +219,8 @@ export interface SwingInput {
 
 /** A press shorter than this is a tap (smart swing); longer is a manual hold. */
 export const TAP_SECONDS = 0.2;
+/** Automatic swings stay short so the player is never carried round a long loop in a tight moment. */
+export const AUTO_SWING_MAX = 1.05;
 
 /**
  * The player's tether controller. A tap launches toward the target automatically; a hold is fully manual
@@ -235,6 +239,8 @@ export class SmartSwing {
   private pressTick = -9999;
   private pending = false;
   private planTick = -9999;
+  /** The button press that cancelled an automatic swing is ignored until it is released. */
+  private swallow = false;
 
   reset(): void {
     this.plan = null;
@@ -243,6 +249,7 @@ export class SmartSwing {
     this.preview = -1;
     this.prevHeld = false;
     this.pending = false;
+    this.swallow = false;
   }
 
   update(w: World, r: Robot, c: Command, inp: SwingInput): void {
@@ -255,34 +262,40 @@ export class SmartSwing {
       // Re-plan a few times a second; the plan is only a preview until the button goes down.
       if (w.tick - this.planTick >= 3 || pressed) {
         this.planTick = w.tick;
-        this.plan = planSwing(w, r, target.x, target.z, inp.anchor >= 0 ? { anchor: inp.anchor } : {});
+        this.plan = planSwing(w, r, target.x, target.z, inp.anchor >= 0 ? { anchor: inp.anchor, maxSwingTime: AUTO_SWING_MAX } : { maxSwingTime: AUTO_SWING_MAX });
       }
       this.preview = inp.anchor >= 0 ? inp.anchor : (this.plan?.anchor ?? pickAnchor(w, r, target.x, target.z, this.preview));
     } else {
       this.preview = r.tAnchor;
     }
 
-    if (pressed) {
+    if (pressed && this.auto && r.tState === 'attached') {
+      // A second tap during an automatic swing lets go immediately.
+      this.auto = null;
+      this.swallow = true;
+    } else if (pressed) {
       this.pressTick = w.tick;
       this.pending = r.tState !== 'attached';
       this.auto = inp.assist ? { tx: target.x, tz: target.z } : null;
     }
+    if (!inp.held) this.swallow = false;
     // Held past the tap threshold: it is a manual swing from now on (release when the player lets go).
     if (this.auto && (inp.held || releasedBtn) && (w.tick - this.pressTick) / TUNING.sim.hz > TAP_SECONDS) this.auto = null;
 
-    let tether = inp.held;
+    let tether = inp.held && !this.swallow;
     if (this.auto) {
       tether = true;
       if (r.tState === 'attached') {
         this.pending = false;
-        if (!inp.held && releaseNow(r, this.auto.tx, this.auto.tz)) {
+        // Let go on the launch line, or after a short swing if the target can't be lined up from here.
+        if (!inp.held && (releaseNow(r, this.auto.tx, this.auto.tz) || r.tTime > AUTO_SWING_MAX + 0.15)) {
           this.auto = null;
           tether = false;
         }
       } else if (!this.pending || (w.tick - this.pressTick) / TUNING.sim.hz > TUNING.tether.pressBuffer + 0.05) {
         // Swing finished (or never started): stop holding.
         this.auto = null;
-        tether = inp.held;
+        tether = inp.held && !this.swallow;
       }
     }
     if (r.tState === 'attached') this.pending = false;

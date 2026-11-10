@@ -23,7 +23,8 @@ export interface Settings {
   cameraShake: boolean;
   quality: 'auto' | 'low' | 'medium' | 'high';
   /** Show the linking hint to the previewed anchor. */
-  anchorAssistance: boolean;
+  /** Faint line from the robot to the anchor it would grab. */
+  anchorLine: boolean;
   /** Smart swing: a tap on tether swings and launches toward your aim automatically. */
   swingAssist: boolean;
   aimAssistance: 'off' | 'light' | 'strong';
@@ -63,7 +64,7 @@ export function defaultSettings(): Settings {
     reducedMotion: prefersReduced,
     cameraShake: false,
     quality: 'auto',
-    anchorAssistance: true,
+    anchorLine: false,
     swingAssist: true,
     aimAssistance: 'light',
     aimMode: 'auto',
@@ -113,7 +114,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     reducedMotion: bool(r.reducedMotion, d.reducedMotion),
     cameraShake: bool(r.cameraShake, d.cameraShake),
     quality: oneOf(r.quality, ['auto', 'low', 'medium', 'high'] as const, d.quality),
-    anchorAssistance: bool(r.anchorAssistance, d.anchorAssistance),
+    anchorLine: bool(r.anchorLine, d.anchorLine),
     swingAssist: bool(r.swingAssist, d.swingAssist),
     aimAssistance: oneOf(r.aimAssistance, ['off', 'light', 'strong'] as const, d.aimAssistance),
     aimMode: oneOf(r.aimMode, ['auto', 'mouse', 'keyboard'] as const, d.aimMode),

@@ -213,11 +213,11 @@ export class PlaySession {
           h('h3', null, 'Controls'),
           row('Move / steer swing', `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])} or arrows`),
           row('Swing: tap = auto launch toward your aim', `Right mouse or ${keyLabel(k.tether[0])}`),
-          row('Swing: hold = steer it yourself, let go on green', 'same button'),
+          row('Swing: tap again = let go now; hold = let go yourself (rope glows green when lined up)', 'same button'),
           row('Kick toward aim', `Left mouse or ${keyLabel(k.kick[0])}`),
           row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
           row('Pause', keyLabel(k.pause[0])),
-          h('p', { class: 'muted' }, 'Touch: left thumb moves, tap SWING, tap KICK or drag it to aim. Gamepad: left stick, right stick aim, trigger swing, A kick. A green arc means a swing beats running.'),
+          h('p', { class: 'muted' }, 'Touch: left thumb moves, tap SWING, tap KICK or drag it to aim. Gamepad: left stick, right stick aim, trigger swing, A kick.'),
         ),
       );
       (body.querySelector('.btn-primary') as HTMLElement | null)?.focus();
@@ -358,16 +358,8 @@ export class PlaySession {
       alpha: this.paused ? 1 : Math.min(1, this.acc / DT),
       dt: this.paused ? 0 : dt,
       preview: live && mode.human >= 0 ? this.input.preview : -1,
-      link: s.anchorAssistance,
-      swing: live && mode.human >= 0
-        ? {
-            plan: this.input.swing.plan,
-            tx: this.input.swing.auto ? this.input.swing.auto.tx : this.input.swingTargetX,
-            tz: this.input.swing.auto ? this.input.swing.auto.tz : this.input.swingTargetZ,
-            auto: !!this.input.swing.auto,
-            cue: this.input.swing.cue,
-          }
-        : undefined,
+      link: s.anchorLine,
+      swingCue: live && this.input.swing.cue,
       aimX: this.input.aimX,
       aimZ: this.input.aimZ,
       showAim: live && this.input.showAim,
