@@ -12,6 +12,9 @@ export interface FieldProjector {
   screenToField(clientX: number, clientY: number, out: { x: number; z: number }): boolean;
 }
 
+/** Touch Events are the most reliable touch source on phones, including inside embedded frames. */
+const TOUCH_EVENTS = typeof window !== 'undefined' && 'ontouchstart' in window;
+
 export type AimDevice = 'mouse' | 'keys' | 'touch' | 'pad';
 
 export class InputManager {
@@ -99,8 +102,19 @@ export class InputManager {
       if (start && t?.closest('button, a, input, select, textarea, label, .no-game-input')) return;
       e.preventDefault();
     };
-    on(this.layer, 'touchstart', (e) => blockTouch(e, true), { passive: false });
-    on(this.layer, 'touchmove', (e) => blockTouch(e, false), { passive: false });
+    on(this.layer, 'touchstart', (e) => {
+      blockTouch(e, true);
+      if (TOUCH_EVENTS) for (const t of Array.from(e.changedTouches)) this.touchBegin(t.identifier, t.clientX, t.clientY, t.target as HTMLElement);
+    }, { passive: false });
+    on(this.layer, 'touchmove', (e) => {
+      blockTouch(e, false);
+      if (TOUCH_EVENTS) for (const t of Array.from(e.changedTouches)) this.touchMove(t.identifier, t.clientX, t.clientY);
+    }, { passive: false });
+    const touchEnd = (e: TouchEvent) => {
+      if (TOUCH_EVENTS) for (const t of Array.from(e.changedTouches)) this.touchEnd(t.identifier);
+    };
+    on(this.layer, 'touchend', touchEnd);
+    on(this.layer, 'touchcancel', touchEnd);
     if (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) this.showTouch();
   }
 
@@ -137,6 +151,10 @@ export class InputManager {
     this.dragAim = false;
     this.aimOnce = null;
     if (this.stickKnob) this.stickKnob.style.transform = '';
+    if (this.stickBase) {
+      this.stickBase.style.left = '';
+      this.stickBase.style.top = '';
+    }
     this.touchRoot?.querySelectorAll('.is-down').forEach((el) => el.classList.remove('is-down'));
   }
 
@@ -200,46 +218,102 @@ export class InputManager {
       }
       return;
     }
-    // touch / pen
+    // Touch and pen. Browsers with Touch Events are handled there (they keep working inside
+    // embedded frames where pointer streams can be cancelled); this path covers the rest.
+    if (TOUCH_EVENTS) return;
+    if (this.touchBegin(e.pointerId, e.clientX, e.clientY, target)) e.preventDefault();
+  }
+
+  /** Starts a touch on a control or the movement stick. Returns true when the touch was used. */
+  private touchBegin(id: number, x: number, y: number, target: HTMLElement | null): boolean {
+    if (!this.enabled) return false;
     if (!this.touchSeen) this.showTouch();
     this.device = 'touch';
-    const kind = (target.closest('[data-touch]') as HTMLElement | null)?.dataset.touch;
+    const btn = target?.closest?.('[data-touch]') as HTMLElement | null;
+    const kind = btn?.dataset.touch;
     if (kind === 'pass' && this.passId < 0) {
-      this.passId = e.pointerId;
+      this.passId = id;
       this.passQueued = true;
       this.used.pass++;
-      target.closest('[data-touch]')!.classList.add('is-down');
-      e.preventDefault();
-    } else if (kind === 'kick' && this.kickId < 0) {
-      this.kickId = e.pointerId;
-      this.kickSX = e.clientX;
-      this.kickSY = e.clientY;
+      btn!.classList.add('is-down');
+      return true;
+    }
+    if (kind === 'kick' && this.kickId < 0) {
+      this.kickId = id;
+      this.kickSX = x;
+      this.kickSY = y;
       this.dragAim = false;
-      target.closest('[data-touch]')!.classList.add('is-down');
-      e.preventDefault();
-    } else if (kind === 'tether' && this.tetherId < 0) {
-      this.tetherId = e.pointerId;
+      btn!.classList.add('is-down');
+      return true;
+    }
+    if (kind === 'tether' && this.tetherId < 0) {
+      this.tetherId = id;
       this.tetherTouch = true;
       this.tetherLatch = true;
       this.used.tether++;
-      target.closest('[data-touch]')!.classList.add('is-down');
-      e.preventDefault();
-    } else if (!target.closest('button, a, .no-game-input') && this.stickId < 0) {
-      const swap = this.settings().touchSwap;
-      const leftSide = e.clientX < window.innerWidth * 0.5;
-      if (leftSide !== swap) {
-        this.stickId = e.pointerId;
-        this.stickOX = e.clientX;
-        this.stickOY = e.clientY;
-        this.stickX = this.stickY = 0;
-        if (this.stickBase) {
-          this.stickBase.style.left = `${e.clientX}px`;
-          this.stickBase.style.top = `${e.clientY}px`;
-          this.stickBase.classList.add('is-down');
-        }
-        this.used.move++;
+      btn!.classList.add('is-down');
+      return true;
+    }
+    if (kind || this.stickId >= 0 || target?.closest?.('button, a, .no-game-input')) return false;
+    const swap = this.settings().touchSwap;
+    const leftSide = x < window.innerWidth * 0.5;
+    if (leftSide === swap) return false;
+    this.stickId = id;
+    this.stickX = this.stickY = 0;
+    // Pressing on or near the drawn stick steers at once, so movement works without a drag.
+    // Anywhere else on that half, the stick appears under the thumb and steers as it moves.
+    const home = this.stickHome();
+    const reach = 1.7 * 62 * this.settings().touchScale;
+    if (home && Math.hypot(x - home.x, y - home.y) <= reach) {
+      this.stickOX = home.x;
+      this.stickOY = home.y;
+    } else {
+      this.stickOX = x;
+      this.stickOY = y;
+      if (this.stickBase) {
+        this.stickBase.style.left = `${x}px`;
+        this.stickBase.style.top = `${y}px`;
       }
     }
+    this.stickBase?.classList.add('is-down');
+    this.used.move++;
+    this.steer(x, y);
+    return true;
+  }
+
+  /** Centre of the stick at rest, in client pixels. */
+  private stickHome(): { x: number; y: number } | null {
+    if (!this.stickBase) return null;
+    this.stickBase.style.left = '';
+    this.stickBase.style.top = '';
+    const r = this.stickBase.getBoundingClientRect();
+    if (!r.width) return null;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  private steer(x: number, y: number): void {
+    const max = 56 * this.settings().touchScale;
+    let dx = x - this.stickOX;
+    let dy = y - this.stickOY;
+    const d = Math.hypot(dx, dy);
+    if (d > max) {
+      // Let the base follow the thumb so direction changes stay easy.
+      this.stickOX += (dx / d) * (d - max);
+      this.stickOY += (dy / d) * (d - max);
+      dx = (dx / d) * max;
+      dy = (dy / d) * max;
+      if (this.stickBase) {
+        this.stickBase.style.left = `${this.stickOX}px`;
+        this.stickBase.style.top = `${this.stickOY}px`;
+      }
+    }
+    const dead = 0.16;
+    const len = Math.hypot(dx, dy);
+    const m = Math.min(1, len / max);
+    const k = m < dead || len === 0 ? 0 : (m - dead) / (1 - dead) / len;
+    this.stickX = dx * k;
+    this.stickY = dy * k;
+    if (this.stickKnob) this.stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
   private pointerMove(e: PointerEvent): void {
@@ -252,32 +326,15 @@ export class InputManager {
       this.mouseY = e.clientY;
       return;
     }
-    if (e.pointerId === this.stickId) {
-      const max = 56 * this.settings().touchScale;
-      let dx = e.clientX - this.stickOX;
-      let dy = e.clientY - this.stickOY;
-      const d = Math.hypot(dx, dy);
-      if (d > max) {
-        // Let the base follow the thumb so direction changes stay easy.
-        this.stickOX += (dx / d) * (d - max);
-        this.stickOY += (dy / d) * (d - max);
-        dx = (dx / d) * max;
-        dy = (dy / d) * max;
-        if (this.stickBase) {
-          this.stickBase.style.left = `${this.stickOX}px`;
-          this.stickBase.style.top = `${this.stickOY}px`;
-        }
-      }
-      const dead = 0.16;
-      const len = Math.hypot(dx, dy);
-      const m = Math.min(1, len / max);
-      const k = m < dead || len === 0 ? 0 : (m - dead) / (1 - dead) / len;
-      this.stickX = dx * k;
-      this.stickY = dy * k;
-      if (this.stickKnob) this.stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-    } else if (e.pointerId === this.kickId) {
-      const dx = e.clientX - this.kickSX;
-      const dy = e.clientY - this.kickSY;
+    if (!TOUCH_EVENTS) this.touchMove(e.pointerId, e.clientX, e.clientY);
+  }
+
+  private touchMove(id: number, x: number, y: number): void {
+    if (id === this.stickId) {
+      this.steer(x, y);
+    } else if (id === this.kickId) {
+      const dx = x - this.kickSX;
+      const dy = y - this.kickSY;
       const d = Math.hypot(dx, dy);
       this.dragAim = d > 18;
       if (this.dragAim) {
@@ -292,15 +349,23 @@ export class InputManager {
       if (e.button === 2) this.tetherMouse = false;
       return;
     }
-    if (e.pointerId === this.stickId) {
+    if (!TOUCH_EVENTS) this.touchEnd(e.pointerId);
+  }
+
+  private touchEnd(id: number): void {
+    if (id === this.stickId) {
       this.stickId = -1;
       this.stickX = this.stickY = 0;
       if (this.stickKnob) this.stickKnob.style.transform = '';
-      this.stickBase?.classList.remove('is-down');
-    } else if (e.pointerId === this.passId) {
+      if (this.stickBase) {
+        this.stickBase.classList.remove('is-down');
+        this.stickBase.style.left = '';
+        this.stickBase.style.top = '';
+      }
+    } else if (id === this.passId) {
       this.passId = -1;
       this.touchRoot?.querySelector('[data-touch="pass"]')?.classList.remove('is-down');
-    } else if (e.pointerId === this.kickId) {
+    } else if (id === this.kickId) {
       this.kickId = -1;
       this.kickQueued = true;
       this.kickByKey = !this.dragAim;
@@ -308,7 +373,7 @@ export class InputManager {
       if (this.dragAim) this.aimOnce = { x: this.dragX, z: this.dragZ };
       this.dragAim = false;
       this.touchRoot?.querySelector('[data-touch="kick"]')?.classList.remove('is-down');
-    } else if (e.pointerId === this.tetherId) {
+    } else if (id === this.tetherId) {
       this.tetherId = -1;
       this.tetherTouch = false;
       this.touchRoot?.querySelector('[data-touch="tether"]')?.classList.remove('is-down');
