@@ -90,6 +90,17 @@ export class InputManager {
     on(this.layer, 'pointermove', (e) => this.pointerMove(e));
     on(this.layer, 'pointerup', (e) => this.pointerUp(e));
     on(this.layer, 'pointercancel', (e) => this.pointerUp(e));
+    // iOS and in-app web views can ignore touch-action inside embedded (cross-origin) frames and
+    // turn a joystick drag into a page scroll, cancelling the pointer. Blocking the touch default
+    // during play keeps drags on the game; taps on real buttons still click.
+    const blockTouch = (e: TouchEvent, start: boolean) => {
+      if (!this.enabled || !e.cancelable) return;
+      const t = e.target as HTMLElement | null;
+      if (start && t?.closest('button, a, input, select, textarea, label, .no-game-input')) return;
+      e.preventDefault();
+    };
+    on(this.layer, 'touchstart', (e) => blockTouch(e, true), { passive: false });
+    on(this.layer, 'touchmove', (e) => blockTouch(e, false), { passive: false });
     if (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) this.showTouch();
   }
 
