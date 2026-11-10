@@ -77,6 +77,9 @@ const ICONS: Record<string, string> = {
   trail: '<path d="M3.500 17.500c5 0 6-9 11-9M3.500 13.500c3 0 4.500-3.500 7-5"/><circle cx="17.500" cy="8" r="2.500"/>',
   palette: '<path d="M12 3.500a8.500 8.500 0 1 0 0 17c1.500 0 2-1 2-2s-.6-1.500-.6-2.500 1-2 2.500-2h1.600c1.700 0 3-1.300 3-3 0-4.200-3.800-7.500-8.500-7.500z"/><circle cx="8" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="7.500" r="1" fill="currentColor"/><circle cx="16" cy="10" r="1" fill="currentColor"/>',
   party: '<path d="M4 20l4.500-12 7.500 7.500zM14 4v2.500M18.500 5.500 17 7.500M20 11h-2.500"/>',
+  boost: '<path d="M13.500 3 5.500 13.500h6l-1.500 7.500 8.500-11h-6z"/>',
+  map: '<path d="M3.500 6.500 9 4.500l6 2 5.500-2v13l-5.500 2-6-2-5.500 2zM9 4.500v13M15 6.500v13"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.500"/><rect x="13" y="4" width="7" height="7" rx="1.500"/><rect x="4" y="13" width="7" height="7" rx="1.500"/><rect x="13" y="13" width="7" height="7" rx="1.500"/>',
   gift: '<rect x="4" y="9.500" width="16" height="10.500" rx="1.500"/><path d="M4 13.500h16M12 9.500V20M12 9.500c-1-3-5.500-3.500-5 0M12 9.500c1-3 5.500-3.500 5 0"/>',
 };
 
@@ -84,4 +87,33 @@ export function icon(name: string, cls = ''): SVGSVGElement {
   const wrap = document.createElement('span');
   wrap.innerHTML = `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ''}</svg>`;
   return wrap.firstChild as SVGSVGElement;
+}
+
+/** True when the player (or the OS default) asked for reduced motion. */
+export function reducedMotion(): boolean {
+  return typeof document !== 'undefined' && document.body.classList.contains('reduced-motion');
+}
+
+/**
+ * Animates a number from `from` to `to` in the element's text (a short, display-only flourish).
+ * The final value is written at the end, and straight away when motion is reduced.
+ */
+export function countUp(el: HTMLElement, to: number, opts: { from?: number; ms?: number; delay?: number; format?: (n: number) => string } = {}): HTMLElement {
+  const fmt = opts.format ?? ((n: number) => String(Math.round(n)));
+  const from = opts.from ?? 0;
+  const ms = opts.ms ?? 900;
+  el.textContent = fmt(to);
+  if (reducedMotion() || from === to || typeof requestAnimationFrame === 'undefined') return el;
+  el.textContent = fmt(from);
+  let start = 0;
+  const step = (now: number) => {
+    if (!el.isConnected && start) return;
+    if (!start) start = now + (opts.delay ?? 0);
+    const t = Math.max(0, Math.min(1, (now - start) / ms));
+    const e = 1 - Math.pow(1 - t, 3);
+    el.textContent = fmt(t >= 1 ? to : from + (to - from) * e);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  return el;
 }
