@@ -41,6 +41,8 @@ function longBall(charge: number | 'ideal') {
     for (const e of s.w.events) {
       if (e.type === 'touch') touchedBy.add(e.robot);
       if (e.type === 'land' && !landed) landed = { x: e.x, z: e.z };
+      // Dropping onto the teammate counts as arriving there (cushioned first touch).
+      if (e.type === 'touch' && e.robot === s.mate.id && !landed) landed = { x: s.w.ball.x, z: s.w.ball.z };
     }
   }
   return { ...s, plan, kick, landed: landed!, touchedBy, maxH, hOverOpp };
@@ -53,7 +55,7 @@ describe('long ball', () => {
     expect(r.kick.perfect).toBe(true);
     expect(r.hOverOpp).toBeGreaterThan(B.headHeight);
     expect(r.touchedBy.has(r.opp.id)).toBe(false);
-    expect(Math.hypot(r.landed.x - r.plan.x, r.landed.z - r.plan.z)).toBeLessThan(1.2);
+    expect(Math.hypot(r.landed.x - r.plan.x, r.landed.z - r.plan.z)).toBeLessThan(1.6);
   });
 
   it('a badly weighted one drops short (undercharged) or sails long (overcharged): it takes skill', () => {
@@ -152,5 +154,28 @@ describe('plays are detected and credited by the match', () => {
     expect(play?.play).toBe('give_and_go');
     expect(play.robot).toBe(0);
     expect(m.stats[0].giveAndGos).toBe(1);
+  });
+});
+
+describe('receiving a long ball', () => {
+  it('a long ball that drops onto the teammate is cushioned: touched, at their feet, not through them', () => {
+    const me = createRobot(0, 0, 0, CHASSIS.all_rounder, true);
+    const mate = createRobot(1, 0, 1, CHASSIS.all_rounder);
+    const w = createWorld(ARENAS.harbor_park, [me, mate]);
+    placeRobot(me, -9, 1, 0);
+    placeRobot(mate, 7, 3, Math.PI);
+    placeBall(w, -8.2, 1);
+    const c = emptyCommand();
+    c.pass = true;
+    c.lob = lobPlan(w, me)!.ideal;
+    stepWorld(w, [c, emptyCommand()]);
+    let touched = false;
+    for (let i = 0; i < 3 * HZ && !touched; i++) {
+      stepWorld(w, [emptyCommand(), emptyCommand()]);
+      touched = w.events.some((e) => e.type === 'touch' && e.robot === 1);
+    }
+    expect(touched).toBe(true);
+    for (let i = 0; i < HZ; i++) stepWorld(w, [emptyCommand(), emptyCommand()]);
+    expect(Math.hypot(w.ball.x - mate.x, w.ball.z - mate.z)).toBeLessThan(3);
   });
 });

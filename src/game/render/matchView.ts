@@ -75,6 +75,10 @@ class Trail {
   private c2 = new THREE.Color();
   private width = 0.3;
   private style = 'trail_standard';
+  /** Points pushed so far (gives each point a stable id for dashed styles) and frames drawn (flicker). */
+  private serial = 0;
+  private tick = 0;
+  private c3 = new THREE.Color();
 
   constructor() {
     const g = new THREE.BufferGeometry();
@@ -101,15 +105,25 @@ class Trail {
     this.c1.set(shade(primary, 0.25));
     this.c2.set(style === 'trail_aurora' ? secondary : primary);
     if (style === 'trail_comet') this.c1.set('#ffffff');
-    this.width = style === 'trail_spark' ? 0.18 : style === 'trail_comet' ? 0.42 : 0.3;
+    if (style === 'trail_ember') {
+      this.c1.set('#fff0a0');
+      this.c2.set('#ff2a10');
+    }
+    if (style === 'trail_chalk') {
+      this.c1.set('#ffffff');
+      this.c2.set(shade(primary, 0.35));
+    }
+    this.width = style === 'trail_spark' ? 0.18 : style === 'trail_comet' ? 0.42 : style === 'trail_ember' ? 0.36 : style === 'trail_chalk' ? 0.22 : 0.3;
   }
 
   update(x: number, z: number, y: number, active: boolean): void {
     const pts = this.pts;
     if (active) {
       const n = pts.length;
-      if (n < 3 || Math.hypot(pts[n - 3] - x, pts[n - 1] - z) > 0.22) pts.push(x, y, z);
-      else {
+      if (n < 3 || Math.hypot(pts[n - 3] - x, pts[n - 1] - z) > 0.22) {
+        pts.push(x, y, z);
+        this.serial++;
+      } else {
         pts[n - 3] = x;
         pts[n - 2] = y;
         pts[n - 1] = z;
@@ -121,6 +135,8 @@ class Trail {
     if (!this.mesh.visible) return;
     const p = this.pos;
     const c = this.colr;
+    const st = this.style;
+    this.tick++;
     for (let i = 0; i < TRAIL_N; i++) {
       const k = Math.min(i, count - 1);
       const px = pts[k * 3];
@@ -134,7 +150,10 @@ class Trail {
       dx /= dl;
       dz /= dl;
       const t = count > 1 ? k / (count - 1) : 1; // 0 = oldest, 1 = head
-      const w = this.width * (this.style === 'trail_comet' ? t * t : 0.35 + 0.65 * t) * (i < count ? 1 : 0);
+      let w = this.width * (st === 'trail_comet' ? t * t : 0.35 + 0.65 * t) * (i < count ? 1 : 0);
+      // ember flickers; chalk pinches every other point into a chain of dashes
+      if (st === 'trail_ember') w *= 0.75 + 0.4 * Math.abs(Math.sin(this.tick * 0.31 + (this.serial - count + k) * 1.9));
+      else if (st === 'trail_chalk') w *= (this.serial - count + k) % 2 ? 1 : 0.08;
       p[i * 6] = px - dz * w;
       p[i * 6 + 1] = 0.06 + py * 0.5;
       p[i * 6 + 2] = pz + dx * w;
@@ -142,9 +161,16 @@ class Trail {
       p[i * 6 + 4] = 0.06 + py * 0.5;
       p[i * 6 + 5] = pz - dx * w;
       const f = t * t;
-      const r = (this.c2.r + (this.c1.r - this.c2.r) * t) * f;
-      const g = (this.c2.g + (this.c1.g - this.c2.g) * t) * f;
-      const b = (this.c2.b + (this.c1.b - this.c2.b) * t) * f;
+      let tc = t;
+      if (st === 'trail_prism') {
+        // rainbow along the ribbon, slowly cycling
+        this.c3.setHSL((t * 0.85 + this.tick * 0.004) % 1, 1, 0.55);
+        this.c1.copy(this.c3);
+        this.c2.copy(this.c3);
+      } else if (st === 'trail_ember') tc = Math.min(1, t * t * 1.4);
+      const r = (this.c2.r + (this.c1.r - this.c2.r) * tc) * f;
+      const g = (this.c2.g + (this.c1.g - this.c2.g) * tc) * f;
+      const b = (this.c2.b + (this.c1.b - this.c2.b) * tc) * f;
       c[i * 6] = c[i * 6 + 3] = r;
       c[i * 6 + 1] = c[i * 6 + 4] = g;
       c[i * 6 + 2] = c[i * 6 + 5] = b;
@@ -317,10 +343,10 @@ export class MatchView {
       m.renderOrder = 3;
       return m;
     };
-    const lobBack = flat(new THREE.Mesh(this.track(new THREE.RingGeometry(1.05, 1.32, 64)), this.track(new THREE.MeshBasicMaterial({ color: '#0d1b2e', transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }))));
-    this.lobFill = flat(new THREE.Mesh(this.track(new THREE.RingGeometry(1.08, 1.29, 64, 1, Math.PI / 2, -Math.PI * 2)), this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }))));
-    this.lobNotch = flat(new THREE.Mesh(this.track(new THREE.PlaneGeometry(0.16, 0.5)), this.track(new THREE.MeshBasicMaterial({ color: '#f4c84b', depthWrite: false, toneMapped: false }))));
-    this.lobDot = flat(new THREE.Mesh(this.track(new THREE.CircleGeometry(0.34, 24)), this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }))));
+    const lobBack = flat(new THREE.Mesh(this.track(new THREE.RingGeometry(1.42, 1.86, 64)), this.track(new THREE.MeshBasicMaterial({ color: '#0d1b2e', transparent: true, opacity: 0.62, depthWrite: false, toneMapped: false }))));
+    this.lobFill = flat(new THREE.Mesh(this.track(new THREE.RingGeometry(1.47, 1.81, 64, 1, Math.PI / 2, -Math.PI * 2)), this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 1, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }))));
+    this.lobNotch = flat(new THREE.Mesh(this.track(new THREE.PlaneGeometry(0.26, 0.78)), this.track(new THREE.MeshBasicMaterial({ color: '#ffd23f', depthWrite: false, toneMapped: false }))));
+    this.lobDot = flat(new THREE.Mesh(this.track(new THREE.CircleGeometry(0.42, 24)), this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }))));
     this.lobGroup.add(lobBack, this.lobFill, this.lobNotch);
     this.lobDot.visible = false;
     this.scene.add(this.lobGroup, this.lobDot);
@@ -869,10 +895,10 @@ export class MatchView {
         const segs = Math.round(Math.max(0, Math.min(1, lob.charge)) * 64);
         this.lobFill.geometry.setDrawRange(0, segs * 6);
         const perfect = Math.abs(lob.charge - lob.ideal) <= TUNING.kick.lobPerfect;
-        (this.lobFill.material as THREE.MeshBasicMaterial).color.set(perfect ? '#f4c84b' : '#ffffff');
+        (this.lobFill.material as THREE.MeshBasicMaterial).color.set(perfect ? '#ffd23f' : lob.charge > lob.ideal ? '#ff9a6b' : '#ffffff');
         // Notch at the ideal charge (clockwise from the top of the ring, like the fill).
         const ang = Math.PI / 2 - lob.ideal * Math.PI * 2;
-        this.lobNotch.position.set(Math.cos(ang) * 1.185, 0.002, -Math.sin(ang) * 1.185);
+        this.lobNotch.position.set(Math.cos(ang) * 1.64, 0.004, -Math.sin(ang) * 1.64);
         this.lobNotch.rotation.z = ang - Math.PI / 2;
         let dx = lob.tx - lob.bx;
         let dz = lob.tz - lob.bz;
@@ -881,7 +907,7 @@ export class MatchView {
         dz /= dl;
         const carry = lobCarry(lob.charge);
         this.lobDot.position.set(lob.bx + dx * carry, 0.035, lob.bz + dz * carry);
-        (this.lobDot.material as THREE.MeshBasicMaterial).color.set(perfect ? '#f4c84b' : '#ffffff');
+        (this.lobDot.material as THREE.MeshBasicMaterial).color.set(perfect ? '#ffd23f' : lob.charge > lob.ideal ? '#ff9a6b' : '#ffffff');
       }
 
       this.aimRing.visible = f.showAim;

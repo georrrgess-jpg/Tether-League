@@ -931,6 +931,24 @@ function collideRobotBall(w: World, r: Robot, pinned: boolean): void {
   const nx = dx / d;
   const nz = dz / d;
   const pen = min - d;
+  if (b.h > 0 && !pinned) {
+    // A lofted ball dropping onto a robot: a cushioned first touch. The robot brings it down at its
+    // feet, moving with it, instead of the ball passing through the body.
+    const keep = TUNING.ball.trapKeep;
+    b.vx = r.vx + (b.vx - r.vx) * keep;
+    b.vz = r.vz + (b.vz - r.vz) * keep;
+    b.h = 0;
+    b.vh = 0;
+    b.x = r.x + nx * min;
+    b.z = r.z + nz * min;
+    w.events.push({ type: 'touch', robot: r.id, speed: Math.hypot(b.vx - r.vx, b.vz - r.vz) + 2 });
+    b.lastTouchRobot = r.id;
+    b.lastTouchTick = w.tick;
+    b.lastTouchDeliberate = false;
+    if (b.passBy >= 0 && w.robots[b.passBy] && w.robots[b.passBy].team !== r.team) b.passBy = -1;
+    r.lastTouchTick = w.tick;
+    return;
+  }
   if (pinned) {
     // Ball is held by a wall: the robot yields.
     r.x -= nx * pen;

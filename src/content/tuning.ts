@@ -77,6 +77,8 @@ export const TUNING = {
     /** Horizontal speed kept on a landing bounce, so a long ball sits down near its target. */
     landingFriction: 0.6,
     bounceMin: 2,
+    /** Share of the relative speed a lofted ball keeps when it drops onto a robot (cushioned first touch). */
+    trapKeep: 0.15,
     /** Exponential drag coefficient (1/s). */
     drag: 0.42,
     /** Constant rolling deceleration (units/s^2). */
