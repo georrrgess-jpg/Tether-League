@@ -252,7 +252,7 @@ function achievementsStrip(app: App): HTMLElement {
     cardHead('trophy', 'Achievements', `${earned} / ${ACHIEVEMENTS.length * 3} tiers`, 'achs-h'),
     h('div', { class: 'ach-strip-row' },
       h('ul', { class: 'ach-row' }, near.map((s) => achCard(s, true))),
-      h('button', { class: 'btn btn-primary view-all', type: 'button', onclick: () => app.navigate('progress?tab=achievements') }, 'View all', icon('next')),
+      h('button', { class: 'btn btn-primary view-all', type: 'button', onclick: () => app.navigate('progress?tab=achievements', true) }, 'View all', icon('next')),
     ),
   );
 }

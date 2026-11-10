@@ -2,7 +2,7 @@ import type { App, ScreenView } from '../../app';
 import { DIVISIONS } from '../../content/clubs';
 import { CLUB_COLORS, COSMETIC_BY_ID, EARNED_COLORS, catalogOfKind, colorHex, isEarnedOnly, type CosmeticKind, type RobotLook } from '../../content/cosmetics';
 import { PLAYS, PLAY_ORDER } from '../../content/plays';
-import { drawFace, drawJersey, makeCanvas } from '../../game/render/textures';
+import { drawFace, drawJersey, makeCanvas, trailThumbCss } from '../../game/render/textures';
 import { playerLooks } from '../../game/setup';
 import { itemSource } from '../../progression/catalog';
 import { purchase, usePick } from '../../progression/progression';
@@ -51,10 +51,7 @@ function thumb(kind: CosmeticKind, id: string, primary: string, secondary: strin
     d.className = 'thumb jersey';
     return d;
   }
-  if (kind === 'trail') {
-    const cols: Record<string, string> = { trail_standard: `linear-gradient(90deg, transparent, ${primary})`, trail_comet: `linear-gradient(90deg, transparent, ${primary} 60%, #fff)`, trail_spark: `repeating-linear-gradient(90deg, ${primary} 0 8px, #fff3a8 8px 12px)`, trail_aurora: `linear-gradient(90deg, transparent, ${secondary}, ${primary})` };
-    return h('span', { class: 'thumb trail' }, h('i', { style: `background:${cols[id] ?? `linear-gradient(90deg, transparent, ${primary} 70%, ${secondary})`}` }));
-  }
+  if (kind === 'trail') return h('span', { class: 'thumb trail' }, h('i', { style: `background:${trailThumbCss(id, primary, secondary)}` }));
   return h('span', { class: 'thumb' }, icon('party'));
 }
 
@@ -85,6 +82,8 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
     const look = (i: number): RobotLook => ({ ...base[i], primary: colorHex(draft.primary), secondary: colorHex(draft.secondary), face: draft.face, pattern: draft.pattern, trail: draft.trail, celebration: draft.celebration, topper: draft.topper, number: draft.numbers[i] });
     app.stage.setLooks([look(0), look(1)]);
     app.stage.setMoods(tab === 'celebration' ? 'celebrate' : 'idle', 'idle');
+    // The Ball tab shows the previewed match ball turning on the podium.
+    app.stage.setBall(tab === 'ball' ? draft.ball : null);
   };
 
   const items = (kind: CosmeticKind) => {
@@ -222,7 +221,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
         h('p', { class: 'muted' }, 'If an opponent wears similar colours they switch to an away kit for that match.'),
       ),
       h('div', { class: 'color-earned' },
-        h('div', { class: 'field' }, h('span', null, 'Earned colours · use as'),
+        h('div', { class: 'field' }, h('span', null, 'Earned · use as'),
           h('div', { class: 'seg', role: 'group', 'aria-label': 'Apply earned colour to' },
             h('button', { type: 'button', 'aria-pressed': String(colorTarget === 'main'), onclick: () => {
               colorTarget = 'main';
@@ -328,5 +327,10 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
   const el = shell(app, { nav: 'club', eyebrow: 'Club', title: 'Customisation', subtitle: save.club.name, cls: 'club', dock: foot },
     tabsSlot, h('div', { class: 'club-grid' }, h('div', { class: 'stage-slot' }), body));
   render();
-  return { el, stage: { shot: 'duo', moods: ['idle', 'idle'] }, dispose: () => app.syncStage(true) };
+  // show() applies the saved look and moods after building the screen; re-apply the preview after it.
+  queueMicrotask(preview);
+  return { el, stage: { shot: 'duo', moods: ['idle', 'idle'] }, dispose: () => {
+    app.stage.setBall(null);
+    app.syncStage(true);
+  } };
 }

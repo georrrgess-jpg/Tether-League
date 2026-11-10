@@ -1,41 +1,11 @@
 import type { App } from '../../app';
 import { COSMETIC_BY_ID, colorHex } from '../../content/cosmetics';
-import { badgeSvg } from '../badge';
-import * as textures from '../../game/render/textures';
+import { badgeSvg, topperSvg } from '../badge';
+import { ballThumbDataUrl } from '../../game/render/textures';
 import { h, icon } from '../dom';
 
-/** Small original SVG drawings of the eight head toppers on a robot dome (UI thumbnails only). */
-export function topperSvg(id: string, accent = '#12BCD2'): string {
-  const ink = '#17273E';
-  const st = `fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
-  let top = '';
-  switch (id) {
-    case 'topper_antenna':
-      top = `<path ${st} d="M32 30V12"/><circle cx="32" cy="10" r="4.5" fill="${accent}" stroke="${ink}" stroke-width="2.5"/>`;
-      break;
-    case 'topper_fin':
-      top = `<path d="M24 31c4-12 14-20 26-22-4 8-6 15-6 22z" fill="${accent}" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/>`;
-      break;
-    case 'topper_headset':
-      top = `<path ${st} d="M14 36c0-14 8-22 18-22s18 8 18 22"/><rect x="9" y="33" width="9" height="13" rx="4" fill="${accent}" stroke="${ink}" stroke-width="2.5"/><rect x="46" y="33" width="9" height="13" rx="4" fill="${accent}" stroke="${ink}" stroke-width="2.5"/><path ${st} d="M14 46c2 6 8 8 14 8"/>`;
-      break;
-    case 'topper_horns':
-      top = `<path d="M20 30l-6-16 10 6 1-8 5 16z" fill="${accent}" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/><path d="M44 30l6-16-10 6-1-8-5 16z" fill="${accent}" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/>`;
-      break;
-    case 'topper_propeller':
-      top = `<path ${st} d="M32 30v-14"/><ellipse cx="22" cy="14" rx="10" ry="3.5" fill="${accent}" stroke="${ink}" stroke-width="2.5"/><ellipse cx="42" cy="14" rx="10" ry="3.5" fill="#F6C542" stroke="${ink}" stroke-width="2.5"/><circle cx="32" cy="14" r="3" fill="${ink}"/>`;
-      break;
-    case 'topper_halo':
-      top = `<ellipse cx="32" cy="12" rx="16" ry="5" fill="none" stroke="#F6C542" stroke-width="5"/><ellipse cx="32" cy="12" rx="16" ry="5" fill="none" stroke="${ink}" stroke-width="1.5"/>`;
-      break;
-    case 'topper_crown':
-      top = `<path d="M18 30l-3-18 9 7 8-12 8 12 9-7-3 18z" fill="#F6C542" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="32" cy="22" r="2.5" fill="#E24B4B"/>`;
-      break;
-    default:
-      top = '';
-  }
-  return `<svg viewBox="0 0 64 64" class="topper-svg" aria-hidden="true"><path d="M10 58c0-16 10-28 22-28s22 12 22 28z" fill="#E6E9E0" stroke="${ink}" stroke-width="3"/><rect x="18" y="44" width="28" height="8" rx="4" fill="${ink}"/><circle cx="25" cy="48" r="2" fill="#7ff3ff"/><circle cx="39" cy="48" r="2" fill="#7ff3ff"/>${top}</svg>`;
-}
+// Topper thumbnails live with the badges (full set, kept in step with the 3D toppers).
+export { topperSvg } from '../badge';
 
 /** A thumbnail for any cosmetic id that does not need the 3D renderer (badges, toppers, titles, colours). */
 export function itemThumb(app: App, id: string, cls = ''): HTMLElement {
@@ -51,37 +21,11 @@ export function itemThumb(app: App, id: string, cls = ''): HTMLElement {
   return h('span', { class: `rw-thumb ${cls}` }, icon(ic[d.kind] ?? 'gift'));
 }
 
-/**
- * Match ball thumbnail. Uses the renderer's ball preview when textures.ts provides one (looked up by
- * name so the UI keeps working while that helper is being added), else a generic ball icon.
- */
+/** Match ball thumbnail: the renderer's shaded preview sphere for the ball skin. */
 export function ballThumb(id: string, cls = 'thumb ball'): HTMLElement {
-  const t = textures as unknown as Record<string, unknown>;
-  for (const name of ['ballThumbDataUrl', 'ballPreviewDataUrl', 'ballThumbUrl', 'ballPreviewUrl', 'ballThumb', 'ballPreview', 'drawBallPreview', 'drawBallThumb']) {
-    const fn = t[name];
-    if (typeof fn !== 'function') continue;
-    try {
-      if (name.startsWith('draw')) {
-        const [c, g] = textures.makeCanvas(128, 128);
-        (fn as (g: CanvasRenderingContext2D, w: number, h: number, id: string) => void)(g, 128, 128, id);
-        c.className = cls;
-        return c;
-      }
-      const out = (fn as (id: string, size?: number) => unknown)(id, 128);
-      if (typeof out === 'string') return h('img', { class: cls, src: out, alt: '', draggable: 'false' });
-      if (out instanceof HTMLCanvasElement) {
-        const [c, g] = textures.makeCanvas(out.width, out.height);
-        g.drawImage(out, 0, 0);
-        c.className = cls;
-        return c;
-      }
-      if (out instanceof HTMLElement) {
-        out.classList.add(...cls.split(' '));
-        return out;
-      }
-    } catch {
-      /* fall back to the icon below */
-    }
+  try {
+    return h('img', { class: cls, src: ballThumbDataUrl(id, 128), alt: '', draggable: 'false' });
+  } catch {
+    return h('span', { class: `${cls} is-generic` }, icon('ball'));
   }
-  return h('span', { class: `${cls} is-generic` }, icon('ball'));
 }

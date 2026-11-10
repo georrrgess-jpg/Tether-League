@@ -1,0 +1,957 @@
+/* =====================================================================
+ * Responsive adjustments per screen. Desktop first; compact heights
+ * (1366x768, 1280x720) tighten spacing; narrow and portrait layouts stack.
+ * ===================================================================== */
+
+/* ---------- compact desktop heights (Chromebooks, 720p) ---------- */
+@media (max-height: 820px) and (min-height: 561px) {
+  .page-head {
+    padding-top: 10px;
+    padding-bottom: 6px;
+  }
+  .ph-title {
+    font-size: clamp(1.9rem, 3vw, 2.6rem);
+  }
+  .ph-sub {
+    margin-top: 2px;
+    font-size: 0.76rem;
+  }
+  .ph-icon {
+    width: 50px;
+    height: 50px;
+  }
+  /* progress overview */
+  .lvl-strip {
+    padding: 6px 12px 6px 8px !important;
+  }
+  .lvl-medal {
+    width: 62px;
+    height: 62px;
+  }
+  .lvl-medal b {
+    font-size: 1.9rem;
+  }
+  .road-sub {
+    display: none;
+  }
+  .road-mini {
+    margin-top: 26px;
+  }
+  .road-step {
+    min-height: 132px;
+  }
+  .prog-overview {
+    gap: 12px 14px;
+  }
+  .prog-overview .panel {
+    padding: 12px 14px;
+  }
+  .objective-row {
+    min-height: 46px;
+  }
+  .mm-card {
+    padding: 6px 6px 8px;
+  }
+  .mm-icon .icon {
+    width: 24px;
+    height: 24px;
+  }
+  .ach-card {
+    padding: 8px 10px;
+  }
+  .ach-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .ach-strip .card-head {
+    margin-bottom: 6px;
+  }
+  /* season hub */
+  .hub-hero {
+    min-height: 196px;
+    gap: 14px;
+  }
+  .hub-hero .stage-slot {
+    min-height: 170px;
+  }
+  .ht-name {
+    font-size: clamp(2rem, 3.6vw, 3.2rem);
+  }
+  .hub-next {
+    padding: 22px 14px 12px;
+    gap: 8px;
+  }
+  .hub-next .badge.big {
+    width: 50px;
+    height: 50px;
+  }
+  .hub-next .vs {
+    width: 46px;
+    height: 46px;
+  }
+  .hub-next .btn-big {
+    min-height: 48px;
+    font-size: 1.3rem;
+  }
+  .hub-next .chip {
+    padding: 4px 10px;
+  }
+  .hub-tabs .tab {
+    min-height: 40px;
+  }
+  .hub-body .panel {
+    padding: 12px 14px;
+  }
+  .hub-body .card-head {
+    margin-bottom: 6px;
+  }
+  .table td {
+    padding: 3px 4px;
+  }
+  .table td.rank span,
+  .table td.pts b {
+    height: 24px;
+  }
+  .fixtures li {
+    min-height: 26px;
+  }
+  /* home */
+  .fc-head {
+    padding: 10px 16px;
+  }
+  .fc-body {
+    padding: 12px 16px 14px;
+    gap: 10px;
+  }
+  .badge.big {
+    width: 64px;
+    height: 64px;
+  }
+  .home-tile {
+    min-height: 88px;
+    padding: 12px 10px 12px 14px;
+  }
+  /* garage */
+  .chassis-detail {
+    padding: 14px 18px;
+  }
+  .stat-bars {
+    gap: 10px;
+  }
+  .trait {
+    padding: 10px 12px;
+  }
+  /* academy */
+  .ac-item {
+    min-height: 58px;
+    padding: 6px 10px 6px 6px;
+  }
+  .ai-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .ac-detail {
+    padding: 14px 18px;
+    gap: 10px;
+  }
+}
+@media (max-height: 740px) and (min-height: 561px) {
+  .page-head {
+    padding-top: 6px;
+  }
+  .ph-title {
+    font-size: 2.1rem;
+  }
+  .road-step {
+    min-height: 118px;
+  }
+  .road-step .rw-thumb {
+    width: 38px;
+    height: 38px;
+  }
+  .hub-hero {
+    min-height: 176px;
+  }
+  .hub-hero .stage-slot {
+    min-height: 150px;
+  }
+  .home-tile {
+    min-height: 80px;
+  }
+  .ht-icon .icon {
+    width: 28px;
+    height: 28px;
+  }
+  .fixtures li {
+    min-height: 24px;
+    font-size: 0.85rem;
+  }
+  .table {
+    font-size: 0.9rem;
+  }
+  .table td.rank span,
+  .table td.pts b {
+    height: 22px;
+  }
+}
+
+/* ---------- mid widths (small laptops, landscape tablets) ---------- */
+@media (max-width: 1200px) {
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+  }
+  .hub-hero {
+    grid-template-columns: minmax(150px, 0.6fr) minmax(0, 1fr) minmax(340px, 1fr);
+  }
+  .hub-body.is-overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .hub-body.is-overview .hub-schedule {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .hub-body.is-overview .hub-mid {
+    grid-column: 1;
+  }
+  .mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vs-name b {
+    font-size: 1.12rem;
+  }
+  .color-tab {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .color-earned {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+  }
+  .chassis-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .chassis-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cd-side {
+    padding-left: 0;
+    border-left: 0;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  .lvl-next {
+    display: none;
+  }
+  .results-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- narrow screens (portrait tablets, small windows, phones) ---------- */
+@media (max-width: 900px), (orientation: portrait) and (max-width: 1000px) {
+  .home .content,
+  .garage .content,
+  .academy .content,
+  .results .content {
+    display: block;
+  }
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: 'stage' 'side' 'goal' 'trophy';
+  }
+  .home-stage {
+    grid-row: auto;
+    grid-column: auto;
+    grid-area: stage;
+    height: min(46vh, 420px);
+  }
+  .home-stage .stage-slot {
+    inset: 70px 0 0 0;
+  }
+  .club-grid .stage-slot {
+    margin: 0;
+  }
+  .gc-obj {
+    max-width: none;
+  }
+  .gc-foot {
+    flex-wrap: wrap;
+  }
+  .hub-hero {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    grid-template-areas: 'stage title' 'next next';
+  }
+  .hub-hero .stage-slot {
+    grid-area: stage;
+  }
+  .hub-title {
+    grid-area: title;
+    padding-top: 40px;
+  }
+  .hub-next {
+    grid-area: next;
+  }
+  .hub-body.is-overview,
+  .hub-body.is-playoffs,
+  .hub-body.is-rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hub-body.is-overview .hub-schedule,
+  .hub-body.is-overview .hub-mid {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .prematch-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .club .content {
+    display: block;
+  }
+  .club-tabs {
+    position: sticky;
+    top: -8px;
+    z-index: 3;
+    margin-bottom: 10px;
+  }
+  .club-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+  .club-grid .stage-slot {
+    height: min(34vh, 320px);
+    min-height: 200px;
+  }
+  .club-editor {
+    display: block;
+  }
+  .ed-body {
+    overflow: visible;
+  }
+  .club .dock,
+  .academy .dock {
+    padding-left: calc(var(--gx) + var(--safe-l));
+  }
+  .garage-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 12px;
+  }
+  .garage-stage {
+    height: min(40vh, 380px);
+    min-height: 220px;
+  }
+  .garage-dock {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .academy-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+  .ac-list {
+    overflow: visible;
+  }
+  .ac-detail {
+    overflow: visible;
+  }
+  .ad-preview {
+    min-height: 180px;
+  }
+  .prog-overview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'lvl' 'road' 'obj' 'mas' 'ach';
+  }
+  .results-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+  .results-left {
+    grid-template-rows: auto minmax(200px, 34vh) auto;
+  }
+  .results-right {
+    overflow: visible;
+  }
+  .trial-result .content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup .content {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  .setup-hero {
+    grid-template-rows: auto minmax(200px, 30vh) auto;
+  }
+}
+
+/* ---------- phones (portrait) ---------- */
+@media (max-width: 600px) {
+  .page-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ph-extra {
+    margin-left: 0;
+    width: 100%;
+  }
+  .ph-extra .tabs {
+    width: 100%;
+  }
+  .ph-extra .tab {
+    flex: 1 0 auto;
+  }
+  .tab .tl-full {
+    display: none;
+  }
+  .tab .tl-short {
+    display: inline;
+  }
+  .tab:not(:has(.tl-short)) .tl-full {
+    display: inline;
+  }
+  .home-hello .hh-title {
+    font-size: 2.1rem;
+  }
+  .home-tiles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .home-tile {
+    min-height: 60px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    align-items: center;
+    gap: 12px;
+  }
+  .ht-icon,
+  .ht-text,
+  .ht-go {
+    grid-row: 1;
+  }
+  .ht-text {
+    grid-column: 2;
+  }
+  .ht-go {
+    grid-column: 3;
+  }
+  .ht-icon .icon {
+    width: 28px;
+    height: 28px;
+  }
+  .versus {
+    gap: 8px;
+  }
+  .vs-team {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+  .vs-team.vs-l,
+  .vs-team.vs-r {
+    justify-content: center;
+  }
+  .vs-name {
+    justify-items: center;
+  }
+  .vs-name b {
+    font-size: 1rem;
+    text-align: center;
+  }
+  .vs {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+  .fc-comp {
+    font-size: 1.15rem;
+  }
+  .goal-card .gc-title {
+    font-size: 1.1rem;
+  }
+  .tc-text b {
+    font-size: 1.3rem;
+  }
+  .hub-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'title' 'stage' 'next';
+  }
+  .hub-hero .stage-slot {
+    min-height: 170px;
+  }
+  .hub-title {
+    padding-top: 48px;
+  }
+  .ht-sub {
+    letter-spacing: 0.1em;
+    font-size: 0.9rem;
+  }
+  .hub-tabs .tab {
+    padding: 0 12px;
+  }
+  .promo-steps {
+    gap: 14px;
+  }
+  .mode-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .arena-line {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .arena-diagram {
+    width: 100%;
+  }
+  .scouting b {
+    font-size: 0.92rem;
+  }
+  .opt-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .dock-row {
+    flex-wrap: wrap;
+    padding: 8px 8px 8px 14px;
+  }
+  .dock-row .dock-info {
+    flex: 1 1 140px;
+  }
+  .dock-row .btn-big {
+    min-height: 50px;
+    font-size: 1.15rem;
+    padding: 0 0.9em;
+  }
+  .swatches {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .swatch {
+    min-height: 36px;
+  }
+  .item-grid {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 8px;
+  }
+  .records {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .save-bar {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+  .sb-note {
+    flex: 1 1 100%;
+    padding-left: 6px;
+  }
+  .save-bar .btn {
+    flex: 1;
+  }
+  .save-bar .btn-save {
+    font-size: 1.1rem;
+    min-height: 48px;
+  }
+  .save-bar .btn-ghost {
+    min-height: 48px;
+  }
+  .chassis-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .chassis-btn {
+    min-height: 54px;
+  }
+  .stat-row {
+    grid-template-columns: 104px minmax(0, 1fr) 14px;
+  }
+  .sr-label {
+    font-size: 0.86rem;
+  }
+  .cd-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .garage-actions .btn-big {
+    min-height: 54px;
+    font-size: 1.15rem;
+    padding: 0 0.6em;
+  }
+  .robot-pick {
+    min-height: 50px;
+    padding: 4px 8px;
+  }
+  .thresholds {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .thr {
+    padding: 2px 6px;
+    gap: 6px;
+  }
+  .thr .medal {
+    width: 26px;
+    height: 26px;
+  }
+  .ad-best {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .lvl-strip {
+    flex-wrap: wrap;
+  }
+  .lvl-xp {
+    flex-basis: 160px;
+  }
+  .lvl-pick {
+    width: 100%;
+  }
+  .road-mini {
+    grid-template-columns: repeat(5, minmax(84px, 1fr));
+    overflow-x: auto;
+    padding: 30px 4px 6px;
+    margin-top: 0;
+  }
+  .objective-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .objective-row .tier-chip {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding: 0 12px;
+    min-height: 24px;
+  }
+  .mm-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ach-strip-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ach-strip .ach-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mastery-list,
+  .ach-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .results-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .results-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .results-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .results-actions .btn {
+    flex: 1 1 auto;
+  }
+  .results-actions .btn-big {
+    flex-basis: 100%;
+    order: -1;
+  }
+  .bind-row {
+    grid-template-columns: minmax(0, 1fr) 84px 84px;
+  }
+  .data-actions .btn {
+    flex: 1 1 140px;
+  }
+  .howto-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .howto-head .seg {
+    width: 100%;
+  }
+  .howto-head .seg button {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* ---------- short landscape phones ---------- */
+@media (max-height: 560px) and (orientation: landscape) {
+  .home .content {
+    display: block;
+  }
+  .home-grid {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-rows: auto;
+    grid-template-areas: 'stage side' 'stage goal' 'stage trophy';
+    gap: 10px 14px;
+  }
+  .home-stage {
+    grid-row: 1 / 4;
+    grid-column: 1;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: calc(100dvh - var(--top-h) - var(--safe-t) - 30px);
+  }
+  .home-stage .stage-slot {
+    inset: 60px 0 0 0;
+  }
+  .club-grid .stage-slot {
+    margin: 0;
+  }
+  .hh-title {
+    font-size: 1.7rem;
+  }
+  .hh-club {
+    font-size: 0.85rem;
+  }
+  .hh-badge {
+    width: 40px;
+    height: 40px;
+  }
+  .home-tiles {
+    gap: 8px;
+  }
+  .home-tile {
+    min-height: 64px;
+    padding: 8px 8px 8px 10px;
+  }
+  .ht-icon .icon {
+    width: 22px;
+    height: 22px;
+  }
+  .ht-text b {
+    font-size: 0.92rem;
+  }
+  .ht-text small {
+    display: none;
+  }
+  .fc-head {
+    padding: 8px 14px;
+  }
+  .fc-comp {
+    font-size: 1.1rem;
+  }
+  .fc-body {
+    padding: 10px 12px 12px;
+    gap: 8px;
+  }
+  .badge.big {
+    width: 48px;
+    height: 48px;
+  }
+  .vs-name b {
+    font-size: 0.95rem;
+  }
+  .vs {
+    width: 40px;
+    height: 40px;
+    font-size: 0.95rem;
+  }
+  .fc-play.btn-big,
+  .hub-next .btn-big {
+    min-height: 50px;
+    font-size: 1.2rem;
+  }
+  .trophy-card {
+    padding: 8px 12px;
+  }
+  .tc-cup {
+    width: 46px;
+    height: 46px;
+  }
+  .tc-cup .icon {
+    width: 26px;
+    height: 26px;
+  }
+  .tc-text b {
+    font-size: 1.15rem;
+  }
+  .gc-foot {
+    flex-wrap: wrap;
+  }
+  .gc-obj {
+    max-width: none;
+  }
+  /* screens with a stage show it beside the scrolling content */
+  .club .content,
+  .garage .content,
+  .academy .content,
+  .results .content {
+    display: block;
+  }
+  .club-tabs {
+    margin-bottom: 8px;
+  }
+  .club-grid,
+  .garage-grid,
+  .results-grid {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    grid-template-rows: auto;
+    gap: 12px;
+  }
+  .club-grid .stage-slot,
+  .garage-stage,
+  .results-left {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: calc(100dvh - var(--top-h) - var(--safe-t) - 150px);
+    min-height: 150px;
+  }
+  .results-left {
+    height: auto;
+    position: static;
+    grid-template-rows: auto minmax(150px, 40dvh) auto;
+  }
+  .club-editor {
+    display: block;
+  }
+  .ed-body,
+  .results-right,
+  .ac-list,
+  .ac-detail {
+    overflow: visible;
+  }
+  .club .dock,
+  .academy .dock {
+    padding-left: calc(var(--gx) + var(--safe-l));
+  }
+  .garage-dock {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+  }
+  .robot-pick {
+    min-height: 44px;
+    padding: 2px 8px;
+  }
+  .rp-text small {
+    display: none;
+  }
+  .garage-actions .btn-big {
+    min-height: 48px;
+    font-size: 1.1rem;
+  }
+  .chassis-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .chassis-btn {
+    min-height: 48px;
+  }
+  .chassis-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cd-side {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .drag-hint {
+    display: none;
+  }
+  .academy-grid {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-rows: auto;
+  }
+  .ad-preview {
+    min-height: 150px;
+  }
+  .hub-hero {
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(300px, 1.1fr);
+    min-height: 0;
+  }
+  .hub-hero .stage-slot {
+    min-height: 150px;
+  }
+  .hub-title {
+    padding-top: 40px;
+  }
+  .ht-name {
+    font-size: 1.8rem;
+  }
+  .ht-sub {
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+  }
+  .hub-body.is-overview,
+  .hub-body.is-playoffs,
+  .hub-body.is-rules {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .hub-body.is-overview .hub-schedule {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .prog-overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: 'lvl lvl' 'road obj' 'ach mas';
+  }
+  .lvl-next {
+    display: none;
+  }
+  .page-head .ph-extra .tabs {
+    max-width: 60vw;
+  }
+  .dock-row {
+    padding: 6px 6px 6px 14px;
+  }
+  .dock-row .btn-big {
+    min-height: 46px;
+    font-size: 1.1rem;
+  }
+  .dock-info small {
+    display: none;
+  }
+  .save-bar {
+    padding: 6px 6px 6px 12px;
+  }
+  .save-bar .btn-save,
+  .save-bar .btn-ghost {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+  .results-actions {
+    padding: 6px;
+  }
+  .results-actions .btn-big {
+    min-height: 46px;
+    font-size: 1.1rem;
+  }
+  .results-head h1 {
+    font-size: 2.2rem;
+  }
+  .final-score {
+    font-size: 1.7rem;
+  }
+  .setup .content {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: start;
+  }
+  .setup-hero {
+    position: sticky;
+    top: 0;
+    height: calc(100dvh - var(--top-h) - 40px);
+  }
+  .setup-title b {
+    font-size: 1.9rem;
+  }
+}
+
+/* phones in portrait: tighter cards */
+@media (orientation: portrait) and (max-width: 480px) {
+  .panel {
+    padding: 14px;
+  }
+  .fixture-card .fc-body {
+    padding: 12px;
+  }
+  .stat-row {
+    grid-template-columns: 96px minmax(0, 1fr) 12px;
+    gap: 6px;
+  }
+  .ad-title h2 {
+    font-size: 1.6rem;
+  }
+  .lvl-medal {
+    width: 60px;
+    height: 60px;
+  }
+  .lvl-medal b {
+    font-size: 1.8rem;
+  }
+}
