@@ -39,6 +39,8 @@ export interface MatchSetup {
   regulationSeconds: number;
   seed: number;
   hints: boolean;
+  /** Show the long-ball / give-and-go hints (until the player has used plays a few times). */
+  playHints?: boolean;
 }
 
 export interface MatchResult {
@@ -80,6 +82,10 @@ export class MatchMode implements PlayMode {
   private lastClock = '';
   private hintKey = '';
   private lastCall = -999;
+  /** Tick of the player's last pass (for give-and-go calls), and whether plays were tried this match. */
+  private myPassTick = -9999;
+  private triedLob = false;
+  private triedGiveGo = false;
   private rushedTold = 0;
   private mercy = 0;
   private lastRushed = -999;
@@ -174,11 +180,19 @@ export class MatchMode implements PlayMode {
     if (m.phase === 'play' && cmds[0].pass) {
       const me = this.world.robots[0];
       const b = this.world.ball;
+      if (cmds[0].lob > 0) this.triedLob = true;
       if (Math.hypot(b.x - me.x, b.z - me.z) > TUNING.kick.range + 0.4) {
-        this.bots.requestPass(0);
+        // Pressed PASS without the ball shortly after passing while on the move: a give-and-go call,
+        // the teammate returns it first time into the run. Otherwise a plain call for the ball.
+        const running = Math.hypot(me.vx, me.vz) > 2.2;
+        const giveGo = running && this.world.tick - this.myPassTick <= TUNING.kick.giveGoWindow * TUNING.sim.hz;
+        if (giveGo) {
+          this.bots.requestGiveAndGo(0);
+          this.triedGiveGo = true;
+        } else this.bots.requestPass(0);
         if (this.world.tick - this.lastCall > 60) {
           this.lastCall = this.world.tick;
-          this.toast('Calling for the ball!');
+          this.toast(giveGo ? 'Give-and-go: keep running!' : 'Calling for the ball!');
         }
       }
     }
@@ -204,8 +218,9 @@ export class MatchMode implements PlayMode {
         this.lastRushed = this.world.tick;
         this.toast('Rushed shot! One press per kick is stronger', 'bad');
       }
-      if (e.type === 'kick' && e.robot === 0 && e.bank) this.toast('Wall pass!', 'good');
+      if (e.type === 'kick' && e.robot === 0 && e.pass) this.myPassTick = this.world.tick;
       if (e.type === 'kick' && e.robot === 0 && e.oneTouch) this.toast('One-touch strike!', 'good');
+      if (e.type === 'kick' && e.robot === 0 && e.lob && e.perfect) this.toast('Perfect weight!', 'good');
     }
     for (const e of m.events) {
       switch (e.type) {
@@ -235,7 +250,7 @@ export class MatchMode implements PlayMode {
             sub = rec.scorer === 0 ? 'You scored!' : `${who} scores`;
             if (rec.assist >= 0) sub += rec.assist === 0 ? ' · your assist' : ` · assist #${String(this.looks[rec.assist].number).padStart(2, '0')}`;
           }
-          this.banner(rec.swing && rec.ownGoalBy < 0 ? 'SWING GOAL!' : 'GOAL!', sub, ours ? 'ours' : 'theirs', TUNING.match.goalCelebration + 0.8, rec.team === 0 ? this.setup.home.primary : this.setup.away.primary);
+          this.banner(rec.ownGoalBy >= 0 ? 'GOAL!' : rec.swing ? 'SWING GOAL!' : rec.oneTouch ? 'ONE-TOUCH GOAL!' : 'GOAL!', sub, ours ? 'ours' : 'theirs', TUNING.match.goalCelebration + 0.8, rec.team === 0 ? this.setup.home.primary : this.setup.away.primary);
           audio.play(ours ? 'goal' : 'concede');
           audio.cheer(ours ? 1 : 0.5);
           break;
@@ -264,6 +279,18 @@ export class MatchMode implements PlayMode {
         case 'intercept':
           if (e.robot === 0) this.toast('Interception', 'good');
           break;
+        case 'play': {
+          // Plays the player's team completed (the match credits them; rewards come from the committed result).
+          const ours = e.robot < 2;
+          if (!ours) break;
+          const me = e.robot === 0;
+          const name = e.play === 'long_ball' ? (e.perfect ? 'Perfect long ball!' : 'Long ball!') : e.play === 'give_and_go' ? (e.perfect ? 'First-time give-and-go!' : 'Give-and-go!') : e.play === 'wall_pass' ? 'Wall pass!' : '';
+          if (name && (me || e.play !== 'give_and_go')) {
+            this.toast(me ? name : `Teammate: ${name}`, 'good');
+            audio.play('gate', { intensity: me ? 0.6 : 0.35 });
+          }
+          break;
+        }
         case 'shot':
           break;
       }
@@ -306,6 +333,21 @@ export class MatchMode implements PlayMode {
         text = touch
           ? 'Tap SWING: you swing from the glowing anchor and launch the way you are heading. Tap again to let go early'
           : `Tap right mouse (or ${keyLabel(k.tether[0])}): you swing from the glowing anchor and launch the way you are moving. Tap again to let go early`;
+      }
+    }
+    // Plays: shown until the player has used them a few times (career-wide), once the basics are in.
+    if (!key && this.setup.playHints && this.settings().showHints && m.phase === 'play' && m.elapsed > 25) {
+      const k = this.settings().keys;
+      const touch = session.input.touchSeen;
+      const pass = touch ? 'PASS' : keyLabel(k.pass[0]);
+      const me = w.robots[0];
+      const hasBall = Math.hypot(w.ball.x - me.x, w.ball.z - me.z) < TUNING.kick.range + 0.6;
+      if (!this.triedLob && hasBall) {
+        key = 'lob';
+        text = `Hold ${pass} to charge a long ball over defenders. Release on the gold notch for the perfect weight`;
+      } else if (this.triedLob && !this.triedGiveGo && m.elapsed > 60 && this.world.tick - this.myPassTick < 4 * TUNING.sim.hz) {
+        key = 'givego';
+        text = `Give-and-go: after passing, run forward and press ${pass} again to get it straight back`;
       }
     }
     if (key !== this.hintKey) {

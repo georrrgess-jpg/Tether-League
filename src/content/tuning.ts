@@ -66,6 +66,17 @@ export const TUNING = {
     netRestitution: 0.12,
     /** Posts keep their old, deader bounce. */
     postRestitution: 0.74,
+    /** Lofted balls (long ball): gravity, air drag and the first bounce. */
+    gravity: 24,
+    airDrag: 0.12,
+    /** Above this height a lofted ball flies over robots. */
+    headHeight: 1.3,
+    /** A lofted ball above this height cannot enter the goal; it comes back off the frame. */
+    crossbar: 2.1,
+    bounceRestitution: 0.36,
+    /** Horizontal speed kept on a landing bounce, so a long ball sits down near its target. */
+    landingFriction: 0.6,
+    bounceMin: 2,
     /** Exponential drag coefficient (1/s). */
     drag: 0.42,
     /** Constant rolling deceleration (units/s^2). */
@@ -108,6 +119,25 @@ export const TUNING = {
     /** Shooting first time off a teammate's pass (within this many seconds) adds power. */
     oneTouchWindow: 1.4,
     oneTouchBonus: 1.14,
+    /** A kick can only meet a ball below this height. */
+    reachHeight: 1.0,
+    /** Long ball: charge 0..1 maps to a carry of lobMin..lobMax units. */
+    lobMin: 6,
+    lobMax: 24,
+    /** Releasing within this much of the ideal charge is a perfect long ball (lands on the target). */
+    lobPerfect: 0.07,
+    /** Max sideways error (radians) of a badly weighted long ball. */
+    lobMaxError: 0.14,
+    /** A long ball is led this far (seconds of the receiver's movement, capped). */
+    lobLeadMax: 0.9,
+    /** PASS input: released before this (seconds) it is a ground pass; held longer it charges a long ball. */
+    lobHoldSeconds: 0.18,
+    /** Seconds of holding (after lobHoldSeconds) to reach full long-ball charge. */
+    lobChargeSeconds: 1.0,
+    /** Give-and-go: the return pass is led this far into the runner's path. */
+    giveGoLead: 0.85,
+    /** A return pass within this many seconds of the first pass completes a give-and-go. */
+    giveGoWindow: 4,
   },
   assist: {
     /** Max aim correction (radians) for off / light / strong. */

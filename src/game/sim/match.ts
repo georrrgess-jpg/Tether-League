@@ -17,6 +17,11 @@ export interface RobotStats {
   swingKicks: number;
   swings: number;
   ownGoals: number;
+  /** Plays: long balls a teammate collected, completed give-and-goes (credited to the runner), wall passes collected, one-touch goals. */
+  longBalls: number;
+  giveAndGos: number;
+  wallPasses: number;
+  oneTouchGoals: number;
 }
 
 export interface GoalRecord {
@@ -29,7 +34,11 @@ export interface GoalRecord {
   ownGoalBy: number;
   overtime: boolean;
   swing: boolean;
+  /** Scored first time off a teammate pass. */
+  oneTouch?: boolean;
 }
+
+export type PlayKind = 'long_ball' | 'give_and_go' | 'wall_pass' | 'one_touch';
 
 export type MatchEvent =
   | { type: 'countdown'; n: number }
@@ -40,7 +49,9 @@ export type MatchEvent =
   | { type: 'save'; robot: number }
   | { type: 'pass'; from: number; to: number }
   | { type: 'intercept'; robot: number }
-  | { type: 'shot'; robot: number };
+  | { type: 'shot'; robot: number }
+  /** A completed play, credited to `robot` (long ball / wall pass: the passer; give-and-go: the runner). */
+  | { type: 'play'; play: PlayKind; robot: number; perfect: boolean };
 
 export interface MatchConfig {
   arena: ArenaDef;
@@ -58,10 +69,11 @@ interface Touch {
   tick: number;
   deliberate: boolean;
   swing: boolean;
+  oneTouch: boolean;
 }
 
 function newStats(): RobotStats {
-  return { goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0 };
+  return { goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0 };
 }
 
 const HZ = TUNING.sim.hz;
@@ -90,7 +102,9 @@ export class Match {
   lastGoalTeam: -1 | 0 | 1 = -1;
 
   private touches: Touch[] = [];
-  private pendingPass: { from: number; team: 0 | 1; tick: number; x: number; z: number } | null = null;
+  private pendingPass: { from: number; team: 0 | 1; tick: number; x: number; z: number; lob: boolean; bank: boolean; perfect: boolean } | null = null;
+  /** The last completed pass, for give-and-go detection. */
+  private lastPass: { from: number; to: number; tick: number } | null = null;
   private pendingIntercept: { robot: number; team: 0 | 1; tick: number } | null = null;
   private pendingSave: { robot: number; side: 0 | 1; tick: number } | null = null;
   private lastSaveTick: [number, number] = [-9999, -9999];
@@ -125,6 +139,7 @@ export class Match {
     this.pendingPass = null;
     this.pendingIntercept = null;
     this.pendingSave = null;
+    this.lastPass = null;
     this.goalBound = null;
     this.lastCountdown = -1;
   }
@@ -226,7 +241,25 @@ export class Match {
     this.goalBound = { side, tick: w.tick };
   }
 
-  private recordTouch(robot: number, deliberate: boolean, swing: boolean): void {
+  /** Plays completed by a pass from pp.from that `to` collected. */
+  private completePlays(pp: { from: number; tick: number; lob: boolean; bank: boolean; perfect: boolean }, to: number, tick: number): void {
+    if (pp.lob) {
+      this.stats[pp.from].longBalls++;
+      this.events.push({ type: 'play', play: 'long_ball', robot: pp.from, perfect: pp.perfect });
+    } else if (pp.bank) {
+      this.stats[pp.from].wallPasses++;
+      this.events.push({ type: 'play', play: 'wall_pass', robot: pp.from, perfect: false });
+    }
+    // Give-and-go: A passed to B, and B's pass now comes straight back to A within the window.
+    const lp = this.lastPass;
+    if (lp && lp.from === to && lp.to === pp.from && tick - lp.tick <= TUNING.kick.giveGoWindow * HZ) {
+      this.stats[to].giveAndGos++;
+      this.events.push({ type: 'play', play: 'give_and_go', robot: to, perfect: pp.tick - lp.tick <= 0.9 * HZ });
+      this.lastPass = null;
+    } else this.lastPass = { from: pp.from, to, tick };
+  }
+
+  private recordTouch(robot: number, deliberate: boolean, swing: boolean, oneTouch = false): void {
     const w = this.world;
     const team = w.robots[robot].team;
     const tick = w.tick;
@@ -246,8 +279,10 @@ export class Match {
           this.stats[pp.from].passes++;
           this.events.push({ type: 'pass', from: pp.from, to: robot });
           this.pendingPass = null;
+          this.completePlays(pp, robot, tick);
         }
       } else {
+        this.lastPass = null;
         // Only a ball that has genuinely travelled counts; scrambles next to the kicker do not.
         const travelled = Math.hypot(w.ball.x - pp.x, w.ball.z - pp.z);
         if (tick - pp.tick <= 3 * HZ && travelled >= 4 && !this.pendingSave) {
@@ -267,7 +302,7 @@ export class Match {
       } else if (team !== pi.team) this.pendingIntercept = null;
     }
 
-    this.touches.push({ robot, team, tick, deliberate, swing });
+    this.touches.push({ robot, team, tick, deliberate, swing, oneTouch });
     if (this.touches.length > 16) this.touches.shift();
   }
 
@@ -281,8 +316,8 @@ export class Match {
           const st = this.stats[e.robot];
           st.kicks++;
           if (e.swing) st.swingKicks++;
-          this.recordTouch(e.robot, true, e.swing);
-          this.pendingPass = { from: e.robot, team: r.team, tick: w.tick, x: w.ball.x, z: w.ball.z };
+          this.recordTouch(e.robot, true, e.swing, e.oneTouch);
+          this.pendingPass = { from: e.robot, team: r.team, tick: w.tick, x: w.ball.x, z: w.ball.z, lob: e.lob, bank: e.bank, perfect: e.perfect };
           // Shot: the kicked ball's straight path meets the opponent goal mouth and has the pace to arrive.
           const b = w.ball;
           const gx = r.team === 0 ? w.hx : -w.hx;
@@ -341,6 +376,7 @@ export class Match {
     let assist = -1;
     let ownGoalBy = -1;
     let swing = false;
+    let oneTouch = false;
     const ts = this.touches;
     const last = ts.length ? ts[ts.length - 1] : null;
     let scorerIdx = -1;
@@ -361,7 +397,12 @@ export class Match {
       const st = ts[scorerIdx];
       scorer = st.robot;
       swing = st.swing;
+      oneTouch = st.oneTouch;
       this.stats[scorer].goals++;
+      if (oneTouch) {
+        this.stats[scorer].oneTouchGoals++;
+        this.events.push({ type: 'play', play: 'one_touch', robot: scorer, perfect: false });
+      }
       for (let i = scorerIdx - 1; i >= 0; i--) {
         const t = ts[i];
         if (st.tick - t.tick > TUNING.stats.assistWindow * HZ) break;
@@ -377,7 +418,7 @@ export class Match {
       }
     } else if (ownGoalBy >= 0) this.stats[ownGoalBy].ownGoals++;
 
-    const record: GoalRecord = { time: this.elapsed, team, scorer, assist, ownGoalBy, overtime: this.overtime, swing };
+    const record: GoalRecord = { time: this.elapsed, team, scorer, assist, ownGoalBy, overtime: this.overtime, swing, oneTouch };
     this.goals.push(record);
     this.events.push({ type: 'goal', record });
     this.phase = 'goal';
@@ -386,5 +427,6 @@ export class Match {
     this.pendingPass = null;
     this.pendingIntercept = null;
     this.pendingSave = null;
+    this.lastPass = null;
   }
 }

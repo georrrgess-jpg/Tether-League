@@ -35,6 +35,12 @@ export class InputManager {
   private mouseY = 0;
   private kickQueued = false;
   private passQueued = false;
+  /** Long-ball charge of the queued pass (0 = ground pass). */
+  private passLob = 0;
+  /** performance.now() when PASS went down, while it is held. */
+  private passDownAt: number | null = null;
+  /** Long-ball charge while PASS is held past the tap window (0..1), else null. The HUD shows it. */
+  lobCharge: number | null = null;
   private passId: number | null = null;
   private padPassPrev = false;
   private kickByKey = false;
@@ -139,6 +145,9 @@ export class InputManager {
     this.keys.clear();
     this.kickQueued = false;
     this.passQueued = false;
+    this.passLob = 0;
+    this.passDownAt = null;
+    this.lobCharge = null;
     this.passId = null;
     this.tetherMouse = false;
     this.tetherTouch = false;
@@ -159,6 +168,30 @@ export class InputManager {
     this.touchRoot?.querySelectorAll('.is-down').forEach((el) => el.classList.remove('is-down'));
   }
 
+  private pressPass(): void {
+    if (this.passDownAt === null) this.passDownAt = performance.now();
+    this.used.pass++;
+  }
+
+  /** PASS released: a tap is a ground pass, a hold is a long ball with the charge reached. */
+  private releasePass(): void {
+    if (this.passDownAt === null) return;
+    const charge = this.chargeAt(performance.now());
+    this.passDownAt = null;
+    this.lobCharge = null;
+    if (!this.enabled) return;
+    this.passQueued = true;
+    this.passLob = charge ?? 0;
+  }
+
+  private chargeAt(now: number): number | null {
+    if (this.passDownAt === null) return null;
+    const K = TUNING.kick;
+    const held = (now - this.passDownAt) / 1000;
+    if (held < K.lobHoldSeconds) return null;
+    return Math.max(0.01, Math.min(1, (held - K.lobHoldSeconds) / K.lobChargeSeconds));
+  }
+
   private keyDown(e: KeyboardEvent): void {
     if (!this.enabled) return;
     const t = e.target as HTMLElement | null;
@@ -174,8 +207,7 @@ export class InputManager {
       return;
     }
     if (a === 'pass') {
-      this.passQueued = true;
-      this.used.pass++;
+      this.pressPass();
     } else if (a === 'kick') {
       this.kickQueued = true;
       this.kickByKey = true;
@@ -193,6 +225,7 @@ export class InputManager {
 
   private keyUp(e: KeyboardEvent): void {
     this.keys.delete(e.code);
+    if (this.bind.get(e.code) === 'pass' && !this.held('pass')) this.releasePass();
   }
 
   private held(a: Action): boolean {
@@ -234,8 +267,7 @@ export class InputManager {
     const kind = btn?.dataset.touch;
     if (kind === 'pass' && this.passId === null) {
       this.passId = id;
-      this.passQueued = true;
-      this.used.pass++;
+      this.pressPass();
       btn!.classList.add('is-down');
       return true;
     }
@@ -365,6 +397,7 @@ export class InputManager {
       }
     } else if (id === this.passId) {
       this.passId = null;
+      this.releasePass();
       this.touchRoot?.querySelector('[data-touch="pass"]')?.classList.remove('is-down');
     } else if (id === this.kickId) {
       this.kickId = null;
@@ -433,10 +466,9 @@ export class InputManager {
     this.padKickPrev = kick;
     const passBtn = b(1) || b(3);
     if (passBtn && !this.padPassPrev) {
-      this.passQueued = true;
-      this.used.pass++;
+      this.pressPass();
       this.device = 'pad';
-    }
+    } else if (!passBtn && this.padPassPrev) this.releasePass();
     this.padPassPrev = passBtn;
     const pause = b(9);
     if (pause && !this.padPausePrev) this.onPause();
@@ -592,7 +624,11 @@ export class InputManager {
     this.preview = this.swing.preview;
 
     c.pass = this.enabled && this.passQueued;
+    c.lob = c.pass ? this.passLob : 0;
+    c.giveGo = false;
     this.passQueued = false;
+    this.passLob = 0;
+    this.lobCharge = this.enabled ? this.chargeAt(performance.now()) : null;
     c.kick = this.enabled && this.kickQueued && !c.pass;
     c.power = 1;
     if (this.kickQueued) {

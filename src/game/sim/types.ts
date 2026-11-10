@@ -21,10 +21,14 @@ export interface Command {
   swingDir: 0 | 1 | -1;
   /** Pass pressed this tick (edge): a weighted, leading pass to the teammate, whatever the aim. */
   pass: boolean;
+  /** With pass: 0 = ground pass, 0 < lob <= 1 = long ball with that charge. */
+  lob: number;
+  /** With pass: a give-and-go return, led further into the receiver's run. */
+  giveGo: boolean;
 }
 
 export function emptyCommand(): Command {
-  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0, pass: false };
+  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0, pass: false, lob: 0, giveGo: false };
 }
 
 export function clearCommand(c: Command): void {
@@ -36,6 +40,8 @@ export function clearCommand(c: Command): void {
   c.anchor = -1;
   c.swingDir = 0;
   c.pass = false;
+  c.lob = 0;
+  c.giveGo = false;
 }
 
 export type TetherState = 'ready' | 'attached' | 'cooldown';
@@ -77,6 +83,10 @@ export interface Robot {
   kickPower: number;
   /** The buffered kick is a pass. */
   kickPass: boolean;
+  /** Long-ball charge of the buffered pass (0 = ground pass). */
+  kickLob: number;
+  /** The buffered pass is a give-and-go return. */
+  kickGiveGo: boolean;
   /** Kick-button mashing level (see TUNING.kick.mashThreshold). */
   mash: number;
   ghost: number;
@@ -102,13 +112,16 @@ export interface Ball {
   lastTouchRobot: number;
   lastTouchTick: number;
   lastTouchDeliberate: boolean;
+  /** Height above the pitch and vertical speed (long balls). 0 / 0 for a rolling ball. */
+  h: number;
+  vh: number;
   /** Robot that last passed the ball (pass button or assisted pass) and when; -1 when an opponent has touched it since. */
   passBy: number;
   passTick: number;
 }
 
 export type SimEvent =
-  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean; bank: boolean; oneTouch: boolean }
+  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean; bank: boolean; oneTouch: boolean; lob: boolean; perfect: boolean; giveGo: boolean }
   | { type: 'touch'; robot: number; speed: number }
   | { type: 'wall'; speed: number; x: number; z: number; nx: number; nz: number }
   | { type: 'post'; speed: number; x: number; z: number }
@@ -117,6 +130,8 @@ export type SimEvent =
   | { type: 'attach'; robot: number; anchor: number }
   | { type: 'release'; robot: number; speed: number; auto: boolean }
   | { type: 'tetherFail'; robot: number }
+  /** A lofted ball touched down (speed = vertical impact speed). */
+  | { type: 'land'; speed: number; x: number; z: number }
   /** side = which goal the ball entered: 0 is the -x goal (defended by team 0), 1 is the +x goal. */
   | { type: 'goal'; side: 0 | 1 };
 

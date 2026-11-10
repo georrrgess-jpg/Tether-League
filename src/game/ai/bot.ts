@@ -2,7 +2,7 @@ import { DT, TUNING } from '../../content/tuning';
 import { Rng } from '../sim/rng';
 import { attackDir, type Command, type Robot, type World } from '../sim/types';
 import { releaseNow, planSwing } from '../sim/swing';
-import { predictBall } from '../sim/world';
+import { lobPlan, predictBall } from '../sim/world';
 
 /**
  * Bots drive robots through the same Command interface as a human. Difficulty changes reaction time,
@@ -126,6 +126,9 @@ interface KickPlan {
   ax: number;
   az: number;
   power: number;
+  /** Passes only: long-ball charge (0 = ground pass) and give-and-go return. */
+  lob?: number;
+  giveGo?: boolean;
 }
 
 interface BotState {
@@ -172,6 +175,7 @@ export class BotDirector {
   private bots: BotState[] = [];
   private byId: (BotState | null)[] = [];
   private pred = new Float32Array(PRED_STEPS * 2);
+  private predH = new Float32Array(PRED_STEPS);
   private predTick = -999;
   private eta: number[] = [];
   private ix: number[] = [];
@@ -179,6 +183,8 @@ export class BotDirector {
   private challenger: [number, number] = [-1, -1];
   /** Tick until which a robot (the player) has called for a pass. */
   private passCall: number[] = [];
+  /** Tick until which a robot has asked for a give-and-go return. */
+  private giveGoCall: number[] = [];
   private roleTick = -999;
 
   /**
@@ -275,6 +281,16 @@ export class BotDirector {
     this.passCall[robot] = this.w.tick + Math.round(1.6 * TUNING.sim.hz);
   }
 
+  /**
+   * The player passed and is making a run: their teammate plays the ball straight back, first time,
+   * led into the run (a give-and-go). Expires like a normal call.
+   */
+  requestGiveAndGo(robot: number): void {
+    const until = this.w.tick + Math.round(2.2 * TUNING.sim.hz);
+    this.passCall[robot] = until;
+    this.giveGoCall[robot] = until;
+  }
+
   /** Forget plans after a kickoff reset. */
   reset(): void {
     for (const b of this.bots) {
@@ -295,7 +311,7 @@ export class BotDirector {
   update(cmds: Command[]): void {
     const w = this.w;
     if (w.tick - this.predTick >= 6) {
-      predictBall(w, this.pred, PRED_STEPS, PRED_DT);
+      predictBall(w, this.pred, PRED_STEPS, PRED_DT, this.predH);
       this.predTick = w.tick;
       for (const r of w.robots) this.computeIntercept(r);
       this.threat[0] = this.detectThreat(0);
@@ -313,6 +329,8 @@ export class BotDirector {
     const speed = TUNING.robot.maxRunSpeed * 0.95;
     const cur = Math.hypot(r.vx, r.vz);
     for (let i = 0; i < PRED_STEPS; i++) {
+      // A lofted ball can only be met once it has dropped below head height.
+      if (this.predH[i] > TUNING.ball.headHeight) continue;
       const t = (i + 1) * PRED_DT;
       const d = Math.hypot(p[i * 2] - r.x, p[i * 2 + 1] - r.z) - 0.75;
       // Robots already carrying swing speed cover a little more ground.
@@ -563,9 +581,12 @@ export class BotDirector {
       const md = Math.hypot(mate.x - ball.x, mate.z - ball.z);
       let marked = 99;
       for (const o of w.robots) if (o.team !== r.team) marked = Math.min(marked, Math.hypot(o.x - mate.x, o.z - mate.z));
-      if (md > 2.5 && marked > 1.2) {
+      const giveGo = (this.giveGoCall[mate.id] ?? -1) > w.tick;
+      // A give-and-go runner is moving into space, so marking near their current spot matters less.
+      if (md > 2.5 && (marked > 1.2 || giveGo)) {
         this.passCall[mate.id] = -1;
-        return { kind: 'pass', ax: mate.x, az: mate.z, power: 1 };
+        this.giveGoCall[mate.id] = -1;
+        return { kind: 'pass', ax: mate.x, az: mate.z, power: 1, giveGo };
       }
     }
     if (mate && rng.chance(Math.min(0.95, b.diff.passSkill * b.style.pass))) {
@@ -578,6 +599,15 @@ export class BotDirector {
       const lz = mate.z + mate.vz * lead;
       const lane = this.laneClearance(r.team, ball.x, ball.z, lx, lz);
       const mateNearOwnGoal = (mate.x - ownX) * att < 5;
+      // Long ball over a blocked lane to an open teammate further up: the bot weighs it like a player
+      // would, missing the perfect charge by an amount that depends on its aim.
+      if (lane <= 1.1 && md > 9 && md < 24 && mateOpen > 3 && ahead > 3 && rng.chance(0.25 + b.diff.passSkill * 0.5)) {
+        const plan = lobPlan(w, r, ball.x, ball.z);
+        if (plan) {
+          const miss = rng.range(-1, 1) * b.diff.aimError * 0.45;
+          return { kind: 'pass', ax: plan.x, az: plan.z, power: 1, lob: Math.max(0.02, Math.min(1, plan.ideal + miss)) };
+        }
+      }
       if (md > 3.5 && md < 17 && lane > 1.1 && mateOpen > 2 && !mateNearOwnGoal && (ahead > 1.5 || (pressure < 2.4 && ahead > -4))) {
         const [ax, az] = aimAt(lx, lz, err() * 0.7);
         const natural = Math.min(K.speedCap, K.baseSpeed + K.forwardVelocityFactor * Math.max(0, r.vx * (ax - ball.x) + r.vz * (az - ball.z)) / Math.max(1, Math.hypot(ax - ball.x, az - ball.z)));
@@ -616,6 +646,8 @@ export class BotDirector {
     c.anchor = -1;
     c.swingDir = 0;
     c.pass = false;
+    c.lob = 0;
+    c.giveGo = false;
     c.mx = 0;
     c.mz = 0;
     c.ax = ball.x;
@@ -743,8 +775,11 @@ export class BotDirector {
         b.kickWait -= DT;
         if (b.kickWait <= 0 && r.kickCd <= 0 && b.hesitate <= 0) {
           // Passes use the same pass command as the player's pass button (led and weighted by the simulation).
-          if (k.kind === 'pass') c.pass = true;
-          else {
+          if (k.kind === 'pass') {
+            c.pass = true;
+            c.lob = k.lob ?? 0;
+            c.giveGo = !!k.giveGo;
+          } else {
             c.kick = true;
             c.power = k.power;
           }

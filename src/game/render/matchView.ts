@@ -3,6 +3,7 @@ import type { ArenaDef } from '../../content/arenas';
 import type { RobotLook } from '../../content/cosmetics';
 import { TUNING } from '../../content/tuning';
 import type { SimEvent, World } from '../sim/types';
+import { lobCarry, predictLanding } from '../sim/world';
 import { ArenaView, type Quality } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
@@ -38,6 +39,8 @@ export interface ViewFrame {
   human: number;
   reduced: boolean;
   shake: boolean;
+  /** Long ball being charged by the player: charge, ideal charge (gold notch) and the aim (ball -> target). */
+  lob?: { charge: number; ideal: number; bx: number; bz: number; tx: number; tz: number } | null;
 }
 
 export interface MatchViewOptions {
@@ -176,6 +179,14 @@ export class MatchView {
   private ballTrail = new Trail();
   private ballShadow: THREE.Mesh;
   private ballRing: THREE.Mesh;
+  private prevBallH = 0;
+  /** Where a lofted ball will land. */
+  private landRing!: THREE.Mesh;
+  /** Long-ball charge meter around the player's feet. */
+  private lobGroup!: THREE.Group;
+  private lobFill!: THREE.Mesh;
+  private lobNotch!: THREE.Mesh;
+  private lobDot!: THREE.Mesh;
   private shadows: THREE.Mesh[] = [];
   private rings: THREE.Mesh[] = [];
   private ropes: THREE.Mesh[] = [];
@@ -292,6 +303,27 @@ export class MatchView {
     this.ballRing.rotation.x = -Math.PI / 2;
     this.ballRing.renderOrder = 2;
     this.scene.add(this.ballRing);
+    // Lofted ball landing spot: a soft ring, only while the ball is high.
+    this.landRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: ringT, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, toneMapped: false })));
+    this.landRing.rotation.x = -Math.PI / 2;
+    this.landRing.renderOrder = 2;
+    this.scene.add(this.landRing);
+    // Long-ball meter: a ring that fills clockwise while PASS is held, a gold notch at the perfect
+    // charge, and a dot where the ball would land if released now (gold when it is on the notch).
+    this.lobGroup = new THREE.Group();
+    this.lobGroup.visible = false;
+    const flat = (m: THREE.Mesh) => {
+      m.rotation.x = -Math.PI / 2;
+      m.renderOrder = 3;
+      return m;
+    };
+    const lobBack = flat(new THREE.Mesh(this.track(new THREE.RingGeometry(1.05, 1.32, 64)), this.track(new THREE.MeshBasicMaterial({ color: '#0d1b2e', transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }))));
+    this.lobFill = flat(new THREE.Mesh(this.track(new THREE.RingGeometry(1.08, 1.29, 64, 1, Math.PI / 2, -Math.PI * 2)), this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }))));
+    this.lobNotch = flat(new THREE.Mesh(this.track(new THREE.PlaneGeometry(0.16, 0.5)), this.track(new THREE.MeshBasicMaterial({ color: '#f4c84b', depthWrite: false, toneMapped: false }))));
+    this.lobDot = flat(new THREE.Mesh(this.track(new THREE.CircleGeometry(0.34, 24)), this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }))));
+    this.lobGroup.add(lobBack, this.lobFill, this.lobNotch);
+    this.lobDot.visible = false;
+    this.scene.add(this.lobGroup, this.lobDot);
 
     // player marker
     const cone = this.track(new THREE.ConeGeometry(0.22, 0.38, 4));
@@ -441,6 +473,7 @@ export class MatchView {
     const n = w.robots.length;
     p[n * 2] = w.ball.x;
     p[n * 2 + 1] = w.ball.z;
+    this.prevBallH = w.ball.h;
   }
 
   /** After a teleporting reset, avoid interpolating across the jump. */
@@ -786,7 +819,8 @@ export class MatchView {
     const b = w.ball;
     const bx = p[n * 2] + (b.x - p[n * 2]) * a;
     const bz = p[n * 2 + 1] + (b.z - p[n * 2 + 1]) * a;
-    this.ball.position.set(bx, TUNING.ball.radius * BALL_SCALE, bz);
+    const bh = this.prevBallH + (b.h - this.prevBallH) * a;
+    this.ball.position.set(bx, TUNING.ball.radius * BALL_SCALE + bh, bz);
     const bs = Math.hypot(b.vx, b.vz);
     if (bs > 0.05) {
       v1.set(b.vz, 0, -b.vx).normalize();
@@ -795,6 +829,18 @@ export class MatchView {
     // Streak behind a hard-hit ball (shots and swing kicks), never over the ball itself.
     this.ballTrail.update(bx, bz, 0.25, !f.reduced && bs > 10.5);
     this.ballShadow.position.set(bx, 0.016, bz);
+    // A lofted ball's shadow spreads and fades with height, and its landing spot is marked.
+    const ss = 1.6 + bh * 0.28;
+    this.ballShadow.scale.set(ss, ss, 1);
+    (this.ballShadow.material as THREE.MeshBasicMaterial).opacity = 0.55 / (1 + bh * 0.45);
+    const lm = this.landRing.material as THREE.MeshBasicMaterial;
+    const land = b.h > 0.35 ? predictLanding(w) : null;
+    lm.opacity += ((land ? 0.75 : 0) - lm.opacity) * Math.min(1, dt * 12);
+    if (land) {
+      this.landRing.position.set(land.x, 0.024, land.z);
+      const ls = 1.5 + Math.min(1.2, land.t * 0.9) + (f.reduced ? 0 : Math.sin(t * 8) * 0.06);
+      this.landRing.scale.set(ls, ls, 1);
+    }
 
     // player-only helpers
     const h = f.human;
@@ -814,6 +860,29 @@ export class MatchView {
       const brs = kickable ? 1.7 + (f.reduced ? 0 : Math.sin(t * 10) * 0.07) : 1.4;
       this.ballRing.scale.set(brs, brs, 1);
       this.ballRing.position.set(bx, 0.022, bz);
+
+      const lob = f.lob;
+      this.lobGroup.visible = !!lob;
+      this.lobDot.visible = !!lob;
+      if (lob) {
+        this.lobGroup.position.set(pose.x, 0.03, pose.z);
+        const segs = Math.round(Math.max(0, Math.min(1, lob.charge)) * 64);
+        this.lobFill.geometry.setDrawRange(0, segs * 6);
+        const perfect = Math.abs(lob.charge - lob.ideal) <= TUNING.kick.lobPerfect;
+        (this.lobFill.material as THREE.MeshBasicMaterial).color.set(perfect ? '#f4c84b' : '#ffffff');
+        // Notch at the ideal charge (clockwise from the top of the ring, like the fill).
+        const ang = Math.PI / 2 - lob.ideal * Math.PI * 2;
+        this.lobNotch.position.set(Math.cos(ang) * 1.185, 0.002, -Math.sin(ang) * 1.185);
+        this.lobNotch.rotation.z = ang - Math.PI / 2;
+        let dx = lob.tx - lob.bx;
+        let dz = lob.tz - lob.bz;
+        const dl = Math.hypot(dx, dz) || 1;
+        dx /= dl;
+        dz /= dl;
+        const carry = lobCarry(lob.charge);
+        this.lobDot.position.set(lob.bx + dx * carry, 0.035, lob.bz + dz * carry);
+        (this.lobDot.material as THREE.MeshBasicMaterial).color.set(perfect ? '#f4c84b' : '#ffffff');
+      }
 
       this.aimRing.visible = f.showAim;
       if (f.showAim) {

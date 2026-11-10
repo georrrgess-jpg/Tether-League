@@ -34,7 +34,7 @@ function freshSave(seed = 4242): SaveGame {
 }
 
 function stats(p: Partial<RobotStats> = {}): RobotStats {
-  return { goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, ...p };
+  return { goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0, ...p };
 }
 
 function result(p: Partial<MatchResult> = {}): MatchResult {

@@ -50,6 +50,8 @@ export function createRobot(id: number, team: 0 | 1, slot: number, chassis: Chas
     kickBuffer: 0,
     kickPower: 1,
     kickPass: false,
+    kickLob: 0,
+    kickGiveGo: false,
     mash: 0,
     ghost: 0,
     carry: 99,
@@ -69,7 +71,7 @@ export function createWorld(arena: ArenaDef, robots: Robot[]): World {
     hx: arena.length / 2,
     hz: arena.width / 2,
     robots,
-    ball: { x: 0, z: 0, vx: 0, vz: 0, lastTouchRobot: -1, lastTouchTick: -999, lastTouchDeliberate: false, passBy: -1, passTick: -999 },
+    ball: { x: 0, z: 0, vx: 0, vz: 0, lastTouchRobot: -1, lastTouchTick: -999, lastTouchDeliberate: false, h: 0, vh: 0, passBy: -1, passTick: -999 },
     tick: 0,
     events: [],
     goalsOpen: true,
@@ -112,6 +114,8 @@ export function placeBall(w: World, x: number, z: number, vx = 0, vz = 0): void 
   b.lastTouchDeliberate = false;
   b.passBy = -1;
   b.passTick = -999;
+  b.h = 0;
+  b.vh = 0;
   w.goalLatch = false;
 }
 
@@ -215,6 +219,8 @@ function controlRobot(w: World, r: Robot, c: Command): void {
     r.kickBuffer = TUNING.kick.passBufferSeconds;
     r.kickPower = 1;
     r.kickPass = true;
+    r.kickLob = Math.max(0, Math.min(1, c.lob || 0));
+    r.kickGiveGo = !!c.giveGo;
   } else if (c.kick) {
     r.kickBuffer = TUNING.kick.inputBufferSeconds;
     r.kickPower = Math.max(0.2, Math.min(1, c.power));
@@ -388,13 +394,57 @@ export function bankPass(w: World, team: 0 | 1, bx: number, bz: number, px: numb
   return best;
 }
 
+/** Carry (units) of a long ball struck with charge c (0..1). */
+export function lobCarry(c: number): number {
+  const K = TUNING.kick;
+  return K.lobMin + Math.max(0, Math.min(1, c)) * (K.lobMax - K.lobMin);
+}
+
+/** Where a long ball from (bx, bz) to `mate` should land and the charge that gets it there exactly. */
+export function lobPlan(w: World, r: Robot, bx = w.ball.x, bz = w.ball.z): { x: number; z: number; dist: number; ideal: number; mate: Robot } | null {
+  const mate = passTarget(w, r);
+  if (!mate) return null;
+  const K = TUNING.kick;
+  const d0 = Math.hypot(mate.x - bx, mate.z - bz);
+  const lead = Math.min(K.lobLeadMax, d0 / 12);
+  let x = mate.x + mate.vx * lead;
+  let z = mate.z + mate.vz * lead;
+  // Keep the landing spot on the pitch.
+  x = Math.max(-w.hx + 1.2, Math.min(w.hx - 1.2, x));
+  z = Math.max(-w.hz + 1.2, Math.min(w.hz - 1.2, z));
+  const dist = Math.hypot(x - bx, z - bz);
+  const ideal = (dist - K.lobMin) / (K.lobMax - K.lobMin);
+  return { x, z, dist, ideal: Math.max(0, Math.min(1, ideal)), mate };
+}
+
+/** Deterministic pseudo-random value in [-1, 1] for a robot on a tick (no Math.random in the sim). */
+function tickNoise(w: World, r: Robot, salt: number): number {
+  const h = Math.sin((w.tick + 1) * 12.9898 + r.id * 78.233 + salt * 37.719) * 43758.5453;
+  return (h - Math.floor(h)) * 2 - 1;
+}
+
+/**
+ * Launches a lofted ball from b toward (tx, tz) so that it lands `carry` units away.
+ * Flight time grows with distance; the horizontal speed accounts for air drag.
+ */
+function launchLob(b: World['ball'], dirX: number, dirZ: number, carry: number): void {
+  const B = TUNING.ball;
+  const T = 0.5 + 0.034 * carry;
+  const k = B.airDrag;
+  const v = (carry * k) / (1 - Math.exp(-k * T));
+  b.vx = dirX * v;
+  b.vz = dirZ * v;
+  b.vh = (B.gravity * T) / 2;
+  b.h = 0.05;
+}
+
 function tryKick(w: World, r: Robot): void {
   const K = TUNING.kick;
   const b = w.ball;
   const dx = b.x - r.x;
   const dz = b.z - r.z;
   const d = Math.hypot(dx, dz);
-  if (d > K.range || w.goalLatch) return;
+  if (d > K.range || w.goalLatch || b.h > K.reachHeight) return;
 
   let ax = r.aimX - b.x;
   let az = r.aimZ - b.z;
@@ -411,17 +461,62 @@ function tryKick(w: World, r: Robot): void {
   let target = -1;
   let speedLimit = Infinity;
   let banked = false;
+  // Long ball: a lofted pass to the teammate's run. The charge sets the carry; releasing on the ideal
+  // charge (within lobPerfect) lands it on the target, otherwise it drops short or sails long and wide.
+  if (r.kickPass && r.kickLob > 0) {
+    const plan = lobPlan(w, r);
+    if (plan) {
+      const err = r.kickLob - plan.ideal;
+      const perfect = Math.abs(err) <= K.lobPerfect;
+      const carry = perfect ? plan.dist : lobCarry(r.kickLob);
+      let lx = (plan.x - b.x) / (plan.dist || 1);
+      let lz = (plan.z - b.z) / (plan.dist || 1);
+      if (!perfect) {
+        const ang = tickNoise(w, r, 3) * Math.min(1, Math.abs(err) * 2.5) * K.lobMaxError;
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const nx = lx * ca - lz * sa;
+        lz = lx * sa + lz * ca;
+        lx = nx;
+      }
+      launchLob(b, lx, lz, carry);
+      b.lastTouchRobot = r.id;
+      b.lastTouchTick = w.tick;
+      b.lastTouchDeliberate = true;
+      b.passBy = r.id;
+      b.passTick = w.tick;
+      r.kickCd = K.cooldownSeconds;
+      r.kickBuffer = 0;
+      r.kickPass = false;
+      r.kickLob = 0;
+      r.kickGiveGo = false;
+      r.ghost = K.ghostSeconds;
+      r.lastKickTick = w.tick;
+      r.lastKickDirX = lx;
+      r.lastKickDirZ = lz;
+      const speed = Math.hypot(b.vx, b.vz);
+      w.events.push({
+        type: 'kick', robot: r.id, speed, power: (speed - K.baseSpeed * 0.6) / (K.speedCap - K.baseSpeed * 0.6),
+        assisted: 'pass', swing: false, target: plan.mate.id, pass: true, rushed: false, bank: false, oneTouch: false,
+        lob: true, perfect, giveGo: false,
+      });
+      return;
+    }
+  }
+  const giveGo = r.kickPass && r.kickGiveGo;
   const mate = r.kickPass ? passTarget(w, r) : null;
   if (mate) {
-    // Pass button: aim at where the teammate will be, weighted so it can be collected.
-    const px = mate.x + mate.vx * Math.min(K.passLeadMax, Math.hypot(mate.x - b.x, mate.z - b.z) / 14);
-    const pz = mate.z + mate.vz * Math.min(K.passLeadMax, Math.hypot(mate.x - b.x, mate.z - b.z) / 14);
+    // Pass button: aim at where the teammate will be, weighted so it can be collected. A give-and-go
+    // return is led further, into the runner's stride.
+    const leadT = giveGo ? K.giveGoLead : Math.min(K.passLeadMax, Math.hypot(mate.x - b.x, mate.z - b.z) / 14);
+    const px = mate.x + mate.vx * leadT;
+    const pz = mate.z + mate.vz * leadT;
     const pl = Math.hypot(px - b.x, pz - b.z) || 1;
     ax = (px - b.x) / pl;
     az = (pz - b.z) / pl;
     assisted = 'pass';
     target = mate.id;
-    speedLimit = K.passBase + K.passPerUnit * pl;
+    speedLimit = K.passBase + K.passPerUnit * pl + (giveGo ? 1 : 0);
     const bank = bankPass(w, r.team, b.x, b.z, px, pz);
     if (bank) {
       const cl = Math.hypot(bank.x - b.x, bank.z - b.z) || 1;
@@ -535,6 +630,8 @@ function tryKick(w: World, r: Robot): void {
   r.kickCd = rushed ? K.rushedCooldown : K.cooldownSeconds;
   r.kickBuffer = 0;
   r.kickPass = false;
+  r.kickLob = 0;
+  r.kickGiveGo = false;
   r.ghost = K.ghostSeconds;
   r.lastKickTick = w.tick;
   r.lastKickDirX = ax;
@@ -552,6 +649,9 @@ function tryKick(w: World, r: Robot): void {
     rushed,
     bank: banked,
     oneTouch,
+    lob: false,
+    perfect: false,
+    giveGo: !!mate && giveGo,
   });
 }
 
@@ -643,7 +743,7 @@ function capBall(b: { vx: number; vz: number }): void {
   }
 }
 
-export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: number }, ev: World['events'] | null): void {
+export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: number; h?: number }, ev: World['events'] | null): void {
   const lz = w.hz - RB;
   if (b.z > lz) {
     b.z = lz;
@@ -682,7 +782,8 @@ export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: n
   const side = b.x >= 0 ? 1 : -1;
   const sxp = side * b.x; // distance along the attacking direction of this end
   if (sxp > w.hx - RB) {
-    const inMouth = w.goalsOpen && Math.abs(b.z) < gh;
+    // A lofted ball above the crossbar comes back off the frame.
+    const inMouth = w.goalsOpen && Math.abs(b.z) < gh && (b.h ?? 0) < TUNING.ball.crossbar;
     if (!inMouth) {
       b.x = side * (w.hx - RB);
       const vn = b.vx * side;
@@ -738,8 +839,40 @@ export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: n
   }
 }
 
-function integrateBall(b: { x: number; z: number; vx: number; vz: number }, h: number): void {
+/** Ball state the integrators and predictions share. */
+export interface BallState {
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  h: number;
+  vh: number;
+}
+
+/** Advances the ball by h seconds. Returns the vertical impact speed when a lofted ball touches down, else 0. */
+function integrateBall(b: BallState, h: number): number {
   const B = TUNING.ball;
+  let landed = 0;
+  if (b.h > 0 || b.vh > 0) {
+    // In the air: light drag, no rolling resistance, gravity.
+    const k = Math.exp(-B.airDrag * h);
+    b.vx *= k;
+    b.vz *= k;
+    b.vh -= B.gravity * h;
+    b.h += b.vh * h;
+    if (b.h <= 0) {
+      b.h = 0;
+      landed = -b.vh;
+      if (-b.vh > B.bounceMin) {
+        b.vh = -b.vh * B.bounceRestitution;
+        b.vx *= B.landingFriction;
+        b.vz *= B.landingFriction;
+      } else b.vh = 0;
+    }
+    b.x += b.vx * h;
+    b.z += b.vz * h;
+    return landed;
+  }
   let sp = Math.hypot(b.vx, b.vz);
   if (sp > 1e-6) {
     let ns = sp * Math.exp(-B.drag * h) - B.rolling * h;
@@ -752,6 +885,7 @@ function integrateBall(b: { x: number; z: number; vx: number; vz: number }, h: n
   }
   b.x += b.vx * h;
   b.z += b.vz * h;
+  return 0;
 }
 
 function collideRobots(w: World, a: Robot, b: Robot): void {
@@ -788,6 +922,7 @@ function collideRobots(w: World, a: Robot, b: Robot): void {
 function collideRobotBall(w: World, r: Robot, pinned: boolean): void {
   if (r.ghost > 0) return;
   const b = w.ball;
+  if (b.h > TUNING.ball.headHeight) return; // a lofted ball sails over
   const dx = b.x - r.x;
   const dz = b.z - r.z;
   const d = Math.hypot(dx, dz);
@@ -851,7 +986,8 @@ export function stepWorld(w: World, cmds: Command[]): void {
       robotWalls(w, r);
     }
     for (let i = 0; i < robots.length; i++) for (let j = i + 1; j < robots.length; j++) collideRobots(w, robots[i], robots[j]);
-    integrateBall(b, h);
+    const impact = integrateBall(b, h);
+    if (impact > 1.5) w.events.push({ type: 'land', speed: impact, x: b.x, z: b.z });
     for (let i = 0; i < robots.length; i++) collideRobotBall(w, robots[i], false);
     ballWalls(w, b, w.events);
     for (let i = 0; i < robots.length; i++) {
@@ -888,8 +1024,8 @@ export function stepWorld(w: World, cmds: Command[]): void {
  * Side-effect free ball prediction with wall rebounds (robots ignored).
  * Fills `out` with positions every `stepSeconds` and returns the number written.
  */
-export function predictBall(w: World, out: Float32Array, steps: number, stepSeconds: number): number {
-  const tmp = { x: w.ball.x, z: w.ball.z, vx: w.ball.vx, vz: w.ball.vz };
+export function predictBall(w: World, out: Float32Array, steps: number, stepSeconds: number, heights?: Float32Array): number {
+  const tmp: BallState = { x: w.ball.x, z: w.ball.z, vx: w.ball.vx, vz: w.ball.vz, h: w.ball.h, vh: w.ball.vh };
   const sub = Math.max(1, Math.round(stepSeconds / (DT * 2)));
   const h = stepSeconds / sub;
   for (let i = 0; i < steps; i++) {
@@ -899,8 +1035,24 @@ export function predictBall(w: World, out: Float32Array, steps: number, stepSeco
     }
     out[i * 2] = tmp.x;
     out[i * 2 + 1] = tmp.z;
+    if (heights) heights[i] = tmp.h;
   }
   return steps;
+}
+
+/** Where a lofted ball first touches down (walls included), or null when it is not in the air. Side effect free. */
+export function predictLanding(w: World): { x: number; z: number; t: number } | null {
+  const b = w.ball;
+  if (b.h <= 0 && b.vh <= 0) return null;
+  const tmp: BallState = { x: b.x, z: b.z, vx: b.vx, vz: b.vz, h: b.h, vh: b.vh };
+  const h = DT / 2;
+  for (let i = 0; i < 6 * TUNING.sim.hz; i++) {
+    const before = tmp.h;
+    integrateBall(tmp, h);
+    ballWalls(w, tmp, null);
+    if (tmp.h <= 0 && before > 0) return { x: tmp.x, z: tmp.z, t: (i + 1) * h };
+  }
+  return null;
 }
 
 /** Preview/acquisition scoring: exactly one candidate, with hysteresis toward the previous one. */

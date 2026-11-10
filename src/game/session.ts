@@ -5,11 +5,11 @@ import { keyLabel, type Settings } from '../storage/settings';
 import { h, icon } from '../ui/dom';
 import { InputManager } from './input/input';
 import type { Gfx } from './render/gfx';
-import { MatchView, type Marker } from './render/matchView';
+import { MatchView, type Marker, type ViewFrame } from './render/matchView';
 import type { RobotMood } from './render/robotView';
 import type { Expression } from './render/textures';
 import { clearCommand, emptyCommand, type Command, type World } from './sim/types';
-import { detach } from './sim/world';
+import { detach, lobPlan } from './sim/world';
 
 export interface PlayContext {
   gfx: Gfx;
@@ -262,6 +262,16 @@ export class PlaySession {
     main();
   }
 
+  /** Long-ball meter state while the player holds PASS near the ball (null otherwise). */
+  private lobFrame(w: World, human: number): ViewFrame['lob'] {
+    const charge = this.input.lobCharge;
+    if (charge === null) return null;
+    const r = w.robots[human];
+    const plan = lobPlan(w, r);
+    if (!plan) return null;
+    return { charge, ideal: plan.ideal, bx: w.ball.x, bz: w.ball.z, tx: plan.x, tz: plan.z };
+  }
+
   private toggleDebug(): void {
     if (this.debugEl) {
       this.debugEl.remove();
@@ -380,6 +390,7 @@ export class PlaySession {
       aimX: this.input.aimX,
       aimZ: this.input.aimZ,
       showAim: live && this.input.showAim,
+      lob: live && mode.human >= 0 ? this.lobFrame(w, mode.human) : null,
       moods: this.moods,
       expressions: this.exprs,
       human: mode.human,

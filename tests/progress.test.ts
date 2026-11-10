@@ -27,7 +27,7 @@ import { defaultSettings } from '../src/storage/settings';
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const fresh = (seed = 99): SaveGame => newSave(defaultClub(), defaultSettings(), seed);
-const stats = (p: Partial<RobotStats> = {}): RobotStats => ({ goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, ...p });
+const stats = (p: Partial<RobotStats> = {}): RobotStats => ({ goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0, ...p });
 const goal = (team: 0 | 1, scorer: number, p: Partial<GoalRecord> = {}): GoalRecord => ({ time: 10, team, scorer, assist: -1, ownGoalBy: -1, overtime: false, swing: false, ...p });
 function result(p: Partial<MatchResult> = {}): MatchResult {
   const score = p.score ?? [1, 0];
@@ -454,5 +454,33 @@ describe('save v3', () => {
     const raw = JSON.parse(JSON.stringify(fresh())) as Record<string, unknown>;
     (raw.club as Record<string, unknown>).ball = 'ball_does_not_exist';
     expect(validateSave(raw).club.ball).toBe('ball_classic');
+  });
+});
+
+describe('plays progression', () => {
+  it('completed plays pay a capped reward line once, count toward records, and advance play objectives', () => {
+    const s = fresh();
+    const slot = setObjective(s, 'm_longball2');
+    const player = stats({ longBalls: 2, giveAndGos: 1, wallPasses: 1, oneTouchGoals: 1, goals: 1 });
+    const rec = commitMatch(s, result({ matchId: 'q-plays', kind: 'career', player }), CTX);
+    const line = rec.rewards.find((l) => l.label.startsWith('Plays completed'));
+    expect(line?.label).toBe('Plays completed × 4'); // 5 plays, capped at 4
+    expect(s.records.longBalls).toBe(2);
+    expect(s.records.giveAndGos).toBe(1);
+    expect(s.records.wallPasses).toBe(1);
+    expect(s.records.oneTouchGoals).toBe(1);
+    // The long-ball objective completed and was replaced by a fresh one in the same slot.
+    expect(s.progress.objectives[slot].id).not.toBe('m_longball2');
+    // Idempotent: committing the same match again pays nothing more.
+    const credits = s.credits;
+    commitMatch(s, result({ matchId: 'q-plays', kind: 'career', player }), CTX);
+    expect(s.credits).toBe(credits);
+    expect(s.records.longBalls).toBe(2);
+  });
+
+  it('a match with no plays has no plays line', () => {
+    const s = fresh();
+    const rec = commitMatch(s, result({ matchId: 'q-none' }), CTX);
+    expect(rec.rewards.some((l) => l.label.startsWith('Plays'))).toBe(false);
   });
 });

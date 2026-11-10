@@ -39,7 +39,14 @@ export const REWARDS = {
     { credits: 50, xp: 50 },
   ],
   lesson: { credits: 10, xp: 15 },
+  /** Per completed play (long ball, give-and-go, wall pass, one-touch goal), up to `max` per match. */
+  play: { credits: 8, xp: 12, max: 4 },
 } as const;
+
+/** Completed plays in a match: long balls, give-and-goes, wall passes and one-touch goals. */
+export function playCount(s: { longBalls?: number; giveAndGos?: number; wallPasses?: number; oneTouchGoals?: number }): number {
+  return (s.longBalls ?? 0) + (s.giveAndGos ?? 0) + (s.wallPasses ?? 0) + (s.oneTouchGoals ?? 0);
+}
 
 export function contributionScore(s: { goals: number; assists: number; saves: number; passes: number; interceptions: number }): number {
   return s.goals * 3 + s.assists * 3 + s.saves * 2 + s.interceptions * 1 + s.passes * 0.5;
@@ -53,6 +60,8 @@ export function matchRewards(result: MatchResult): RewardLine[] {
   const score = contributionScore(result.player);
   const tier = REWARDS.contribution.find((t) => score >= t.min);
   if (tier) lines.push({ label: tier.label, credits: sc(tier.credits), xp: sc(tier.xp), source: 'match' });
+  const plays = Math.min(REWARDS.play.max, playCount(result.player));
+  if (plays > 0) lines.push({ label: `Plays completed × ${plays}`, credits: sc(REWARDS.play.credits * plays), xp: sc(REWARDS.play.xp * plays), source: 'match' });
   return lines;
 }
 
@@ -178,6 +187,10 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
   rec.interceptions += p.interceptions;
   rec.shots += p.shots;
   rec.swingGoals += facts.swingGoals;
+  rec.longBalls += p.longBalls ?? 0;
+  rec.giveAndGos += p.giveAndGos ?? 0;
+  rec.wallPasses += p.wallPasses ?? 0;
+  rec.oneTouchGoals += p.oneTouchGoals ?? 0;
   if (facts.cleanSheets) rec.cleanSheets++;
   if (facts.hatTrick) rec.hatTricks++;
   if (p.goals > rec.bestGoals) {

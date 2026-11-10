@@ -135,7 +135,8 @@ export type ObjectiveTier = 'easy' | 'medium' | 'hard';
 export type MatchMetric =
   | 'goals' | 'assists' | 'saves' | 'passes' | 'interceptions' | 'shots' | 'swingGoals' | 'swingKicks'
   | 'wins' | 'careerMatches' | 'careerWins' | 'cleanSheets' | 'comebackWins' | 'firstGoal' | 'winBy2' | 'winBy3'
-  | 'hatTrick' | 'goalAndSave' | 'arenaWin' | 'teamGoals';
+  | 'hatTrick' | 'goalAndSave' | 'arenaWin' | 'teamGoals'
+  | 'plays' | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals';
 export type TrialMetric = 'trialBronze' | 'trialSilver' | 'trialGold';
 
 export interface ObjectiveDef {
@@ -174,10 +175,13 @@ export const OBJECTIVES: ObjectiveDef[] = [
   o('e_assist1', 'easy', 'Set up a goal with an assist', 'assists', 1),
   o('e_shots6', 'easy', 'Take 6 shots', 'shots', 6),
   o('e_career2', 'easy', 'Play 2 career matches', 'careerMatches', 2),
+  o('e_play1', 'easy', 'Complete a play: long ball, give-and-go or wall pass', 'plays', 1),
   o('e_trial_bronze', 'easy', 'Earn a bronze medal or better in any trial', 'trialBronze', 1),
   o('e_team4', 'easy', 'Your team scores 4 goals', 'teamGoals', 4),
   // medium: a session's work
   o('m_swing2', 'medium', 'Score 2 swing goals', 'swingGoals', 2),
+  o('m_longball2', 'medium', 'Complete 2 long balls', 'longBalls', 2),
+  o('m_givego2', 'medium', 'Complete 2 give-and-goes', 'giveAndGos', 2),
   o('m_passes6', 'medium', 'Complete 6 passes in one match', 'passes', 6, 'match'),
   o('m_clean1', 'medium', 'Keep a clean sheet', 'cleanSheets', 1),
   o('m_saves3', 'medium', 'Make 3 saves in one match', 'saves', 3, 'match'),
@@ -202,6 +206,8 @@ export const OBJECTIVES: ObjectiveDef[] = [
   o('h_dome', 'hard', 'Win a match at the Championship Dome', 'arenaWin', 1, 'total', { arena: 'championship_dome' }),
   o('h_by3', 'hard', 'Win by 3 goals or more', 'winBy3', 1),
   o('h_swing4', 'hard', 'Score 4 swing goals', 'swingGoals', 4),
+  o('h_plays3m', 'hard', 'Complete 3 plays in one match', 'plays', 3, 'match'),
+  o('h_onetouch2', 'hard', 'Score 2 one-touch goals', 'oneTouchGoals', 2),
 ];
 
 export const OBJECTIVE_BY_ID: Record<string, ObjectiveDef> = Object.assign(Object.create(null), Object.fromEntries(OBJECTIVES.map((d) => [d.id, d])));
@@ -214,6 +220,7 @@ export const OBJECTIVE_BY_ID: Record<string, ObjectiveDef> = Object.assign(Objec
 export type AchievementStat =
   | 'goals' | 'swingGoals' | 'assists' | 'passes' | 'saves' | 'interceptions' | 'shots' | 'wins' | 'matches'
   | 'bestStreak' | 'bestMargin' | 'bestGoals' | 'bestSaves' | 'cleanSheets' | 'comebackWins' | 'overtimeWins' | 'hatTricks'
+  | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals'
   | 'trophies' | 'topDivision' | 'seasons' | 'finals' | 'trialMedals' | 'trialGolds' | 'lessons'
   | 'clubLevel' | 'objectivesDone' | 'bestMastery' | 'totalMastery' | 'playoffs' | 'shopOwned' | 'arenasWon';
 
@@ -253,6 +260,10 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'brick_wall', name: 'Brick Wall', text: 'Keep {n} clean {sheet|sheets}', stat: 'cleanSheets', tiers: [1, 5, 15], items: { 2: 'title_the_wall' } },
   { id: 'comeback', name: 'Comeback Kids', text: 'Win {n} {match|matches} after falling behind', stat: 'comebackWins', tiers: [1, 4, 12], items: { 2: 'title_comeback_kings' } },
   { id: 'sudden_death', name: 'Sudden Death', text: 'Win {n} {match|matches} in overtime', stat: 'overtimeWins', tiers: [1, 4, 10], items: { 2: 'title_overtime' } },
+  { id: 'long_range', name: 'Long Range', text: 'Complete {n} long {ball|balls}', stat: 'longBalls', tiers: [5, 25, 75] },
+  { id: 'playmaker', name: 'Playmaker', text: 'Complete {n} {give-and-go|give-and-goes}', stat: 'giveAndGos', tiers: [3, 15, 50] },
+  { id: 'wall_artist', name: 'Off the Wall', text: 'Complete {n} wall {pass|passes}', stat: 'wallPasses', tiers: [3, 15, 40] },
+  { id: 'first_time', name: 'First Time', text: 'Score {n} one-touch {goal|goals}', stat: 'oneTouchGoals', tiers: [3, 15, 40] },
   { id: 'hat_tricks', name: 'Hat-trick Heroes', text: 'Score {n} {hat-trick|hat-tricks}', stat: 'hatTricks', tiers: [1, 3, 8], items: { 2: 'title_goal_machine' } },
   { id: 'silverware', name: 'Silverware', text: 'Win {n} division {trophy|trophies}', stat: 'trophies', tiers: [1, 3, 6], items: { 0: 'title_champions', 1: 'badge_cup' } },
   { id: 'climber', name: 'The Climb', text: 'Reach division {n} of 5', stat: 'topDivision', tiers: [2, 3, 5] },

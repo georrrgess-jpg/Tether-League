@@ -48,6 +48,11 @@ export function matchFacts(result: MatchResult): MatchFacts {
     goalAndSave: p.goals >= 1 && p.saves >= 1 ? 1 : 0,
     arenaWin: won ? 1 : 0,
     teamGoals: result.score[0],
+    plays: p.longBalls + p.giveAndGos + p.wallPasses + p.oneTouchGoals,
+    longBalls: p.longBalls,
+    giveAndGos: p.giveAndGos,
+    wallPasses: p.wallPasses,
+    oneTouchGoals: p.oneTouchGoals,
   };
 }
 
