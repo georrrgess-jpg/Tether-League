@@ -1,5 +1,5 @@
 import type { App, ScreenView } from '../../app';
-import { CLUB_COLORS, cosmeticsOfKind } from '../../content/cosmetics';
+import { CLUB_COLORS, colorHex, cosmeticsOfKind } from '../../content/cosmetics';
 import { cleanClubName } from '../../storage/save';
 import { badgeSvg } from '../badge';
 import { h, icon } from '../dom';
@@ -24,7 +24,8 @@ export function swatches(selected: string, disabled: string, onPick: (id: string
 
 export function setupScreen(app: App): ScreenView {
   const club = app.save.club;
-  const root = h('div', { class: 'screen setup' });
+  const root = h('div', { class: 'screen setup sec-play' });
+  const main = h('main', { class: 'content' });
   const colorName = (id: string) => CLUB_COLORS.find((c) => c.id === id)?.name ?? id;
 
   const form = () => {
@@ -40,6 +41,8 @@ export function setupScreen(app: App): ScreenView {
       return true;
     };
     name.addEventListener('input', valid);
+    const pvName = h('b', null, club.name.trim() || 'Your club');
+    name.addEventListener('input', () => (pvName.textContent = name.value.trim() || 'Your club'));
     const rerender = () => {
       club.name = name.value;
       app.syncStage();
@@ -53,10 +56,12 @@ export function setupScreen(app: App): ScreenView {
       club.name = cleanClubName(name.value);
       app.hasClub = true;
       app.persist();
-      root.replaceChildren(top, welcome(), slot, tag);
+      main.replaceChildren(hero, welcome());
+      (main.querySelector('[data-autofocus]') as HTMLElement | null)?.focus({ preventScroll: true });
     };
     let panel = h('div', { class: 'panel setup-panel' },
       h('div', { class: 'panel-title' }, 'Create your club', h('small', null, 'Everything can be changed later')),
+      h('div', { class: 'setup-preview' }, h('span', { class: 'badge big', html: badgeSvg(club.badge, colorHex(club.primary), colorHex(club.secondary)) }), pvName),
       h('label', { class: 'field' }, h('span', null, 'Club name'), name, err),
       h('div', { class: 'field' }, h('span', null, `Main colour · ${colorName(club.primary)}`), swatches(club.primary, club.secondary, (id) => {
         club.primary = id;
@@ -105,9 +110,12 @@ export function setupScreen(app: App): ScreenView {
       ),
     );
 
-  const top = h('header', { class: 'topbar' }, wordmark());
-  const slot = h('div', { class: 'stage-slot' });
-  const tag = h('p', { class: 'setup-tag' }, h('b', null, '2v2 robot ball. '), 'Swing, launch, pass and score.');
-  root.append(top, form(), slot, tag);
+  const hero = h('div', { class: 'setup-hero' },
+    h('h1', { class: 'setup-title' }, h('span', null, 'Welcome to'), h('b', null, 'Tether League')),
+    h('div', { class: 'stage-slot' }),
+    h('p', { class: 'setup-tag' }, h('b', null, '2v2 robot ball. '), 'Swing, launch, pass and score.'),
+  );
+  main.append(hero, form());
+  root.append(h('div', { class: 'topbar', 'aria-hidden': 'true' }), h('div', { class: 'brand' }, wordmark()), main);
   return { el: root, stage: { shot: 'duo', moods: ['ready', 'idle'] } };
 }

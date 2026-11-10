@@ -1,6 +1,7 @@
 import type { App, ScreenView } from '../../app';
 import { DIVISIONS } from '../../content/clubs';
 import { CLUB_COLORS, COSMETIC_BY_ID, EARNED_COLORS, catalogOfKind, colorHex, isEarnedOnly, type CosmeticKind, type RobotLook } from '../../content/cosmetics';
+import { PLAYS, PLAY_ORDER } from '../../content/plays';
 import { drawFace, drawJersey, makeCanvas } from '../../game/render/textures';
 import { playerLooks } from '../../game/setup';
 import { itemSource } from '../../progression/catalog';
@@ -9,27 +10,33 @@ import { cleanClubName, type ClubProfile } from '../../storage/save';
 import { badgeSvg } from '../badge';
 import { h, icon } from '../dom';
 import { shell } from '../shell';
+import { emptyState, shirt, tabBar } from '../widgets';
 import { ordinal } from './home';
 import { swatches } from './setup';
-import { topperSvg } from './thumbs';
+import { ballThumb, topperSvg } from './thumbs';
 
-type Tab = 'colors' | 'pattern' | 'face' | 'trail' | 'celebration' | 'badge' | 'topper' | 'identity' | 'records';
+type Tab = 'colors' | 'pattern' | 'face' | 'trail' | 'celebration' | 'badge' | 'topper' | 'ball' | 'identity' | 'records';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'colors', label: 'Colours', icon: 'palette' },
-  { id: 'pattern', label: 'Jersey', icon: 'shirt' },
-  { id: 'face', label: 'Face', icon: 'face' },
-  { id: 'trail', label: 'Trail', icon: 'trail' },
-  { id: 'celebration', label: 'Celebrate', icon: 'party' },
-  { id: 'badge', label: 'Badge', icon: 'save' },
-  { id: 'topper', label: 'Topper', icon: 'academy' },
-  { id: 'identity', label: 'Name & title', icon: 'edit' },
-  { id: 'records', label: 'Records', icon: 'trophy' },
+const TABS: { id: Tab; label: string; short?: string; icon: string; title: string }[] = [
+  { id: 'colors', label: 'Colours', icon: 'palette', title: 'Colours' },
+  { id: 'pattern', label: 'Jersey', icon: 'shirt', title: 'Jersey' },
+  { id: 'face', label: 'Face', icon: 'face', title: 'Face' },
+  { id: 'trail', label: 'Trail', icon: 'trail', title: 'Tether trail' },
+  { id: 'celebration', label: 'Celebrate', icon: 'party', title: 'Celebration' },
+  { id: 'badge', label: 'Badge', icon: 'shield', title: 'Club badge' },
+  { id: 'topper', label: 'Topper', icon: 'topper', title: 'Topper' },
+  { id: 'ball', label: 'Ball', icon: 'ball', title: 'Match ball' },
+  { id: 'identity', label: 'Name & title', short: 'Name', icon: 'edit', title: 'Name & title' },
+  { id: 'records', label: 'Records', icon: 'trophy', title: 'Club records' },
 ];
+
+/** Cosmetic kinds edited on this screen, each stored in the club profile field of the same name. */
+const ITEM_KINDS: CosmeticKind[] = ['face', 'pattern', 'trail', 'celebration', 'badge', 'topper', 'ball', 'title'];
 
 function thumb(kind: CosmeticKind, id: string, primary: string, secondary: string): HTMLElement {
   if (kind === 'badge') return h('span', { class: 'thumb', html: badgeSvg(id, primary, secondary) });
   if (kind === 'topper') return h('span', { class: 'thumb topper', html: topperSvg(id, primary) });
+  if (kind === 'ball') return ballThumb(id);
   if (kind === 'face') {
     const [c, g] = makeCanvas(120, 60);
     drawFace(g, 120, 60, id, 'neutral', '#7ff3ff');
@@ -46,7 +53,7 @@ function thumb(kind: CosmeticKind, id: string, primary: string, secondary: strin
   }
   if (kind === 'trail') {
     const cols: Record<string, string> = { trail_standard: `linear-gradient(90deg, transparent, ${primary})`, trail_comet: `linear-gradient(90deg, transparent, ${primary} 60%, #fff)`, trail_spark: `repeating-linear-gradient(90deg, ${primary} 0 8px, #fff3a8 8px 12px)`, trail_aurora: `linear-gradient(90deg, transparent, ${secondary}, ${primary})` };
-    return h('span', { class: 'thumb trail', style: `background:${cols[id] ?? primary}` });
+    return h('span', { class: 'thumb trail' }, h('i', { style: `background:${cols[id] ?? `linear-gradient(90deg, transparent, ${primary} 70%, ${secondary})`}` }));
   }
   return h('span', { class: 'thumb' }, icon('party'));
 }
@@ -59,14 +66,19 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
   const save = app.save;
   let draft: ClubProfile = JSON.parse(JSON.stringify(save.club));
   let tab: Tab = (TABS.find((t) => t.id === params.get('tab'))?.id ?? 'colors') as Tab;
+  let colorTarget: 'main' | 'trim' = 'main';
+  let earnedFilter: 'owned' | 'locked' = EARNED_COLORS.some((c) => save.owned.includes(c.item)) ? 'owned' : 'locked';
   let busy = false;
-  const body = h('div', { class: 'club-body' });
-  const tabs = h('div', { class: 'club-tabs', role: 'tablist', 'aria-label': 'Customise' });
+  const tabsSlot = h('div', { class: 'club-tabs' });
+  const body = h('section', { class: 'panel club-editor', 'aria-live': 'polite' });
   const foot = h('div', { class: 'club-foot' });
 
   const dirty = () => JSON.stringify(draft) !== JSON.stringify(save.club);
-  const fieldOf = (kind: CosmeticKind): keyof ClubProfile => ((kind === 'pattern' ? 'pattern' : kind) as keyof ClubProfile);
-  const unowned = () => (['face', 'pattern', 'trail', 'celebration', 'badge', 'topper', 'title'] as CosmeticKind[]).filter((k) => !save.owned.includes(draft[fieldOf(k)] as string));
+  const fieldOf = (kind: CosmeticKind): keyof ClubProfile => kind as keyof ClubProfile;
+  const unowned = () => ITEM_KINDS.filter((k) => {
+    const id = draft[fieldOf(k)];
+    return typeof id === 'string' && !!COSMETIC_BY_ID[id] && !save.owned.includes(id);
+  });
 
   const preview = () => {
     const base = playerLooks(save);
@@ -79,20 +91,34 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
     const field = fieldOf(kind);
     const p = colorHex(draft.primary);
     const s = colorHex(draft.secondary);
-    return h('div', { class: 'item-grid' },
-      catalogOfKind(kind).map((c) => {
+    const all = catalogOfKind(kind);
+    if (!all.length) return emptyState('gift', 'Nothing to choose here yet.');
+    return h('div', { class: 'item-grid', role: 'listbox', 'aria-label': TABS.find((t) => t.id === tab)?.title ?? '' },
+      all.map((c) => {
         const owned = save.owned.includes(c.id);
         const selected = draft[field] === c.id;
         const equipped = save.club[field] === c.id;
         const afford = save.credits >= c.credits;
         const earned = isEarnedOnly(c.id);
-        return h('button', { class: `item${selected ? ' is-selected' : ''}${owned ? '' : ' is-locked'}${earned ? ' is-earned' : ''}`, 'aria-pressed': String(selected), title: owned ? c.blurb : `${c.blurb} ${itemSource(c.id)}.`, onclick: () => {
-          (draft[field] as string) = c.id;
-          render();
-        } },
-          thumb(kind, c.id, p, s),
+        return h('button', {
+          class: `item${selected ? ' is-selected' : ''}${owned ? ' is-owned' : ' is-locked'}${earned ? ' is-earned' : ''}${equipped ? ' is-equipped' : ''}`,
+          type: 'button',
+          role: 'option',
+          'aria-selected': String(selected),
+          title: owned ? c.blurb : `${c.blurb} ${itemSource(c.id)}.`,
+          onclick: () => {
+            (draft[field] as string) = c.id;
+            render();
+          },
+        },
+          h('span', { class: 'item-art' }, thumb(kind, c.id, p, s), owned ? null : h('span', { class: 'item-lock', 'aria-hidden': 'true' }, icon('lock'))),
           h('span', { class: 'item-name' }, c.name),
-          h('span', { class: 'item-state' }, equipped ? h('span', { class: 'chip chip-cyan' }, icon('check'), 'Equipped') : owned ? h('span', { class: 'chip' }, 'Owned') : earned ? h('span', { class: 'chip chip-earn' }, icon('lock'), 'Earn') : h('span', { class: `chip${afford ? ' chip-yellow' : ''}` }, icon(afford ? 'coin' : 'lock'), String(c.credits))),
+          h('span', { class: 'item-state' },
+            equipped ? h('span', { class: 'chip chip-cyan' }, icon('check'), 'Equipped')
+              : owned ? h('span', { class: 'chip' }, 'Owned')
+              : earned ? h('span', { class: 'chip chip-earn' }, icon('star'), 'Earn')
+              : h('span', { class: `chip${afford ? ' chip-yellow' : ''}` }, icon('coin'), String(c.credits))),
+          selected ? h('span', { class: 'item-check', 'aria-hidden': 'true' }, icon('check')) : null,
         );
       }),
     );
@@ -106,10 +132,13 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
         r.matches === 0 ? h('p', { class: 'muted' }, 'Play your first match to start your record book.') : null,
         kv('Matches played', r.matches), kv('Wins', `${r.wins} (${r.matches ? Math.round((r.wins / r.matches) * 100) : 0}%)`), kv('Best win streak', r.bestStreak), kv('Biggest win', r.bestMargin ? `by ${r.bestMargin}` : '—'),
         kv('Goals', r.goals), kv('Swing goals', r.swingGoals), kv('Assists', r.assists), kv('Saves', r.saves), kv('Most goals in a match', r.bestGoals), kv('Most saves in a match', r.bestSaves)),
-      h('div', { class: 'rec-col' }, h('h3', { class: 'section-head' }, icon('trophy'), 'Honours'),
-        save.trophies.length ? h('ul', { class: 'history' }, save.trophies.slice().reverse().map((t) => h('li', null, h('b', null, DIVISIONS[t.division].trophy), h('span', null, `Season ${t.seasonNo}`)))) : h('p', { class: 'muted' }, 'No trophies yet. Win a division playoff final to engrave the first one.'),
+      h('div', { class: 'rec-col' },
+        h('h3', { class: 'section-head' }, icon('assist'), 'Plays'),
+        PLAY_ORDER.map((id) => kv(PLAYS[id].name, r[PLAYS[id].record] ?? 0)),
+        h('h3', { class: 'section-head' }, icon('trophy'), 'Honours'),
+        save.trophies.length ? h('ul', { class: 'history' }, save.trophies.slice().reverse().map((t) => h('li', null, h('b', null, DIVISIONS[t.division].trophy), h('span', { class: 'chip chip-yellow' }, `Season ${t.seasonNo}`)))) : h('p', { class: 'muted' }, 'No trophies yet. Win a division playoff final to engrave the first one.'),
         h('h3', { class: 'section-head' }, icon('calendar'), 'Seasons'),
-        save.seasons.length ? h('ul', { class: 'history' }, save.seasons.slice().reverse().slice(0, 10).map((s) => h('li', null, h('b', null, `S${s.seasonNo} · ${DIVISIONS[s.division].name}`), h('span', null, `${ordinal(s.rank)} · ${s.wins}W ${s.losses}L`)))) : h('p', { class: 'muted' }, 'Your first season is under way.')),
+        save.seasons.length ? h('ul', { class: 'history' }, save.seasons.slice().reverse().slice(0, 10).map((s) => h('li', null, h('b', null, `S${s.seasonNo} · ${DIVISIONS[s.division].name}`), h('span', { class: 'chip' }, `${ordinal(s.rank)} · ${s.wins}W ${s.losses}L`)))) : h('p', { class: 'muted' }, 'Your first season is under way.')),
     );
   };
 
@@ -132,7 +161,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
     const titles = catalogOfKind('title');
     const ownedTitles = titles.filter((t) => save.owned.includes(t.id));
     const titlePick = h('div', { class: 'title-picks', role: 'radiogroup', 'aria-label': 'Club title' },
-      ownedTitles.map((t) => h('button', { class: `title-pick${draft.title === t.id ? ' is-selected' : ''}`, role: 'radio', 'aria-checked': String(draft.title === t.id), title: t.blurb, onclick: () => {
+      ownedTitles.map((t) => h('button', { class: `title-pick${draft.title === t.id ? ' is-selected' : ''}`, type: 'button', role: 'radio', 'aria-checked': String(draft.title === t.id), title: t.blurb, onclick: () => {
         draft.title = t.id;
         render();
       } }, draft.title === t.id ? icon('check') : icon('star'), t.name)),
@@ -142,6 +171,71 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
       h('div', { class: 'row-2' }, h('label', { class: 'field' }, h('span', null, 'Your number'), num(0)), h('label', { class: 'field' }, h('span', null, 'Teammate number'), num(1))),
       h('div', { class: 'field' }, h('span', null, `Club title · shown under your club name (${ownedTitles.length} of ${titles.length} earned)`), titlePick),
       ownedTitles.length < titles.length ? h('p', { class: 'muted' }, 'More titles come from the Club Road, achievements and chassis mastery (see Progress).') : null,
+    );
+  };
+
+  const colorName = (id: string) => CLUB_COLORS.find((c) => c.id === id)?.name ?? EARNED_COLORS.find((c) => c.id === id)?.name ?? id;
+  const colors = () => {
+    const ownedEarned = EARNED_COLORS.filter((c) => save.owned.includes(c.item));
+    const list = EARNED_COLORS.filter((c) => (earnedFilter === 'owned') === save.owned.includes(c.item));
+    const earned = h('div', { class: 'earned' },
+      h('div', { class: 'seg earned-filter', role: 'group', 'aria-label': 'Earned colours filter' },
+        h('button', { type: 'button', 'aria-pressed': String(earnedFilter === 'owned'), onclick: () => {
+          earnedFilter = 'owned';
+          render();
+        } }, icon('check'), ` Owned (${ownedEarned.length})`),
+        h('button', { type: 'button', 'aria-pressed': String(earnedFilter === 'locked'), onclick: () => {
+          earnedFilter = 'locked';
+          render();
+        } }, icon('lock'), ` Locked (${EARNED_COLORS.length - ownedEarned.length})`),
+      ),
+      list.length ? h('ul', { class: 'earned-list' },
+        list.map((c) => {
+          const owned = save.owned.includes(c.item);
+          const inUse = draft.primary === c.id ? 'main' : draft.secondary === c.id ? 'trim' : '';
+          const other = colorTarget === 'main' ? draft.secondary : draft.primary;
+          const content = [
+            h('span', { class: 'swatch-dot', style: `--sw:${c.hex}`, 'aria-hidden': 'true' }, owned ? null : icon('lock')),
+            h('span', { class: 'ec-text' }, h('b', null, c.name), h('small', null, owned ? (inUse ? `In use as ${inUse}` : `Owned · tap to use as ${colorTarget}`) : itemSource(c.item))),
+            inUse ? h('span', { class: 'ec-check', 'aria-hidden': 'true' }, icon('check')) : null,
+          ];
+          return h('li', null, owned
+            ? h('button', { class: `earned-color${inUse ? ' is-selected' : ''}`, type: 'button', disabled: other === c.id || null, title: other === c.id ? `${c.name} is your ${colorTarget === 'main' ? 'trim' : 'main'} colour` : `Use ${c.name} as ${colorTarget} colour`, onclick: () => {
+                if (colorTarget === 'main') draft.primary = c.id;
+                else draft.secondary = c.id;
+                render();
+              } }, content)
+            : h('div', { class: 'earned-color is-locked' }, content));
+        }),
+      ) : h('p', { class: 'muted earned-empty' }, earnedFilter === 'owned' ? 'No earned colours yet. They come from the Club Road.' : 'Every earned colour is unlocked.'),
+    );
+    return h('div', { class: 'color-tab' },
+      h('div', { class: 'color-grids' },
+        h('div', { class: 'field' }, h('span', null, 'Main colour · ', h('b', null, colorName(draft.primary))), swatches(draft.primary, draft.secondary, (id) => {
+          draft.primary = id;
+          render();
+        }, 'Main colour')),
+        h('div', { class: 'field' }, h('span', null, 'Trim colour · ', h('b', null, colorName(draft.secondary))), swatches(draft.secondary, draft.primary, (id) => {
+          draft.secondary = id;
+          render();
+        }, 'Trim colour')),
+        h('p', { class: 'muted' }, 'If an opponent wears similar colours they switch to an away kit for that match.'),
+      ),
+      h('div', { class: 'color-earned' },
+        h('div', { class: 'field' }, h('span', null, 'Earned colours · use as'),
+          h('div', { class: 'seg', role: 'group', 'aria-label': 'Apply earned colour to' },
+            h('button', { type: 'button', 'aria-pressed': String(colorTarget === 'main'), onclick: () => {
+              colorTarget = 'main';
+              render();
+            } }, 'Main'),
+            h('button', { type: 'button', 'aria-pressed': String(colorTarget === 'trim'), onclick: () => {
+              colorTarget = 'trim';
+              render();
+            } }, 'Trim'),
+          ),
+        ),
+        earned,
+      ),
     );
   };
 
@@ -163,26 +257,35 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
         if (res === 'ok') {
           app.persist();
           app.toast(done, 'good');
+          app.refreshChrome();
           render();
         } else app.toast(res === 'insufficient' ? `You need ${def.credits - save.credits} more credits.` : res === 'no_pick' ? 'No free picks left.' : res === 'earned' ? 'This item is earned through play, not bought.' : 'Already owned.', 'bad');
       };
-      buy = earnedOnly ? h('div', { class: 'buy-bar' },
-        h('span', null, icon('lock'), h('b', null, def.name), ` is earned, not bought. ${itemSource(id)}. Previewing only.`),
-        h('button', { class: 'btn btn-cyan btn-small', onclick: () => app.navigate('progress') }, icon('target'), 'See progress'),
-      ) : h('div', { class: 'buy-bar' },
-        h('span', null, icon('lock'), h('b', null, def.name), ' is not owned yet. Previewing only.'),
-        save.picks > 0 ? h('button', { class: 'btn btn-primary btn-small', onclick: act(() => usePick(save, id), `${def.name} unlocked with a free pick!`) }, icon('gift'), `Use free pick (${save.picks})`) : null,
-        h('button', { class: `btn btn-small ${afford ? 'btn-cyan' : 'is-disabled'}`, 'aria-disabled': String(!afford), onclick: act(() => purchase(save, id), `${def.name} purchased!`) }, icon('coin'), afford ? `Buy · ${def.credits}` : `Need ${def.credits - save.credits} more`),
-      );
+      buy = earnedOnly
+        ? h('div', { class: 'buy-bar is-earned' },
+            h('span', { class: 'bb-text' }, icon('lock'), h('span', null, h('b', null, def.name), ` is earned, not bought. ${itemSource(id)}. Previewing only.`)),
+            h('button', { class: 'btn btn-small btn-ghost', type: 'button', onclick: () => app.navigate('progress') }, icon('target'), 'See progress'),
+          )
+        : h('div', { class: 'buy-bar' },
+            h('span', { class: 'bb-text' }, icon('lock'), h('span', null, h('b', null, def.name), ' is not owned yet. Previewing only.')),
+            save.picks > 0 ? h('button', { class: 'btn btn-small btn-primary', type: 'button', onclick: act(() => usePick(save, id), `${def.name} unlocked with a free pick!`) }, icon('gift'), `Use free pick (${save.picks})`) : null,
+            h('button', { class: `btn btn-small btn-cyan${afford ? '' : ' is-disabled'}`, type: 'button', 'aria-disabled': String(!afford), onclick: act(() => purchase(save, id), `${def.name} purchased!`) }, icon('coin'), afford ? `Buy · ${def.credits}` : `Need ${def.credits - save.credits} more`),
+          );
     }
     foot.replaceChildren(
-      buy ?? h('span', { class: 'foot-note' }, save.picks > 0 ? h('span', { class: 'chip chip-yellow' }, icon('gift'), `${save.picks} free pick${save.picks > 1 ? 's' : ''}: choose any shop item`) : h('span', { class: 'muted' }, dirty() ? 'Unsaved changes' : 'Earn credits and free picks by playing matches and trials.')),
-      h('div', { class: 'foot-actions' },
-        h('button', { class: 'btn btn-ghost', disabled: !dirty(), onclick: () => {
+      buy ?? h('span', { hidden: true }),
+      h('div', { class: 'save-bar' },
+        h('span', { class: 'sb-note' },
+          save.picks > 0
+            ? h('span', { class: 'chip chip-yellow' }, icon('gift'), `${save.picks} free pick${save.picks > 1 ? 's' : ''}`)
+            : null,
+          h('span', null, dirty() ? 'Unsaved changes' : save.picks > 0 ? 'Choose any shop item' : 'Earn credits and free picks by playing'),
+        ),
+        h('button', { class: 'btn btn-ghost', type: 'button', disabled: !dirty(), onclick: () => {
           draft = JSON.parse(JSON.stringify(save.club));
           render();
         } }, 'Cancel'),
-        h('button', { class: 'btn btn-primary', disabled: !dirty() || missing.length > 0 || !nameOk, title: missing.length ? 'Unlock the previewed item first' : !nameOk ? 'Enter a club name' : null, onclick: () => {
+        h('button', { class: 'btn btn-primary btn-save', type: 'button', disabled: !dirty() || missing.length > 0 || !nameOk, title: missing.length ? 'Unlock the previewed item first' : !nameOk ? 'Enter a club name' : null, onclick: () => {
           draft.name = cleanClubName(draft.name);
           save.club = JSON.parse(JSON.stringify(draft));
           app.persist();
@@ -194,54 +297,36 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
   };
 
   const render = () => {
-    tabs.replaceChildren(...TABS.map((t) => h('button', { class: `tab${t.id === tab ? ' is-active' : ''}`, role: 'tab', 'aria-selected': String(t.id === tab), title: t.label, 'aria-label': t.label, onclick: () => {
-      tab = t.id;
+    tabsSlot.replaceChildren(tabBar<Tab>(TABS.map((t) => {
+      const kind = ITEM_KINDS.includes(t.id as CosmeticKind) ? (t.id as CosmeticKind) : null;
+      const changed = kind ? draft[fieldOf(kind)] !== save.club[fieldOf(kind)] : t.id === 'colors' ? draft.primary !== save.club.primary || draft.secondary !== save.club.secondary : false;
+      return { id: t.id, label: t.label, short: t.short, icon: t.icon, badge: changed ? '•' : null };
+    }), tab, (t) => {
+      tab = t;
       render();
-    } }, icon(t.icon), h('span', null, t.label))));
-    const colorName = (id: string) => CLUB_COLORS.find((c) => c.id === id)?.name ?? EARNED_COLORS.find((c) => c.id === id)?.name ?? id;
-    const earnedSwatches = () => h('div', { class: 'earned-colors' },
-      EARNED_COLORS.map((c) => {
-        const owned = save.owned.includes(c.item);
-        const inUse = draft.primary === c.id ? 'main' : draft.secondary === c.id ? 'trim' : '';
-        return h('div', { class: `earned-color${owned ? '' : ' is-locked'}` },
-          h('span', { class: 'swatch', style: `--sw:${c.hex}`, 'aria-hidden': 'true' }, owned ? (inUse ? icon('check') : null) : icon('lock')),
-          h('span', { class: 'ec-text' }, h('b', null, c.name), h('small', null, owned ? (inUse ? `In use as ${inUse}` : 'Owned') : itemSource(c.item))),
-          owned ? h('span', { class: 'ec-actions' },
-            h('button', { class: 'btn btn-small', disabled: draft.secondary === c.id || draft.primary === c.id, 'aria-label': `Use ${c.name} as main colour`, onclick: () => {
-              draft.primary = c.id;
-              render();
-            } }, 'Main'),
-            h('button', { class: 'btn btn-small', disabled: draft.primary === c.id || draft.secondary === c.id, 'aria-label': `Use ${c.name} as trim colour`, onclick: () => {
-              draft.secondary = c.id;
-              render();
-            } }, 'Trim'),
-          ) : null,
-        );
-      }),
-    );
+    }, 'Customise'));
+    const meta = TABS.find((t) => t.id === tab)!;
     let content: HTMLElement;
-    if (tab === 'colors') {
-      content = h('div', { class: 'color-tab' },
-        h('div', { class: 'field' }, h('span', null, `Main colour · ${colorName(draft.primary)}`), swatches(draft.primary, draft.secondary, (id) => {
-          draft.primary = id;
-          render();
-        }, 'Main colour')),
-        h('div', { class: 'field' }, h('span', null, `Trim colour · ${colorName(draft.secondary)}`), swatches(draft.secondary, draft.primary, (id) => {
-          draft.secondary = id;
-          render();
-        }, 'Trim colour')),
-        h('div', { class: 'field' }, h('span', null, 'Earned colours · tap to use as main or trim'), earnedSwatches()),
-        h('p', { class: 'muted' }, 'If an opponent wears similar colours they switch to an away kit for that match.'),
-      );
-    } else if (tab === 'identity') content = identity();
+    let note: string | null = null;
+    if (tab === 'colors') content = colors();
+    else if (tab === 'identity') content = identity();
     else if (tab === 'records') content = records();
-    else content = items(tab);
-    body.replaceChildren(h('section', { class: 'panel club-panel' }, content));
+    else {
+      content = items(tab);
+      const all = catalogOfKind(tab);
+      note = `${all.filter((c) => save.owned.includes(c.id)).length} of ${all.length} owned`;
+    }
+    body.className = `panel club-editor tab-${tab}`;
+    body.replaceChildren(
+      h('div', { class: 'ed-head' }, h('h2', { class: 'ed-title' }, meta.title), note ? h('span', { class: 'ch-note' }, note) : null),
+      h('div', { class: 'ed-body' }, content),
+    );
     footer();
     preview();
   };
 
-  const el = shell(app, { nav: 'club', title: save.club.name, subtitle: 'Club customisation', cls: 'club', dock: foot }, tabs, h('div', { class: 'stage-slot' }), body);
-  queueMicrotask(render);
+  const el = shell(app, { nav: 'club', eyebrow: 'Club', title: 'Customisation', subtitle: save.club.name, cls: 'club', dock: foot },
+    tabsSlot, h('div', { class: 'club-grid' }, h('div', { class: 'stage-slot' }), body));
+  render();
   return { el, stage: { shot: 'duo', moods: ['idle', 'idle'] }, dispose: () => app.syncStage(true) };
 }

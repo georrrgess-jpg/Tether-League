@@ -13,9 +13,11 @@ import { PlaySession, type PlayMode } from './game/session';
 import { playerLooks } from './game/setup';
 import { commitLesson, commitMatch, commitTrial, type TrialOutcome } from './progression/progression';
 import { browserStorage, loadSave, newSave, writeSave, type SaveGame, type StorageLike } from './storage/save';
-import { defaultSettings, type Settings } from './storage/settings';
-import { h } from './ui/dom';
+import { defaultSettings, keyLabel, type Settings } from './storage/settings';
+import { h, icon } from './ui/dom';
 import { ROUTES } from './ui/routes';
+import { creditsChip } from './ui/shell';
+import { shirt } from './ui/widgets';
 
 export interface ScreenView {
   el: HTMLElement;
@@ -55,6 +57,9 @@ export class App {
   private last = performance.now();
   private slot: Element | null = null;
   private pendingSettings: Settings = defaultSettings();
+  /** "YOU" tag that follows the player's robot during play (DOM, positioned from the view's projection). */
+  private youTag: HTMLElement | null = null;
+  private youPos = { x: 0, y: 0 };
 
   constructor() {
     this.storage = browserStorage();
@@ -166,6 +171,12 @@ export class App {
     this.show(this.route);
   }
 
+  /** Re-draws the top-bar credits after a purchase without rebuilding the screen (keeps drafts). */
+  refreshChrome(): void {
+    const el = this.view?.el.querySelector('.credits');
+    if (el) el.replaceWith(creditsChip(this));
+  }
+
   private onHash(): void {
     const route = location.hash.replace(/^#\/?/, '');
     if (this.session) {
@@ -220,7 +231,11 @@ export class App {
     requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    if (this.session || document.hidden) return;
+    if (this.session) {
+      this.trackYou();
+      return;
+    }
+    if (document.hidden) return;
     this.measureSlot();
     this.stage.render(dt);
   };
@@ -278,12 +293,43 @@ export class App {
     );
     this.session = session;
     this.host.insertBefore(session.layer, this.toastStack);
+    this.decorateHud(session, mode);
     session.start();
+  }
+
+  /**
+   * Shared HUD furniture added around a mode's own HUD: a small controls legend (mouse and keyboard
+   * only), the arena name for matches, and a "YOU" tag over the player's robot. Display only.
+   */
+  private decorateHud(session: PlaySession, mode: PlayMode): void {
+    const k = this.settings.keys;
+    const keys = (a: [string, string]) => a.map(keyLabel).filter((x) => x !== '—').join(' / ');
+    const match = mode instanceof MatchMode;
+    session.layer.classList.toggle('is-match', match);
+    const legend = h('div', { class: 'hud-legend', 'aria-hidden': 'true' },
+      h('div', null, icon('mouse'), h('span', null, h('b', null, 'Swing'), h('small', null, `Right click · ${keys(k.tether)}`))),
+      h('div', null, icon('mouse'), h('span', null, h('b', null, 'Kick'), h('small', null, `Left click · ${keys(k.kick)}`))),
+      h('div', null, icon('keyboard'), h('span', null, h('b', null, 'Pass'), h('small', null, `${keys(k.pass)} · hold: long ball`))),
+    );
+    const arena = match ? h('div', { class: 'hud-arena', 'aria-hidden': 'true' }, h('i'), mode.world.arena.name, h('i')) : null;
+    this.youTag = mode.human >= 0 ? h('div', { class: 'hud-you', 'aria-hidden': 'true' }, h('b', null, `#${shirt(this.save.club.numbers[0])}`), h('span', null, 'You')) : null;
+    session.layer.append(h('div', { class: 'hud-extra' }, legend, arena, this.youTag));
+  }
+
+  private trackYou(): void {
+    const s = this.session;
+    const tag = this.youTag;
+    if (!s || !tag || !tag.isConnected) return;
+    const r = s.mode.world.robots[s.mode.human];
+    if (!r) return;
+    s.view.fieldToScreen(r.x, 3.7, r.z, this.youPos);
+    tag.style.transform = `translate3d(${Math.round(this.youPos.x)}px, ${Math.round(this.youPos.y)}px, 0)`;
   }
 
   private end(): void {
     this.session?.stop();
     this.session = null;
+    this.youTag = null;
     audio.startMusic('menu');
   }
 

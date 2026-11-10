@@ -41,6 +41,8 @@ export interface MatchSetup {
   hints: boolean;
   /** Show the long-ball / give-and-go hints (until the player has used plays a few times). */
   playHints?: boolean;
+  /** The player's club match ball (cosmetic id). */
+  ball?: string;
 }
 
 export interface MatchResult {
@@ -87,6 +89,7 @@ export class MatchMode implements PlayMode {
   private triedLob = false;
   private triedGiveGo = false;
   private rushedTold = 0;
+  readonly ballSkin?: string;
   private mercy = 0;
   private lastRushed = -999;
 
@@ -101,6 +104,7 @@ export class MatchMode implements PlayMode {
     });
     this.world = this.match.world;
     this.looks = look;
+    this.ballSkin = setup.ball;
     this.teamColors = [setup.home.primary, setup.away.primary];
     this.title = `${setup.home.name} v ${setup.away.name}`;
     this.leaveNote =

@@ -1,6 +1,7 @@
 import type { App } from '../../app';
 import { COSMETIC_BY_ID, colorHex } from '../../content/cosmetics';
 import { badgeSvg } from '../badge';
+import * as textures from '../../game/render/textures';
 import { h, icon } from '../dom';
 
 /** Small original SVG drawings of the eight head toppers on a robot dome (UI thumbnails only). */
@@ -45,6 +46,42 @@ export function itemThumb(app: App, id: string, cls = ''): HTMLElement {
   if (d.kind === 'topper') return h('span', { class: `rw-thumb ${cls}`, html: topperSvg(id, colorHex(c.primary)) });
   if (d.kind === 'color') return h('span', { class: `rw-thumb ${cls}` }, h('i', { class: 'color-dot', style: `background:${d.hex}` }));
   if (d.kind === 'title') return h('span', { class: `rw-thumb ${cls}` }, icon('star'));
+  if (d.kind === 'ball') return ballThumb(id, `rw-thumb ${cls}`);
   const ic: Record<string, string> = { face: 'face', pattern: 'shirt', trail: 'trail', celebration: 'party' };
   return h('span', { class: `rw-thumb ${cls}` }, icon(ic[d.kind] ?? 'gift'));
+}
+
+/**
+ * Match ball thumbnail. Uses the renderer's ball preview when textures.ts provides one (looked up by
+ * name so the UI keeps working while that helper is being added), else a generic ball icon.
+ */
+export function ballThumb(id: string, cls = 'thumb ball'): HTMLElement {
+  const t = textures as unknown as Record<string, unknown>;
+  for (const name of ['ballThumbDataUrl', 'ballPreviewDataUrl', 'ballThumbUrl', 'ballPreviewUrl', 'ballThumb', 'ballPreview', 'drawBallPreview', 'drawBallThumb']) {
+    const fn = t[name];
+    if (typeof fn !== 'function') continue;
+    try {
+      if (name.startsWith('draw')) {
+        const [c, g] = textures.makeCanvas(128, 128);
+        (fn as (g: CanvasRenderingContext2D, w: number, h: number, id: string) => void)(g, 128, 128, id);
+        c.className = cls;
+        return c;
+      }
+      const out = (fn as (id: string, size?: number) => unknown)(id, 128);
+      if (typeof out === 'string') return h('img', { class: cls, src: out, alt: '', draggable: 'false' });
+      if (out instanceof HTMLCanvasElement) {
+        const [c, g] = textures.makeCanvas(out.width, out.height);
+        g.drawImage(out, 0, 0);
+        c.className = cls;
+        return c;
+      }
+      if (out instanceof HTMLElement) {
+        out.classList.add(...cls.split(' '));
+        return out;
+      }
+    } catch {
+      /* fall back to the icon below */
+    }
+  }
+  return h('span', { class: `${cls} is-generic` }, icon('ball'));
 }

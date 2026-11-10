@@ -55,7 +55,7 @@ describe('content integrity', () => {
     for (const a of ACHIEVEMENTS) for (const id of Object.values(a.items ?? {})) add(id!, a.id);
     for (const id of Object.keys(sources)) expect(COSMETIC_BY_ID[id], id).toBeDefined();
     for (const c of COSMETICS.filter((x) => x.unlock === 'level' || x.unlock === 'achievement')) expect(sources[c.id] ?? [], c.id).toHaveLength(1);
-    expect(COSMETICS.filter((c) => c.kind === 'topper').map((c) => c.id).sort()).toEqual(['topper_antenna', 'topper_crown', 'topper_fin', 'topper_halo', 'topper_headset', 'topper_horns', 'topper_none', 'topper_propeller']);
+    expect(COSMETICS.filter((c) => c.kind === 'topper').map((c) => c.id).sort()).toEqual(['topper_antenna', 'topper_crown', 'topper_ears', 'topper_fin', 'topper_halo', 'topper_headset', 'topper_horns', 'topper_mohawk', 'topper_none', 'topper_propeller', 'topper_radar', 'topper_tophat']);
     expect(ACHIEVEMENTS.length).toBeGreaterThanOrEqual(30);
     expect(OBJECTIVES.length).toBeGreaterThanOrEqual(25);
     for (const tier of OBJECTIVE_SLOTS) expect(OBJECTIVES.filter((o) => o.tier === tier && !o.arena).length).toBeGreaterThanOrEqual(5);

@@ -3,7 +3,7 @@ import type { RobotLook } from '../../content/cosmetics';
 import { buildHarborScenery, makePalm } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
-import { beamTexture, blobTexture, skyTexture, tileTexture, type Expression } from './textures';
+import { ballMaps, beamTexture, blobTexture, skyTexture, tileTexture, type Expression } from './textures';
 
 export type StageShot = 'duo' | 'solo' | 'hidden';
 
@@ -34,6 +34,10 @@ export class MenuStage {
   private spotMat: THREE.MeshBasicMaterial | null = null;
   private bannerGrp = new THREE.Group();
   private lowEnv: THREE.Texture | null = null;
+  /** Optional club match ball resting on the platform (Club screen ball tab); null = none shown. */
+  private ball: THREE.Mesh | null = null;
+  private ballId = '';
+  private ballOn = false;
   reduced = false;
 
   constructor(private gfx: Gfx) {
@@ -232,6 +236,41 @@ export class MenuStage {
     if (looks[0]) this.setColors(looks[0].primary, looks[0].secondary);
   }
 
+  /**
+   * Shows the club's match ball (COSMETICS kind 'ball') resting at the front of the platform, slowly turning, or
+   * hides it with null. Ball maps are cached in textures.ts and shared with the match.
+   */
+  setBall(id: string | null): void {
+    this.ballOn = !!id;
+    if (!id) return;
+    if (!this.ball) {
+      const geo = new THREE.SphereGeometry(0.42, 48, 32);
+      this.disposables.push(geo);
+      this.ball = new THREE.Mesh(geo, new THREE.MeshStandardMaterial());
+      this.ball.castShadow = this.gfx.quality === 'high';
+      this.ball.position.set(0.05, 0.39 + 0.42, 1.0);
+      this.scene.add(this.ball);
+    }
+    if (id === this.ballId) return;
+    this.ballId = id;
+    const m = ballMaps(id);
+    (this.ball.material as THREE.Material).dispose();
+    const mat =
+      this.gfx.quality === 'low'
+        ? new THREE.MeshStandardMaterial({ map: m.map, roughness: m.roughness ?? 0.36, metalness: m.metalness ?? 0 })
+        : new THREE.MeshPhysicalMaterial({ map: m.map, bumpMap: m.bump, bumpScale: 1.4, roughness: m.roughness ?? 0.42, metalness: m.metalness ?? 0, clearcoat: 1, clearcoatRoughness: 0.08 });
+    if (this.gfx.quality === 'low') {
+      mat.envMap = this.gfx.environment();
+      mat.envMapIntensity = 0.7;
+    }
+    if (m.emissive) {
+      mat.emissive.set('#ffffff');
+      mat.emissiveMap = m.emissive;
+      mat.emissiveIntensity = m.emissiveIntensity ?? 1;
+    }
+    this.ball.material = mat;
+  }
+
   setShot(shot: StageShot): void {
     this.shot = shot;
   }
@@ -316,6 +355,10 @@ export class MenuStage {
       this.bannerGrp.rotation.z = Math.sin(this.time * 0.6 + 1) * 0.02;
     }
     this.sweepMat.opacity = this.reduced ? 0 : 0.55 + Math.sin(this.time * 1.3) * 0.2;
+    if (this.ball) {
+      this.ball.visible = this.ballOn && !hidden;
+      if (!this.reduced) this.ball.rotation.set(0.35, this.time * 0.5, 0.2);
+    }
     this.applyEnvironment();
     this.gfx.renderer.toneMappingExposure = this.gfx.quality === 'low' ? 0.88 : 0.86;
     this.gfx.render(this.scene, cam);
@@ -323,6 +366,7 @@ export class MenuStage {
 
   dispose(): void {
     for (const r of this.robots) r.dispose();
+    if (this.ball) (this.ball.material as THREE.Material).dispose();
     for (const d of this.disposables) d.dispose();
   }
 }

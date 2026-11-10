@@ -4,11 +4,16 @@ import { clearSave, exportSave, importSave, newSave, SaveError } from '../../sto
 import { ACTIONS, ACTION_LABELS, defaultKeys, keyLabel, type Action, type Settings } from '../../storage/settings';
 import { h, icon } from '../dom';
 import { shell } from '../shell';
+import { cardHead, tabBar } from '../widgets';
 import { seg } from './prematch';
 
-export function settingsScreen(app: App): ScreenView {
+type Section = 'audio' | 'graphics' | 'assist' | 'controls' | 'data';
+
+export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
   const s = app.settings;
-  const root = h('div', { class: 'settings-grid' });
+  const root = h('div', { class: 'settings-body' });
+  const tabsSlot = h('div', { class: 'settings-tabs' });
+  let section: Section = (['audio', 'graphics', 'assist', 'controls', 'data'] as Section[]).find((x) => x === params.get('tab')) ?? 'audio';
   let capture: { action: Action; slot: 0 | 1 } | null = null;
 
   const apply = () => {
@@ -61,7 +66,7 @@ export function settingsScreen(app: App): ScreenView {
 
   const controls = () =>
     h('section', { class: 'panel settings-card controls-card', id: 'set-controls' },
-      h('h2', { class: 'section-head' }, icon('edit'), 'Controls'),
+      cardHead('keyboard', 'Keys'),
       h('p', { class: 'muted' }, 'Mouse: move to aim, left button kicks, right button swings. Click a key to rebind it, then press the new key.'),
       h('div', { class: 'bind-table' },
         ACTIONS.map((a) =>
@@ -83,6 +88,10 @@ export function settingsScreen(app: App): ScreenView {
           render();
         } }, icon('retry'), 'Reset keys'),
       ),
+    );
+  const controlsSide = () =>
+    h('section', { class: 'panel settings-card', id: 'set-aim' },
+      cardHead('touch', 'Aim & touch'),
       choice('Aim mode', 'aimMode', [{ value: 'auto', label: 'Auto' }, { value: 'mouse', label: 'Mouse' }, { value: 'keyboard', label: 'Keyboard' }], s.aimMode === 'keyboard' ? 'Kicks and anchors follow your movement direction; assists pick the goal or a teammate when you face them.' : s.aimMode === 'mouse' ? 'Always aim with the cursor.' : 'Uses the cursor after you move the mouse, and movement direction after you use the keyboard kick or tether keys.'),
       slider('Touch control size', 'touchScale', 0.7, 1.5),
       toggle('Left-handed touch layout', 'touchSwap', 'Moves the stick to the right and the buttons to the left.'),
@@ -144,7 +153,7 @@ export function settingsScreen(app: App): ScreenView {
       if (ok && box.value.trim()) await applyImport(box.value.trim(), 'code');
     };
     return h('section', { class: 'panel settings-card', id: 'set-data' },
-      h('h2', { class: 'section-head' }, icon('save'), 'Save data'),
+      cardHead('save', 'Save data'),
       h('p', { class: 'muted' }, app.storage ? (app.saveFailed ? 'Saving is currently failing in this browser. Export a copy to keep your progress.' : 'Progress saves automatically in this browser after every result, purchase and change.') : 'Browser storage is blocked, so nothing can be saved automatically. Export a copy to keep your progress.'),
       h('div', { class: 'data-actions' },
         h('button', { class: 'btn', onclick: () => {
@@ -174,50 +183,58 @@ export function settingsScreen(app: App): ScreenView {
     );
   };
 
+  const audioCard = () => h('section', { class: 'panel settings-card', id: 'set-audio' },
+    cardHead('sound', 'Audio'),
+    toggle('Mute all sound', 'muted'),
+    slider('Master volume', 'masterVolume', 0, 1),
+    slider('Music', 'musicVolume', 0, 1),
+    slider('Effects', 'effectsVolume', 0, 1, () => audio.play('kick', { intensity: 0.5 })),
+    h('p', { class: 'muted' }, 'All sound and music is synthesised live by the game.'),
+  );
+  const graphicsCard = () => h('section', { class: 'panel settings-card', id: 'set-graphics' },
+    cardHead('settings', 'Graphics'),
+    choice('Quality', 'quality', [{ value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }], `Currently rendering at ${app.gfx.quality} quality. Low removes shadows and thins the crowd; the pitch, anchors and ball stay clear.`),
+    choice('Text size', 'textScale', [{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }]),
+  );
+  const comfortCard = () => h('section', { class: 'panel settings-card', id: 'set-comfort' },
+    cardHead('star', 'Comfort'),
+    toggle('Reduced motion', 'reducedMotion', 'Removes confetti, camera shake, hops and decorative animation.'),
+    toggle('Camera shake', 'cameraShake', 'A small shake on goals and swing shots.'),
+    toggle('High contrast panels', 'highContrast', 'Stronger outlines on menus and a permanent ring around the ball.'),
+  );
+  const assistCard = () => h('section', { class: 'panel settings-card', id: 'set-assist' },
+    cardHead('target', 'Assistance'),
+    choice('Aim assist', 'aimAssistance', [{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'strong', label: 'Strong' }], 'Nudges kicks that are already close to the goal or a teammate. It never moves the ball for you.'),
+    toggle('Smart swing', 'swingAssist', 'A quick tap swings round the highlighted anchor and lets go automatically toward your aim. Tap again to let go early. Holding the button gives full manual control.'),
+  );
+  const helpersCard = () => h('section', { class: 'panel settings-card', id: 'set-helpers' },
+    cardHead('info', 'On-pitch helpers'),
+    toggle('Anchor line', 'anchorLine', 'Draws a faint line from your robot to the highlighted anchor.'),
+    toggle('Ball outline', 'ballOutline', 'Keeps a bright ring under the ball at all times.'),
+    toggle('Show hints', 'showHints', 'Contextual control hints during your first matches.'),
+  );
+
   const render = () => {
-    root.replaceChildren(
-      h('section', { class: 'panel settings-card', id: 'set-audio' },
-        h('h2', { class: 'section-head' }, icon('sound'), 'Audio'),
-        toggle('Mute all sound', 'muted'),
-        slider('Master volume', 'masterVolume', 0, 1),
-        slider('Music', 'musicVolume', 0, 1),
-        slider('Effects', 'effectsVolume', 0, 1, () => audio.play('kick', { intensity: 0.5 })),
-        h('p', { class: 'muted' }, 'All sound and music is synthesised live by the game.'),
-      ),
-      h('section', { class: 'panel settings-card', id: 'set-graphics' },
-        h('h2', { class: 'section-head' }, icon('settings'), 'Graphics & comfort'),
-        choice('Quality', 'quality', [{ value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }], `Currently rendering at ${app.gfx.quality} quality. Low removes shadows and thins the crowd; the pitch, anchors and ball stay clear.`),
-        toggle('Reduced motion', 'reducedMotion', 'Removes confetti, camera shake, hops and decorative animation.'),
-        toggle('Camera shake', 'cameraShake', 'A small shake on goals and swing shots.'),
-        toggle('High contrast panels', 'highContrast', 'Stronger outlines on menus and a permanent ring around the ball.'),
-        choice('Text size', 'textScale', [{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }]),
-      ),
-      h('section', { class: 'panel settings-card', id: 'set-assist' },
-        h('h2', { class: 'section-head' }, icon('target'), 'Assistance'),
-        choice('Aim assist', 'aimAssistance', [{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'strong', label: 'Strong' }], 'Nudges kicks that are already close to the goal or a teammate. It never moves the ball for you.'),
-        toggle('Smart swing', 'swingAssist', 'A quick tap swings round the highlighted anchor and lets go automatically toward your aim. Tap again to let go early. Holding the button gives full manual control.'),
-        toggle('Anchor line', 'anchorLine', 'Draws a faint line from your robot to the highlighted anchor.'),
-        toggle('Ball outline', 'ballOutline', 'Keeps a bright ring under the ball at all times.'),
-        toggle('Show hints', 'showHints', 'Contextual control hints during your first matches.'),
-      ),
-      controls(),
-      data(),
-    );
+    tabsSlot.replaceChildren(tabBar<Section>([
+      { id: 'audio', label: 'Audio', icon: 'sound' },
+      { id: 'graphics', label: 'Graphics & comfort', short: 'Graphics', icon: 'settings' },
+      { id: 'assist', label: 'Assistance', short: 'Assist', icon: 'target' },
+      { id: 'controls', label: 'Controls', icon: 'keyboard' },
+      { id: 'data', label: 'Save data', short: 'Saves', icon: 'save' },
+    ], section, (x) => {
+      section = x;
+      capture = null;
+      render();
+    }, 'Settings sections'));
+    root.className = `settings-body is-${section}`;
+    if (section === 'audio') root.replaceChildren(audioCard());
+    else if (section === 'graphics') root.replaceChildren(graphicsCard(), comfortCard());
+    else if (section === 'assist') root.replaceChildren(assistCard(), helpersCard());
+    else if (section === 'controls') root.replaceChildren(controls(), controlsSide());
+    else root.replaceChildren(data());
   };
   render();
 
-  const jump = (id: string, label: string, ic: string) => h('button', { onclick: () => {
-    const card = root.querySelector<HTMLElement>(`#${id}`);
-    if (!card) return;
-    // Scroll only the content panel: scrollIntoView would also shift the fixed app frame.
-    const sc = root.closest<HTMLElement>('.content');
-    if (sc) sc.scrollTo({ top: sc.scrollTop + card.getBoundingClientRect().top - sc.getBoundingClientRect().top - 8, behavior: document.body.classList.contains('reduced-motion') ? 'auto' : 'smooth' });
-    card.classList.remove('flash');
-    void card.offsetWidth;
-    card.classList.add('flash');
-  } }, icon(ic), label);
-  const jumps = h('nav', { class: 'settings-jump', 'aria-label': 'Settings sections' },
-    jump('set-audio', 'Audio', 'sound'), jump('set-graphics', 'Graphics', 'settings'), jump('set-assist', 'Assistance', 'target'), jump('set-controls', 'Controls', 'edit'), jump('set-data', 'Save data', 'save'));
-  const el = shell(app, { nav: 'settings', title: 'Settings', subtitle: 'Sound, comfort, controls and saves', dim: true, cls: 'settings' }, jumps, root);
+  const el = shell(app, { nav: 'settings', title: 'Settings', subtitle: 'Sound, comfort, controls and saves', dim: true, cls: 'settings' }, tabsSlot, root);
   return { el, dispose: () => window.removeEventListener('keydown', onKey, true) };
 }

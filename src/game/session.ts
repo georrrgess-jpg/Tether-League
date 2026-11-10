@@ -33,6 +33,8 @@ export interface PlayMode {
   markers?: { version: number; list: Marker[] };
   /** Forces smart swing on or off for this mode, regardless of the player's setting. */
   readonly swingAssist?: boolean;
+  /** Match ball skin (cosmetic id); the classic ball when absent. */
+  readonly ballSkin?: string;
   inputLive(): boolean;
   /** Advance one fixed tick. cmds[human] is already filled from input. */
   tick(cmds: Command[]): void;
@@ -106,6 +108,7 @@ export class PlaySession {
       human: mode.human,
       teamColors: mode.teamColors,
       ballOutline: s.ballOutline || s.highContrast,
+      ball: mode.ballSkin,
     });
     this.input = new InputManager(this.layer, ctx.settings, () => this.view, () => this.togglePause());
     if (mode.swingAssist !== undefined) this.input.assistOverride = mode.swingAssist;
@@ -223,7 +226,10 @@ export class PlaySession {
               row('KICK', 'Tap, or drag to aim (one tap per kick; mashing scuffs the shot)'),
               row('PASS', 'Tap (without the ball: call for it)'),
               row('Pause', 'II button'),
-              h('p', { class: 'muted' }, 'Walls are lively: bank passes and crosses off them. PASS bends round a blocked lane off the side wall, and a first-time shot off a teammate\'s pass is a one-touch strike.'),
+              h('h3', null, 'Plays'),
+              row('Long ball', 'Hold PASS, release to send it'),
+              row('Give-and-go', 'Tap PASS again after passing'),
+              h('p', { class: 'muted' }, 'Walls are lively: bank passes and crosses off them. PASS bends round a blocked lane off the side wall, and a first-time shot off a teammate\'s pass is a one-touch strike. The Academy playbook explains every play.'),
             )
           : h('div', { class: 'pause-controls' },
               h('h3', null, 'Controls'),
@@ -234,7 +240,10 @@ export class PlaySession {
               row('Pass to teammate (without the ball: call for it)', `${keyLabel(k.pass[0])} / ${keyLabel(k.pass[1])}`),
               row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
               row('Pause', keyLabel(k.pause[0])),
-              h('p', { class: 'muted' }, 'Gamepad: left stick, right stick aim, trigger swing, A kick, B pass. Swings go the way you are moving (standing still: toward the cursor). Walls are lively, a blocked pass banks off the side wall, and a first-time shot off a pass is a one-touch strike.'),
+              h('h3', null, 'Plays'),
+              row('Long ball', `Hold ${keyLabel(k.pass[0])}, release to send it`),
+              row('Give-and-go', `${keyLabel(k.pass[0])} again after passing`),
+              h('p', { class: 'muted' }, 'Gamepad: left stick, right stick aim, trigger swing, A kick, B pass (hold for a long ball). Swings go the way you are moving (standing still: toward the cursor). Walls are lively, a blocked pass banks off the side wall, and a first-time shot off a pass is a one-touch strike. The Academy playbook explains every play.'),
             ),
       );
       (body.querySelector('.btn-primary') as HTMLElement | null)?.focus();
@@ -256,7 +265,10 @@ export class PlaySession {
       (body.querySelector('.btn-primary') as HTMLElement | null)?.focus();
     };
     this.pauseEl = h('div', { class: 'overlay pause-overlay no-game-input', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Paused' },
-      h('div', { class: 'panel pause-panel' }, h('div', { class: 'panel-title' }, h('span', null, 'Paused'), h('small', null, this.mode.title)), body),
+      h('div', { class: 'panel pause-panel' },
+        h('div', { class: 'pause-head' }, h('span', { class: 'pause-icon', 'aria-hidden': 'true' }, icon('pause')), h('div', { class: 'panel-title' }, h('span', null, 'Paused'), h('small', null, this.mode.title))),
+        body,
+      ),
     );
     this.layer.appendChild(this.pauseEl);
     main();

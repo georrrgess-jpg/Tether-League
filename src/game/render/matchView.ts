@@ -50,6 +50,8 @@ export interface MatchViewOptions {
   /** Colours of the -x goal (team 0) and +x goal (team 1). */
   teamColors: [string, string];
   ballOutline: boolean;
+  /** Match ball skin (cosmetic id, kind 'ball'); the classic ball when absent. */
+  ball?: string;
 }
 
 const PLANE = new THREE.PlaneGeometry(1, 1);
@@ -308,12 +310,14 @@ export class MatchView {
     // ball
     // Drawn a little larger than the collision circle (like the robots) so it reads at the match camera.
     const ballGeo = this.track(new THREE.SphereGeometry(TUNING.ball.radius * BALL_SCALE, 48, 32));
-    const maps = ballMaps();
+    const maps = ballMaps(opts.ball);
     // Glossy match ball: panel texture with seam bump under a clear coat that picks up the studio reflections.
+    // Skins may add a glow (emissive map), metal or their own roughness.
+    const glow = maps.emissive ? { emissiveMap: maps.emissive, emissive: new THREE.Color('#ffffff'), emissiveIntensity: maps.emissiveIntensity ?? 1 } : {};
     const ballMat =
       this.quality === 'low'
-        ? new THREE.MeshStandardMaterial({ map: maps.map, roughness: 0.36, envMap: gfx.environment(), envMapIntensity: 0.7 })
-        : new THREE.MeshPhysicalMaterial({ map: maps.map, bumpMap: maps.bump, bumpScale: 1.4, roughness: 0.42, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9 });
+        ? new THREE.MeshStandardMaterial({ map: maps.map, roughness: maps.roughness ?? 0.36, metalness: maps.metalness ?? 0, envMap: gfx.environment(), envMapIntensity: 0.7, ...glow })
+        : new THREE.MeshPhysicalMaterial({ map: maps.map, bumpMap: maps.bump, bumpScale: 1.4, roughness: maps.roughness ?? 0.42, metalness: maps.metalness ?? 0, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9, ...glow });
     this.ball = new THREE.Mesh(ballGeo, this.track(ballMat));
     this.ball.castShadow = shadows;
     this.scene.add(this.ball);

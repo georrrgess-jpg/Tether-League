@@ -422,13 +422,45 @@ interface TopperGeo {
   /** Parts that animate, with their pivot (head-local). */
   moving: Map<Slot, THREE.BufferGeometry>;
   pivot: V3;
-  kind: 'none' | 'wobble' | 'spin' | 'float';
+  kind: 'none' | 'wobble' | 'spin' | 'float' | 'sweep';
   /** Height above the head centre the topper reaches (for markers above the robot). */
   height: number;
 }
 
 const topperCache = new Map<string, TopperGeo>();
-const TOPPERS = new Set(['topper_antenna', 'topper_fin', 'topper_headset', 'topper_horns', 'topper_propeller', 'topper_halo', 'topper_crown']);
+const TOPPERS = new Set(['topper_antenna', 'topper_fin', 'topper_headset', 'topper_horns', 'topper_propeller', 'topper_halo', 'topper_crown', 'topper_mohawk', 'topper_ears', 'topper_tophat', 'topper_radar']);
+
+/** The same surface seen from both sides: the copy has reversed winding and normals (open bowls, dishes). */
+function twoSided(g: THREE.BufferGeometry): [THREE.BufferGeometry, THREE.BufferGeometry] {
+  const back = g.clone();
+  const idx = back.index!;
+  for (let i = 0; i < idx.count; i += 3) {
+    const a = idx.getX(i);
+    idx.setX(i, idx.getX(i + 2));
+    idx.setX(i + 2, a);
+  }
+  const n = back.attributes.normal;
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i));
+  return [g, back];
+}
+
+/** Places geometry in a tilted frame (origin `at`, Euler `tilt`) before it goes into a Parts list. */
+function inFrame(at: V3, tilt: V3): (slot: Slot, g: THREE.BufferGeometry, x: Xf, into: Parts) => void {
+  const frame = new THREE.Object3D();
+  frame.position.set(at[0], at[1], at[2]);
+  frame.rotation.set(tilt[0], tilt[1], tilt[2]);
+  frame.updateMatrix();
+  return (slot, g, x, into) => {
+    const local = g.clone();
+    const s = x.s ?? 1;
+    const p = x.p ?? [0, 0, 0];
+    const r = x.r ?? [0, 0, 0];
+    _m.compose(_p.set(p[0], p[1], p[2]), _q.setFromEuler(_e.set(r[0], r[1], r[2])), typeof s === 'number' ? _s.setScalar(s) : _s.set(s[0], s[1], s[2]));
+    local.applyMatrix4(_m);
+    local.applyMatrix4(frame.matrix);
+    into.add(slot, local);
+  };
+}
 
 function topperGeo(id: string): TopperGeo | null {
   if (!TOPPERS.has(id)) return null;
@@ -552,6 +584,72 @@ function topperGeo(id: string): TopperGeo | null {
       height = TOP_Y + 0.15;
       break;
     }
+    case 'topper_mohawk': {
+      // a ridge of blade spikes along the crown stripe, tallest over the brow, each standing on the skull normal
+      const spikes: [number, number][] = [[0.62, 0.16], [0.3, 0.22], [-0.03, 0.24], [-0.37, 0.21], [-0.72, 0.16], [-1.05, 0.11]];
+      for (const [a, h] of spikes) {
+        const py = SKULL[1] * Math.cos(a);
+        const pz = SKULL[2] * Math.sin(a);
+        const ny = Math.cos(a) / SKULL[1];
+        const nz = Math.sin(a) / SKULL[2];
+        const nl = Math.hypot(ny, nz);
+        const th = Math.atan2(nz / nl, ny / nl);
+        const cone = new THREE.ConeGeometry(0.075, h, 4, 1);
+        cone.translate(0, h / 2, 0);
+        F.add('secondary', cone, { p: [0, py - (ny / nl) * 0.02, pz - (nz / nl) * 0.02], r: [th, 0, 0], s: [0.55, 1, 1.2] });
+      }
+      height = TOP_Y + 0.23;
+      break;
+    }
+    case 'topper_ears': {
+      // pointed cat ears: white shell outside, club colour inside, tilted out over the ear pods
+      const outer: [number, number][] = [[-0.095, 0], [0.095, 0], [0.012, 0.19]];
+      const inner: [number, number][] = [[-0.055, 0.02], [0.055, 0.02], [0.008, 0.14]];
+      for (const sx of [-1, 1]) {
+        const put = inFrame([sx * 0.19, TOP_Y - 0.075, 0.0], [0, -sx * 0.25, -sx * 0.42]);
+        put('shell', extrude(outer.map(([x, y]) => [x * sx, y] as [number, number]), 0.045, 0.012), {}, F);
+        put('accent', extrude(inner.map(([x, y]) => [x * sx, y] as [number, number]), 0.02, 0.004), { p: [0, 0, 0.026] }, F);
+      }
+      height = TOP_Y + 0.13;
+      break;
+    }
+    case 'topper_tophat': {
+      // dapper navy top hat with a club-colour band and a gold buckle, worn at a slight tilt
+      const put = inFrame([0.02, TOP_Y - 0.035, -0.01], [-0.1, 0, -0.14]);
+      put('navy', CYL, { p: [0, 0.01, 0], s: [0.25, 0.02, 0.235] }, F);
+      put('navy', new THREE.CylinderGeometry(0.158, 0.148, 0.25, 32), { p: [0, 0.14, 0] }, F);
+      put('navy', CYL, { p: [0, 0.266, 0], s: [0.159, 0.006, 0.159] }, F);
+      put('accent', CYL, { p: [0, 0.05, 0], s: [0.153, 0.05, 0.153] }, F);
+      put('gold', ROUND_BOX, { p: [0, 0.05, 0.152], r: [Math.PI / 2, 0, 0], s: [0.05, 0.012, 0.045] }, F);
+      height = TOP_Y + 0.27;
+      break;
+    }
+    case 'topper_radar': {
+      // a little radar dish on a mast that sweeps the pitch; the feed tip glows
+      pivot = [0, TOP_Y + 0.11, -0.03];
+      kind = 'sweep';
+      F.add('navy', CYL, { p: [0, TOP_Y - 0.005, -0.03], s: [0.05, 0.03, 0.05] });
+      F.add('metal', CYL, { p: [0, TOP_Y + 0.06, -0.03], s: [0.016, 0.12, 0.016] });
+      const R = 0.24;
+      const cap = new THREE.SphereGeometry(R, 28, 7, 0, Math.PI * 2, 0, 0.72);
+      cap.translate(0, -R, 0);
+      const [outside, inside] = twoSided(cap);
+      inside.translate(0, -0.006, 0);
+      const tiltUp = 0.45;
+      const rx = -(Math.PI / 2 + tiltUp);
+      M.add('shell', outside, { p: [0, 0.03, 0], r: [rx, 0, 0] });
+      M.add('metal', inside, { p: [0, 0.03, 0], r: [rx, 0, 0] });
+      // rim and feed: the dish opens toward +z, tipped up
+      const dz = Math.cos(tiltUp);
+      const dy = Math.sin(tiltUp);
+      const rimC: V3 = [0, 0.03 + dy * R * (1 - Math.cos(0.72)), dz * R * (1 - Math.cos(0.72))];
+      M.add('accent', torus(R * Math.sin(0.72), 0.011, 40), { p: rimC, r: [rx + Math.PI / 2, 0, 0] });
+      const feedLen = 0.1;
+      M.add('navy', CYL, { p: [0, 0.03 + dy * feedLen * 0.5, dz * feedLen * 0.5], r: [Math.PI / 2 - tiltUp, 0, 0], s: [0.008, feedLen, 0.008] });
+      M.add('glow', SPH_LO, { p: [0, 0.03 + dy * feedLen, dz * feedLen], s: 0.02 });
+      height = pivot[1] + 0.16;
+      break;
+    }
   }
   const geo: TopperGeo = { fixed: F.build(), moving: M.build(), pivot, kind, height };
   topperCache.set(id, geo);
@@ -581,6 +679,11 @@ export class RobotView {
   private spinVel = 0;
   private legLz = 0;
   private legRz = 0;
+  /** Backflip angle (rad, about the body's hip-height pivot) and the body's rest height for the chassis. */
+  private flip = 0;
+  private pitchNow = 0;
+  private celT = 0;
+  private bodyBaseY = 0;
   private jersey: THREE.Mesh;
   private visor: THREE.Mesh;
   private flame: THREE.Mesh;
@@ -744,7 +847,8 @@ export class RobotView {
     this.legL.position.set(-d.legSpread, this.hipY, 0);
     this.legR.position.set(d.legSpread, this.hipY, 0);
     // Longer / shorter legs raise or lower the whole body so feet stay on the ground.
-    this.body.position.y = (d.legY - 1) * 0.33;
+    this.bodyBaseY = (d.legY - 1) * 0.33;
+    this.body.position.y = this.bodyBaseY;
   }
 
   private buildTopper(id: string): void {
@@ -928,6 +1032,8 @@ export class RobotView {
     const cel = this.look.celebration;
     // Celebrations blend in and out (hop height, spin) instead of starting mid-bounce or mid-turn.
     this.cheer += ((celebrating ? 1 : 0) - this.cheer) * Math.min(1, dt * 6);
+    // Time into the current celebration, so cycles (backflip, drum roll) always start from their first beat.
+    this.celT = celebrating ? this.celT + dt : 0;
     const spinning = celebrating && cel === 'celebration_spin' && !reduced;
     this.spinVel += ((spinning ? 7 : 0) - this.spinVel) * Math.min(1, dt * 4);
     this.spinAngle += this.spinVel * dt;
@@ -943,7 +1049,59 @@ export class RobotView {
       pitch = 0;
       rollTarget = 0;
       thrustTarget = reduced ? 0.3 : 0.35 + Math.max(0, Math.cos(t * 6.5)) * 0.5;
-      if (cel === 'celebration_spin') {
+      if (cel === 'celebration_flip') {
+        // crouch with arms back, launch into a full backflip with arms high, land with arms wide
+        const u = reduced ? 0.9 : (this.celT % 1.9) / 1.9;
+        if (u < 0.2) {
+          armLx = armRx = 0.7;
+          armLz = -0.3;
+          armRz = 0.3;
+          lift = 0;
+          pitch = 0.18;
+        } else if (u < 0.74) {
+          const s = (u - 0.2) / 0.54;
+          lift = 3.6 * s * (1 - s) * 0.95;
+          armLx = armRx = -2.75;
+          armLz = -0.85;
+          armRz = 0.85;
+          legLx = legRx = -0.5 * Math.sin(Math.PI * s);
+          thrustTarget = 1;
+        } else {
+          armLx = armRx = -0.35;
+          armLz = -1.25;
+          armRz = 1.25;
+          lift = 0;
+        }
+      } else if (cel === 'celebration_drum') {
+        // a furious drum roll (arms forward at chest height, well below the head), then ta-da
+        const u = reduced ? 0.9 : (this.celT % 2.4) / 2.4;
+        if (u < 0.7) {
+          const s = reduced ? 0 : Math.sin(t * 24);
+          armLx = -1.35 + s * 0.45;
+          armRx = -1.35 - s * 0.45;
+          armLz = -0.24;
+          armRz = 0.24;
+          lift = Math.abs(s) * 0.015;
+          legLx = legRx = 0;
+          thrustTarget = 0.25;
+        } else {
+          armLx = armRx = -2.6;
+          armLz = -1.0;
+          armRz = 1.0;
+          lift = Math.sin((Math.PI * (u - 0.7)) / 0.3) * 0.3;
+          legLx = legRx = 0;
+        }
+      } else if (cel === 'celebration_point') {
+        // point out to the right at the teammate who set it up, fist pump with the other arm, look their way
+        const s = reduced ? 0 : Math.sin(t * 9);
+        armRz = 1.35 + s * 0.1;
+        armRx = -0.35;
+        armLx = -2.75 + Math.max(0, s) * 0.22;
+        armLz = -0.85;
+        legLx = legRx = 0;
+        lift = reduced ? 0 : Math.abs(Math.sin(t * 4.5)) * 0.08;
+        headY = 0.45;
+      } else if (cel === 'celebration_spin') {
         armLx = armRx = -2.75;
         armLz = -0.85;
         armRz = 0.85;
@@ -1003,8 +1161,19 @@ export class RobotView {
     this.roll += (rollTarget - this.roll) * k;
     const kk = Math.min(1, dt * 16);
     const b = this.body;
-    b.rotation.x += (pitch - b.rotation.x) * kk;
+    // Backflip: the angle follows the airborne part of the cycle; otherwise it settles on the nearest full turn.
+    if (celebrating && cel === 'celebration_flip' && !reduced) {
+      const u = (this.celT % 1.9) / 1.9;
+      const s = Math.max(0, Math.min(1, (u - 0.24) / 0.46));
+      this.flip = -s * s * (3 - 2 * s) * Math.PI * 2; // 0 and -2pi look the same, so the wrap is seamless
+    } else this.flip += (Math.round(this.flip / (Math.PI * 2)) * Math.PI * 2 - this.flip) * Math.min(1, dt * 6);
+    this.pitchNow += (pitch - this.pitchNow) * kk;
+    b.rotation.x = this.pitchNow + this.flip;
     b.rotation.z = this.roll;
+    // rotate about a pivot at hip height rather than the feet
+    const piv = 0.62;
+    b.position.y = this.bodyBaseY + piv - piv * Math.cos(this.flip);
+    b.position.z = -piv * Math.sin(this.flip);
 
     if (this.ropeArm !== 0) {
       // Aim the rope arm at the anchor: its direction in body space gives the two shoulder angles
@@ -1093,6 +1262,11 @@ export class RobotView {
       const rate = reduced ? 1.5 : 5 + this.thrust * 28 + speed * 0.8;
       this.spin = (this.spin + rate * dt) % (Math.PI * 2);
       mv.rotation.y = this.spin;
+    } else if (kind === 'sweep') {
+      // radar dish: a slow scan, quicker while sprinting or swinging; parked facing forward in reduced motion
+      if (reduced) this.spin = 0;
+      else this.spin = (this.spin + (1.3 + this.thrust * 2.5) * dt) % (Math.PI * 2);
+      mv.rotation.y = Math.sin(this.spin) * 1.1;
     } else if (kind === 'float') {
       const geo = topperGeo(this.topperId);
       const baseY = geo ? geo.pivot[1] : TOP_Y + 0.13;

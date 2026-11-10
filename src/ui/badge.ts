@@ -82,6 +82,14 @@ function emblem(id: string, fg: string, bg: string): string {
       return `<circle ${f} cx="48" cy="48" r="12"/><path ${s} d="M48 18v9M48 69v9M18 48h9M69 48h9M27 27l6.500 6.500M62.500 62.500 69 69M27 69l6.500-6.500M62.500 33.500 69 27"/>`;
     case 'badge_anchor':
       return `<circle ${s} cx="48" cy="24" r="7"/><path ${s} d="M48 31v42M34 42h28M24 56c2 12 12 17 24 17s22-5 24-17"/>`;
+    case 'badge_trident':
+      return `<path ${s} d="M48 26v48M34 27v9c0 8 6 12 14 12s14-4 14-12v-9M41 74h14"/><path ${f} d="M48 12l-7 12h14zM34 15l-6 11h12zM62 15l-6 11h12z"/>`;
+    case 'badge_rocket':
+      return `<path ${f} d="M48 12c11 9 15 22 12 38H36c-3-16 1-29 12-38z"/><circle fill="${bg}" cx="48" cy="32" r="5.5"/><path ${f} d="M37 40l-10 13v8l11-7zM59 40l10 13v8l-11-7z"/><path ${s} stroke-width="4" d="M42 57l-2 11M48 57v16M54 57l2 11"/>`;
+    case 'badge_robot':
+      return `<path ${s} stroke-width="4" d="M48 30V21"/><circle ${f} cx="48" cy="18" r="5"/><rect ${f} x="25" y="30" width="46" height="36" rx="13"/><path ${f} d="M19 41h7v14h-7zM70 41h7v14h-7z"/><rect fill="${bg}" x="32" y="38" width="32" height="18" rx="8"/><circle ${f} cx="41" cy="47" r="3.8"/><circle ${f} cx="55" cy="47" r="3.8"/>`;
+    case 'badge_bank':
+      return `<path ${s} stroke-width="8" d="M22 16v62"/><path ${s} stroke-width="4" stroke-dasharray="7 6" d="M70 72 30 47 64 25"/><circle ${f} cx="68" cy="23" r="8"/><circle ${f} cx="30" cy="47" r="3"/>`;
     case 'badge_gear':
       return `<circle ${s} cx="48" cy="48" r="13"/><path ${s} stroke-width="9" d="M48 20v6M48 70v6M20 48h6M70 48h6M28.500 28.500l4 4M63.500 63.500l4 4M28.500 67.500l4-4M63.500 32.500l4-4"/>`;
     case 'badge_skyline':
@@ -128,4 +136,54 @@ export function colorDistance(a: string, b: string): number {
   const dg = g1 - g2;
   const db = b1 - b2;
   return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
+}
+
+/**
+ * Topper thumbnails: a robot dome with the head accessory drawn on top (original SVG, 64 x 64). `accent` is the
+ * club colour used where the 3D topper uses the trim or club colour. Covers every topper id in COSMETICS.
+ */
+export function topperSvg(id: string, accent = '#12BCD2'): string {
+  const ink = '#17273E';
+  const shell = '#E6E9E0';
+  const st = `fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"`;
+  const line = `stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"`;
+  let top = '';
+  switch (id) {
+    case 'topper_antenna':
+      top = `<path ${st} d="M32 30V12"/><circle cx="32" cy="10" r="4.5" fill="${accent}" stroke="${ink}" stroke-width="2.5"/>`;
+      break;
+    case 'topper_fin':
+      top = `<path d="M24 31c4-12 14-20 26-22-4 8-6 15-6 22z" fill="${accent}" ${line}/>`;
+      break;
+    case 'topper_headset':
+      top = `<path ${st} d="M14 36c0-14 8-22 18-22s18 8 18 22"/><rect x="9" y="33" width="9" height="13" rx="4" fill="${accent}" ${line}/><rect x="46" y="33" width="9" height="13" rx="4" fill="${accent}" ${line}/><path ${st} d="M14 46c2 6 8 8 14 8"/>`;
+      break;
+    case 'topper_horns':
+      top = `<path d="M20 30l-6-16 10 6 1-8 5 16z" fill="${accent}" ${line}/><path d="M44 30l6-16-10 6-1-8-5 16z" fill="${accent}" ${line}/>`;
+      break;
+    case 'topper_propeller':
+      top = `<path ${st} d="M32 30v-14"/><ellipse cx="22" cy="14" rx="10" ry="3.5" fill="${accent}" ${line}/><ellipse cx="42" cy="14" rx="10" ry="3.5" fill="#F6C542" ${line}/><circle cx="32" cy="14" r="3" fill="${ink}"/>`;
+      break;
+    case 'topper_halo':
+      top = `<ellipse cx="32" cy="12" rx="16" ry="5" fill="none" stroke="#F6C542" stroke-width="5"/><ellipse cx="32" cy="12" rx="16" ry="5" fill="none" stroke="${ink}" stroke-width="1.5"/>`;
+      break;
+    case 'topper_crown':
+      top = `<path d="M18 30l-3-18 9 7 8-12 8 12 9-7-3 18z" fill="#F6C542" ${line}/><circle cx="32" cy="22" r="2.5" fill="#E24B4B"/>`;
+      break;
+    case 'topper_mohawk':
+      top = `<path d="M17 36l3-15 5 9 3-16 4 15 4-15 3 16 5-9 3 15z" fill="${accent}" ${line}/>`;
+      break;
+    case 'topper_ears':
+      top = `<path d="M13 40l3-27 15 13z" fill="${shell}" ${line}/><path d="M51 40l-3-27-15 13z" fill="${shell}" ${line}/><path d="M17 34l1-14 8 7z" fill="${accent}"/><path d="M47 34l-1-14-8 7z" fill="${accent}"/>`;
+      break;
+    case 'topper_tophat':
+      top = `<path d="M20 30V7h24v23z" fill="${ink}"/><path d="M20 22h24v6H20z" fill="${accent}"/><rect x="29" y="22" width="6" height="6" fill="#F6C542"/><ellipse cx="32" cy="31" rx="21" ry="4" fill="${ink}"/>`;
+      break;
+    case 'topper_radar':
+      top = `<path ${st} d="M32 31V19"/><path d="M15 9a17 17 0 0 0 30 13z" fill="${shell}" ${line}/><path ${st} stroke-width="2.5" d="M30 15 41 6"/><circle cx="42" cy="5.5" r="3" fill="${accent}" stroke="${ink}" stroke-width="2"/>`;
+      break;
+    default:
+      top = '';
+  }
+  return `<svg viewBox="0 0 64 64" class="topper-svg" aria-hidden="true"><path d="M10 58c0-16 10-28 22-28s22 12 22 28z" fill="${shell}" stroke="${ink}" stroke-width="3"/><rect x="18" y="44" width="28" height="8" rx="4" fill="${ink}"/><circle cx="25" cy="48" r="2" fill="#7ff3ff"/><circle cx="39" cy="48" r="2" fill="#7ff3ff"/>${top}</svg>`;
 }

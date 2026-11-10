@@ -10,7 +10,8 @@ import { controlsStrip } from '../controls';
 import { standings } from '../../career/career';
 import { REWARDS } from '../../progression/progression';
 import { clubBadge, shell } from '../shell';
-import { comebackChip } from './home';
+import { cardHead } from '../widgets';
+import { comebackChip, versus } from './home';
 import { clubBadgeFor } from './league';
 
 export function seg<T extends string | number>(options: { value: T; label: string; title?: string }[], current: T, onPick: (v: T) => void, label: string): HTMLElement {
@@ -102,7 +103,7 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
   const row = (label: string, control: Node, note?: string) => h('div', { class: 'opt' }, h('div', { class: 'opt-head' }, h('b', null, label), control), note ? h('p', { class: 'muted' }, note) : null);
 
   const options = h('section', { class: 'panel prematch-options' },
-    h('h2', { class: 'section-head' }, icon('settings'), 'Match setup'),
+    cardHead('settings', 'Match setup'),
     row('Teammate', seg((Object.keys(TENDENCY) as TendencyId[]).map((t) => ({ value: t, label: TENDENCY[t].name })), prefs.tendency, (v) => change(() => (prefs.tendency = v))(), 'Teammate tendency'), tend.summary),
     mode === 'quick'
       ? row('Difficulty', seg(DIFFICULTY_ORDER.map((d) => ({ value: d, label: DIFFICULTY[d].name })), prefs.quickDifficulty, (v) => change(() => (prefs.quickDifficulty = v))(), 'Difficulty'), DIFFICULTY[prefs.quickDifficulty].summary)
@@ -124,40 +125,41 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
   if (oppPick) options.insertBefore(oppPick, options.children[1]);
 
   const pay = (credits: number) => Math.round(credits * (mode === 'quick' ? REWARDS.quickFactor : 1));
-  const matchup = h('section', { class: 'panel-dark prematch-matchup' },
-    h('div', { class: 'ln-tag display' }, info ? info.label : 'Quick match'),
-    h('div', { class: 'versus on-dark' },
-      h('div', { class: 'vs-team' }, clubBadge(app, 'big'), h('b', null, save.club.name), h('small', null, 'Attacks right →')),
-      h('span', { class: 'vs' }, 'VS'),
-      h('div', { class: 'vs-team' }, clubBadgeFor(app, oppId, 'big'), h('b', null, opp.name), h('small', null, opp.styleLabel)),
-    ),
-    info ? comebackChip(info.ease) : null,
-    kit.awayKit ? h('p', { class: 'muted center' }, `${opp.name} wear their away kit so the teams are easy to tell apart.`) : null,
-    info ? scouting() : null,
-    h('div', { class: 'stakes' },
-      h('span', { class: 'chip' }, icon('coin'), `Play: +${pay(REWARDS.matchComplete.credits)}`),
-      h('span', { class: 'chip chip-yellow' }, icon('trophy'), `Win: +${pay(REWARDS.matchComplete.credits + REWARDS.winBonus.credits)} credits`),
-      h('span', { class: 'chip' }, icon('star'), 'Passes, saves and goals add a bonus'),
+  const matchup = h('section', { class: 'fixture-card prematch-matchup' },
+    h('div', { class: 'fc-head' }, icon('trophy'), h('span', { class: 'fc-comp' }, info ? info.label : 'Quick match'), mode === 'quick' ? h('span', { class: 'chip chip-peach' }, `${prefs.quickMinutes} min`) : null),
+    h('div', { class: 'fc-body' },
+      versus(
+        { badge: clubBadge(app, 'big'), name: save.club.name, sub: h('small', null, 'Attacks right →') },
+        { badge: clubBadgeFor(app, oppId, 'big'), name: opp.name, sub: h('small', null, opp.styleLabel) },
+      ),
+      info ? comebackChip(info.ease) : null,
+      kit.awayKit ? h('p', { class: 'muted center' }, `${opp.name} wear their away kit so the teams are easy to tell apart.`) : null,
+      info ? scouting() : null,
+      h('div', { class: 'stakes' },
+        h('span', { class: 'chip' }, icon('coin'), `Play: +${pay(REWARDS.matchComplete.credits)}`),
+        h('span', { class: 'chip chip-yellow' }, icon('trophy'), `Win: +${pay(REWARDS.matchComplete.credits + REWARDS.winBonus.credits)} credits`),
+        h('span', { class: 'chip' }, icon('star'), 'Passes, saves and goals add a bonus'),
+      ),
     ),
   );
 
   const arenaCard = h('section', { class: 'panel prematch-arena' },
     h('div', { class: 'arena-line' },
       arenaDiagram(arena),
-      h('div', null, h('b', { class: 'display' }, ARENAS[arena].name), h('br'), h('span', { class: 'chip' }, ARENAS[arena].tag), h('p', { class: 'muted' }, ARENAS[arena].blurb),
+      h('div', { class: 'al-text' }, h('span', { class: 'al-eyebrow' }, icon('pin'), 'Arena'), h('b', { class: 'al-name' }, ARENAS[arena].name), h('span', { class: 'chip chip-violet' }, ARENAS[arena].tag), h('p', { class: 'muted' }, ARENAS[arena].blurb),
         mode === 'quick' ? h('button', { class: 'btn btn-small btn-cyan', onclick: () => app.navigate('arenas') }, icon('map'), 'Change arena') : null),
     ),
   );
 
-  const controls = h('section', { class: 'panel-dark prematch-controls' }, h('h2', { class: 'section-head' }, icon('info'), 'Controls'), controlsStrip(save.settings));
+  const controls = h('section', { class: 'panel prematch-controls' }, cardHead('keyboard', 'Controls'), controlsStrip(save.settings));
 
   const dock = h('div', { class: 'dock-row' },
     h('div', { class: 'dock-info' }, h('b', null, `${save.club.name} v ${opp.name}`), h('small', null, mode === 'career' ? 'Three minutes. Leaving mid-match keeps the fixture unplayed.' : `${prefs.quickMinutes} minutes. Quick matches pay ${Math.round(REWARDS.quickFactor * 100)}% rewards and never change the league.`)),
     h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: start }, icon('play'), 'Start match'),
   );
 
-  const el = shell(app, { nav: 'play', title: 'Pre-match', subtitle: info ? info.label : 'Quick match', back: mode === 'career' ? 'league' : 'home', dim: true, cls: 'prematch', dock },
-    h('div', { class: 'prematch-grid' }, h('div', { class: 'prematch-left' }, matchup, arenaCard), h('div', { class: 'prematch-left' }, options, controls)));
+  const el = shell(app, { nav: 'play', title: mode === 'career' ? 'Pre-match' : 'Quick match', subtitle: info ? info.label : 'Arena, opponent, difficulty and length', back: mode === 'career' ? 'league' : 'home', dim: true, cls: 'prematch', dock },
+    h('div', { class: 'prematch-grid' }, h('div', { class: 'prematch-col' }, matchup, controls), h('div', { class: 'prematch-col' }, options, arenaCard)));
   return { el };
 }
 
@@ -166,18 +168,19 @@ export function arenasScreen(app: App): ScreenView {
   const unlocked = unlockedArenas(save);
   let selected: ArenaId = unlocked.includes(save.prefs.quickArena) ? save.prefs.quickArena : 'harbor_park';
   const grid = h('div', { class: 'arena-grid' });
-  const foot = h('div', { class: 'arena-foot' });
+  const foot = h('div', { class: 'dock-row arena-foot' });
   const render = () => {
     grid.replaceChildren(
       ...ARENA_ORDER.map((id) => {
         const a = ARENAS[id];
         const open = unlocked.includes(id);
-        return h('button', { class: `arena-card tilt${id === selected ? ' is-selected' : ''}${open ? '' : ' is-locked'}`, 'aria-pressed': String(id === selected), onclick: () => {
+        return h('button', { class: `arena-card${id === selected ? ' is-selected' : ''}${open ? '' : ' is-locked'}`, 'aria-pressed': String(id === selected), onclick: () => {
           selected = id;
           render();
         } },
           arenaDiagram(id),
-          h('span', { class: 'arena-name display' }, a.name),
+          h('span', { class: 'arena-name' }, a.name),
+          h('span', { class: 'arena-tag' }, open ? a.tag : a.unlockHint),
           h('span', { class: 'arena-state' }, open ? (id === selected ? icon('check') : null) : icon('lock')),
         );
       }),
@@ -185,7 +188,7 @@ export function arenasScreen(app: App): ScreenView {
     const a = ARENAS[selected];
     const open = unlocked.includes(selected);
     foot.replaceChildren(
-      h('div', { class: 'dock-info' }, h('b', null, a.name, ' · ', h('span', { class: 'accent' }, a.tag)), h('p', { class: 'muted' }, `${a.blurb} ${a.length} × ${a.width} units, ${a.anchors.length} anchors.`),
+      h('div', { class: 'dock-info' }, h('b', null, a.name, ' · ', a.tag), h('small', null, `${a.blurb} ${a.length} × ${a.width} units, ${a.anchors.length} anchors.`),
         open ? null : h('p', { class: 'locked-note' }, icon('lock'), `Locked: ${a.unlockHint}`)),
       open
         ? h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: () => {

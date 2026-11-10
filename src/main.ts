@@ -4,10 +4,10 @@ import '@fontsource/kanit/latin-700-italic.css';
 import '@fontsource/kanit/latin-800-italic.css';
 import '@fontsource-variable/nunito/wght.css';
 import './ui/styles/base.css';
+import './ui/styles/shell.css';
+import './ui/styles/screens.css';
+import './ui/styles/responsive.css';
 import './ui/styles/hud.css';
-import './ui/styles/menus.css';
-import './ui/styles/progress.css';
-import './ui/styles/polish.css';
 import { App } from './app';
 
 function boot(): void {

@@ -1,6 +1,7 @@
 import type { App, ScreenView } from '../app';
 import { clubScreen } from './screens/club';
-import { academyScreen, garageScreen } from './screens/garage';
+import { academyScreen } from './screens/academy';
+import { garageScreen } from './screens/garage';
 import { homeScreen, playScreen } from './screens/home';
 import { leagueScreen, seasonScreen } from './screens/league';
 import { arenasScreen, prematchScreen } from './screens/prematch';
