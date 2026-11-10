@@ -61,7 +61,7 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
   const foot = h('div', { class: 'panel-dark club-foot' });
 
   const dirty = () => JSON.stringify(draft) !== JSON.stringify(save.club);
-  const fieldOf = (kind: CosmeticKind): keyof ClubProfile => (kind === 'pattern' ? 'pattern' : kind);
+  const fieldOf = (kind: CosmeticKind): keyof ClubProfile => ((kind === 'pattern' ? 'pattern' : kind) as keyof ClubProfile);
   const unowned = () => (['face', 'pattern', 'trail', 'celebration', 'badge'] as CosmeticKind[]).filter((k) => !save.owned.includes(draft[fieldOf(k)] as string));
 
   const preview = () => {
