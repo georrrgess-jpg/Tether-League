@@ -122,7 +122,9 @@ class Trail {
     const pts = this.pts;
     if (active) {
       const n = pts.length;
-      if (n < 3 || Math.hypot(pts[n - 3] - x, pts[n - 1] - z) > 0.22) {
+      // The last point is the live head; a new head starts once it is 0.22 from the last fixed point. (Comparing
+      // with the head itself only grew the trail when one frame moved more than 0.22, so it rarely showed.)
+      if (n < 6 || Math.hypot(pts[n - 6] - x, pts[n - 4] - z) > 0.22) {
         pts.push(x, y, z);
         this.serial++;
       } else {
@@ -170,9 +172,11 @@ class Trail {
         this.c1.copy(this.c3);
         this.c2.copy(this.c3);
       } else if (st === 'trail_ember') tc = Math.min(1, t * t * 1.4);
-      const r = (this.c2.r + (this.c1.r - this.c2.r) * tc) * f;
-      const g = (this.c2.g + (this.c1.g - this.c2.g) * tc) * f;
-      const b = (this.c2.b + (this.c1.b - this.c2.b) * tc) * f;
+      // warm and rainbow ribbons are boosted: additive red and violet barely show on the green pitch otherwise
+      const fb = f * (st === 'trail_ember' ? 1.6 : st === 'trail_prism' ? 1.3 : 1);
+      const r = (this.c2.r + (this.c1.r - this.c2.r) * tc) * fb;
+      const g = (this.c2.g + (this.c1.g - this.c2.g) * tc) * fb;
+      const b = (this.c2.b + (this.c1.b - this.c2.b) * tc) * fb;
       c[i * 6] = c[i * 6 + 3] = r;
       c[i * 6 + 1] = c[i * 6 + 4] = g;
       c[i * 6 + 2] = c[i * 6 + 5] = b;
