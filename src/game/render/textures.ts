@@ -173,8 +173,8 @@ export function faceTexture(face: string, exp: Expression, color: string): THREE
   const key = `${face}|${exp}|${color}`;
   let t = faceCache.get(key);
   if (!t) {
-    const [c, g] = makeCanvas(160, 80);
-    drawFace(g, 160, 80, face, exp, color);
+    const [c, g] = makeCanvas(256, 128);
+    drawFace(g, 256, 128, face, exp, color);
     t = tex(c);
     faceCache.set(key, t);
   }
@@ -222,22 +222,47 @@ export function drawJersey(g: CanvasRenderingContext2D, W: number, H: number, pa
     default:
       break;
   }
+  // side panels with piping (u = 0.25 / 0.75 are the flanks)
+  for (const cx of [W * 0.25, W * 0.75]) {
+    const grad = g.createLinearGradient(cx - W * 0.06, 0, cx + W * 0.06, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.5, 'rgba(0,0,0,0.16)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(cx - W * 0.06, 0, W * 0.12, H);
+    g.fillStyle = secondary;
+    g.fillRect(cx - W * 0.004, H * 0.07, W * 0.008, H * 0.83);
+  }
+  // fabric shading: lighter across the chest, darker toward the hem
+  const fab = g.createLinearGradient(0, 0, 0, H);
+  fab.addColorStop(0, 'rgba(255,255,255,0.10)');
+  fab.addColorStop(0.45, 'rgba(255,255,255,0)');
+  fab.addColorStop(1, 'rgba(0,0,0,0.16)');
+  g.fillStyle = fab;
+  g.fillRect(0, 0, W, H);
   // collar and hem trim
   g.fillStyle = secondary;
   g.fillRect(0, 0, W, H * 0.07);
   g.fillRect(0, H * 0.9, W, H * 0.1);
-  // numbers: front at u=0.5, back at the seam
+  g.fillStyle = 'rgba(255,255,255,0.35)';
+  g.fillRect(0, H * 0.07, W, H * 0.012);
+  g.fillRect(0, H * 0.888, W, H * 0.012);
+  // numbers: front at u=0.5, back at the seam; bold outline keeps them readable from the match camera
   const light = luminance(primary) > 0.62;
-  g.fillStyle = light ? '#17273E' : '#ffffff';
-  g.strokeStyle = light ? 'rgba(255,255,255,0.5)' : 'rgba(23,39,62,0.55)';
-  g.lineWidth = H * 0.05;
-  g.font = `800 italic ${Math.round(H * 0.5)}px Kanit, "Arial Black", sans-serif`;
+  const ink = light ? '#17273E' : '#ffffff';
+  const rim = light ? 'rgba(255,255,255,0.75)' : 'rgba(15,26,44,0.85)';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
+  g.lineJoin = 'round';
   const label = String(number).padStart(2, '0');
-  for (const cx of [W / 2, 0, W]) {
-    g.strokeText(label, cx, H * 0.47);
-    g.fillText(label, cx, H * 0.47);
+  // The back number sits higher and a little smaller, above the robot's jet pack.
+  for (const [cx, cy, size] of [[W / 2, 0.48, 0.56], [0, 0.33, 0.4], [W, 0.33, 0.4]] as [number, number, number][]) {
+    g.font = `800 italic ${Math.round(H * size)}px Kanit, "Arial Black", sans-serif`;
+    g.strokeStyle = rim;
+    g.lineWidth = H * size * 0.15;
+    g.strokeText(label, cx, H * cy);
+    g.fillStyle = ink;
+    g.fillText(label, cx, H * cy);
   }
 }
 
@@ -247,10 +272,11 @@ export function jerseyTexture(pattern: string, primary: string, secondary: strin
   const key = `${pattern}|${primary}|${secondary}|${number}`;
   let t = jerseyCache.get(key);
   if (!t) {
-    const [c, g] = makeCanvas(512, 128);
-    drawJersey(g, 512, 128, pattern, primary, secondary, number);
+    const [c, g] = makeCanvas(1024, 256);
+    drawJersey(g, 1024, 256, pattern, primary, secondary, number);
     t = tex(c);
     t.wrapS = THREE.RepeatWrapping;
+    t.anisotropy = 8;
     jerseyCache.set(key, t);
   }
   return t;
@@ -357,7 +383,60 @@ export interface FieldPaint {
   line: string;
 }
 
-/** Striped pitch with regulation-style markings, drawn to scale (canvas spans the full field rectangle). */
+/** Deterministic pseudo-random sequence for repeatable procedural art. */
+function seeded(seed: number): () => number {
+  let x = seed >>> 0 || 1;
+  return () => {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return ((x >>> 0) % 100000) / 100000;
+  };
+}
+
+let grassTile: HTMLCanvasElement | null = null;
+/** Small tileable grass-blade noise used as an overlay on the pitch. */
+function grassNoise(): HTMLCanvasElement {
+  if (grassTile) return grassTile;
+  const N = 256;
+  const [c, g] = makeCanvas(N, N);
+  const rnd = seeded(91);
+  g.fillStyle = 'rgb(128,128,128)';
+  g.fillRect(0, 0, N, N);
+  for (let i = 0; i < 5200; i++) {
+    const v = Math.floor(70 + rnd() * 120);
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const len = 2 + rnd() * 5;
+    g.fillRect(x, y, 1, len);
+    // wrap blades crossing the tile edge so the pattern tiles seamlessly
+    if (y + len > N) g.fillRect(x, y - N, 1, len);
+  }
+  // soft clumps
+  for (let i = 0; i < 60; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const r = 6 + rnd() * 18;
+    const dark = rnd() < 0.5;
+    for (const ox of [-N, 0, N])
+      for (const oy of [-N, 0, N]) {
+        const grad = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        grad.addColorStop(0, dark ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.10)');
+        grad.addColorStop(1, 'rgba(128,128,128,0)');
+        g.fillStyle = grad;
+        g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+      }
+  }
+  grassTile = c;
+  return c;
+}
+
+/**
+ * Striped pitch with regulation-style markings, drawn to scale (canvas spans the full field rectangle):
+ * mown stripes with a soft sheen across each stripe, a faint cross-cut, blade noise, light wear in the
+ * goalmouths and centre circle, and painted lines with a slight bleed.
+ */
 export function fieldTexture(length: number, width: number, goalWidth: number, paint: FieldPaint, res: number): THREE.Texture {
   const S = res / length;
   const W = Math.round(length * S);
@@ -365,54 +444,102 @@ export function fieldTexture(length: number, width: number, goalWidth: number, p
   const [c, g] = makeCanvas(W, H);
   const stripes = Math.round(length / 2.125);
   for (let i = 0; i < stripes; i++) {
+    const x0 = Math.floor((i / stripes) * W);
+    const w = Math.ceil(W / stripes) + 1;
     g.fillStyle = i % 2 === 0 ? paint.grassA : paint.grassB;
-    g.fillRect(Math.floor((i / stripes) * W), 0, Math.ceil(W / stripes) + 1, H);
+    g.fillRect(x0, 0, w, H);
+    // mower sheen: each stripe catches the light a little more on one side
+    const sh = g.createLinearGradient(x0, 0, x0 + w, 0);
+    const lit = i % 2 === 0;
+    sh.addColorStop(0, lit ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.035)');
+    sh.addColorStop(0.5, 'rgba(255,255,255,0)');
+    sh.addColorStop(1, lit ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)');
+    g.fillStyle = sh;
+    g.fillRect(x0, 0, w, H);
   }
-  // soft mowing noise
-  g.globalAlpha = 0.05;
-  for (let i = 0; i < 900; i++) {
-    g.fillStyle = i % 2 ? '#ffffff' : '#000000';
-    g.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 5, 1.5);
+  // faint cross-cut bands
+  const bands = Math.round(width / 2.5);
+  for (let j = 0; j < bands; j++) {
+    if (j % 2) continue;
+    g.fillStyle = 'rgba(255,255,255,0.022)';
+    g.fillRect(0, Math.floor((j / bands) * H), W, Math.ceil(H / bands));
   }
-  g.globalAlpha = 1;
+  // blade noise overlay
+  const pat = g.createPattern(grassNoise(), 'repeat');
+  if (pat) {
+    g.save();
+    g.globalCompositeOperation = 'overlay';
+    g.globalAlpha = 0.32;
+    g.fillStyle = pat;
+    g.fillRect(0, 0, W, H);
+    g.restore();
+  }
+  // wear: goalmouths and centre spot are a touch paler
+  const wear = (x: number, y: number, rx: number, ry: number, a: number) => {
+    g.save();
+    g.translate(x, y);
+    g.scale(1, ry / rx);
+    const grad = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+    grad.addColorStop(0, `rgba(222,214,170,${a})`);
+    grad.addColorStop(1, 'rgba(222,214,170,0)');
+    g.fillStyle = grad;
+    g.fillRect(-rx, -rx, rx * 2, rx * 2);
+    g.restore();
+  };
+  wear(W / 2, H / 2, 2.6 * S, 2.6 * S, 0.07);
+  wear(1.6 * S, H / 2, 2.2 * S, (goalWidth / 2) * S, 0.1);
+  wear(W - 1.6 * S, H / 2, 2.2 * S, (goalWidth / 2) * S, 0.1);
   // vignette toward the walls
   const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.62);
-  vg.addColorStop(0, 'rgba(255,255,255,0.06)');
-  vg.addColorStop(1, 'rgba(0,20,30,0.16)');
+  vg.addColorStop(0, 'rgba(255,255,255,0.05)');
+  vg.addColorStop(1, 'rgba(0,20,30,0.18)');
   g.fillStyle = vg;
   g.fillRect(0, 0, W, H);
 
-  g.strokeStyle = paint.line;
-  g.fillStyle = paint.line;
-  g.lineWidth = Math.max(2, 0.11 * S);
   const m = 0.6 * S;
-  g.strokeRect(m, m, W - m * 2, H - m * 2);
-  g.beginPath();
-  g.moveTo(W / 2, m);
-  g.lineTo(W / 2, H - m);
-  g.stroke();
-  g.beginPath();
-  g.arc(W / 2, H / 2, 3 * S, 0, Math.PI * 2);
-  g.stroke();
-  g.beginPath();
-  g.arc(W / 2, H / 2, 0.22 * S, 0, Math.PI * 2);
-  g.fill();
   const boxW = (goalWidth + 5) * S;
   const boxD = 5 * S;
   const smallW = (goalWidth + 1.6) * S;
   const smallD = 2 * S;
-  for (const side of [0, 1]) {
-    const x0 = side === 0 ? m : W - m;
-    const dir = side === 0 ? 1 : -1;
-    g.strokeRect(Math.min(x0, x0 + dir * boxD), H / 2 - boxW / 2, boxD, boxW);
-    g.strokeRect(Math.min(x0, x0 + dir * smallD), H / 2 - smallW / 2, smallD, smallW);
+  const lines = (lw: number, alpha: number) => {
+    g.globalAlpha = alpha;
+    g.strokeStyle = paint.line;
+    g.fillStyle = paint.line;
+    g.lineWidth = lw;
+    g.strokeRect(m, m, W - m * 2, H - m * 2);
     g.beginPath();
-    g.arc(x0 + dir * boxD, H / 2, 2.2 * S, side === 0 ? -Math.PI / 2 : Math.PI / 2, side === 0 ? Math.PI / 2 : Math.PI * 1.5);
+    g.moveTo(W / 2, m);
+    g.lineTo(W / 2, H - m);
     g.stroke();
     g.beginPath();
-    g.arc(x0 + dir * 3.6 * S, H / 2, 0.16 * S, 0, Math.PI * 2);
+    g.arc(W / 2, H / 2, 3 * S, 0, Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.arc(W / 2, H / 2, 0.22 * S + (lw - Math.max(2, 0.11 * S)) / 2, 0, Math.PI * 2);
     g.fill();
-  }
+    for (const side of [0, 1]) {
+      const x0 = side === 0 ? m : W - m;
+      const dir = side === 0 ? 1 : -1;
+      g.strokeRect(Math.min(x0, x0 + dir * boxD), H / 2 - boxW / 2, boxD, boxW);
+      g.strokeRect(Math.min(x0, x0 + dir * smallD), H / 2 - smallW / 2, smallD, smallW);
+      g.beginPath();
+      g.arc(x0 + dir * boxD, H / 2, 2.2 * S, side === 0 ? -Math.PI / 2 : Math.PI / 2, side === 0 ? Math.PI / 2 : Math.PI * 1.5);
+      g.stroke();
+      g.beginPath();
+      g.arc(x0 + dir * 3.6 * S, H / 2, 0.16 * S, 0, Math.PI * 2);
+      g.fill();
+      // corner arcs
+      for (const sy of [m, H - m]) {
+        g.beginPath();
+        g.arc(x0, sy, 0.5 * S, 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
+    g.globalAlpha = 1;
+  };
+  const lw = Math.max(2, 0.11 * S);
+  lines(lw * 2.2, 0.08); // paint bleed into the grass
+  lines(lw, 0.94);
   const t = tex(c);
   t.anisotropy = 8;
   return t;
@@ -429,14 +556,61 @@ export function netTexture(color: string): THREE.Texture {
   return t;
 }
 
+/** Diamond goal-net mesh with small knots; one texture repeat = one net cell. */
+export function netMeshTexture(): THREE.Texture {
+  const N = 128;
+  const [c, g] = makeCanvas(N, N);
+  g.clearRect(0, 0, N, N);
+  g.strokeStyle = 'rgba(255,255,255,0.95)';
+  g.lineWidth = 5;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(0, N / 2);
+  g.lineTo(N / 2, 0);
+  g.lineTo(N, N / 2);
+  g.lineTo(N / 2, N);
+  g.closePath();
+  g.stroke();
+  // wrapped half-lines at the corners keep the diamond lattice continuous
+  for (const [x, y] of [[0, 0], [N, 0], [0, N], [N, N]]) {
+    g.beginPath();
+    g.moveTo(x, y - N / 2);
+    g.lineTo(x + N / 2, y);
+    g.lineTo(x, y + N / 2);
+    g.lineTo(x - N / 2, y);
+    g.closePath();
+    g.stroke();
+  }
+  g.fillStyle = '#ffffff';
+  for (const [x, y] of [[0, N / 2], [N / 2, 0], [N, N / 2], [N / 2, N]]) {
+    g.beginPath();
+    g.arc(x, y, 4.5, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = tex(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
 export function tileTexture(a: string, b: string, grout: string): THREE.Texture {
   const [c, g] = makeCanvas(128, 128);
   g.fillStyle = grout;
   g.fillRect(0, 0, 128, 128);
+  const rnd = seeded(a.length * 31 + b.charCodeAt(1));
   for (let y = 0; y < 2; y++)
     for (let x = 0; x < 2; x++) {
       g.fillStyle = (x + y) % 2 ? a : b;
       g.fillRect(x * 64 + 2, y * 64 + 2, 60, 60);
+      // a little stone grain and a soft bevel so the paving does not look flat
+      for (let i = 0; i < 40; i++) {
+        g.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.035)' : 'rgba(255,255,255,0.04)';
+        g.fillRect(x * 64 + 3 + rnd() * 56, y * 64 + 3 + rnd() * 56, 1 + rnd() * 3, 1 + rnd() * 3);
+      }
+      g.fillStyle = 'rgba(255,255,255,0.07)';
+      g.fillRect(x * 64 + 2, y * 64 + 2, 60, 2);
+      g.fillStyle = 'rgba(0,0,0,0.06)';
+      g.fillRect(x * 64 + 2, y * 64 + 60, 60, 2);
     }
   const t = tex(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -512,5 +686,120 @@ export function labelTexture(text: string, fg: string, bg: string): THREE.Textur
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(text.toUpperCase(), 256, 52);
+  return tex(c);
+}
+
+
+/**
+ * Scrolling LED advertising strip (one repeat = 16:1). Sections: league wordmark, home colour chevrons,
+ * venue name, away colour chevrons and a slogan, finished with a fine LED dot mask.
+ */
+export function ledBoardTexture(teamColors: [string, string], venue: string, accent: string): THREE.Texture {
+  const W = 2048;
+  const H = 128;
+  const [c, g] = makeCanvas(W, H);
+  g.fillStyle = '#0b1222';
+  g.fillRect(0, 0, W, H);
+  const font = (px: number) => `800 italic ${px}px Kanit, "Arial Black", sans-serif`;
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  const word = (text: string, x: number, w: number, fg: string, size = 66) => {
+    g.font = font(size);
+    let s = size;
+    while (g.measureText(text).width > w - 40 && s > 20) {
+      s -= 2;
+      g.font = font(s);
+    }
+    g.fillStyle = fg;
+    g.fillText(text, x + w / 2, H / 2 + 4);
+  };
+  const chevrons = (x: number, w: number, color: string) => {
+    g.fillStyle = color;
+    g.fillRect(x, 0, w, H);
+    g.fillStyle = 'rgba(255,255,255,0.28)';
+    for (let i = 0; i < 6; i++) {
+      const cx = x + 30 + i * (w / 6);
+      g.beginPath();
+      g.moveTo(cx, 18);
+      g.lineTo(cx + 26, H / 2);
+      g.lineTo(cx, H - 18);
+      g.lineTo(cx + 14, H - 18);
+      g.lineTo(cx + 40, H / 2);
+      g.lineTo(cx + 14, 18);
+      g.closePath();
+      g.fill();
+    }
+  };
+  word('TETHER LEAGUE', 0, 560, '#ffffff', 70);
+  g.fillStyle = '#f6c542';
+  g.fillRect(90, H - 22, 380, 6);
+  chevrons(560, 300, teamColors[0]);
+  word(venue.toUpperCase(), 860, 520, accent, 62);
+  chevrons(1380, 300, teamColors[1]);
+  word('SWING  •  KICK  •  SCORE', 1680, 368, '#ffffff', 46);
+  // LED pixel mask
+  g.fillStyle = 'rgba(0,0,0,0.32)';
+  for (let x = 0; x < W; x += 6) g.fillRect(x, 0, 1.6, H);
+  for (let y = 0; y < H; y += 6) g.fillRect(0, y, W, 1.6);
+  const t = tex(c);
+  t.wrapS = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** Floodlight lamp panel: a grid of bright lamps in dark housings. */
+export function lampPanelTexture(): THREE.Texture {
+  const [c, g] = makeCanvas(128, 64);
+  g.fillStyle = '#2a3140';
+  g.fillRect(0, 0, 128, 64);
+  for (let y = 0; y < 3; y++)
+    for (let x = 0; x < 6; x++) {
+      const cx = 11 + x * 21;
+      const cy = 11 + y * 21;
+      const grad = g.createRadialGradient(cx, cy, 0, cx, cy, 9);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.6, '#fff4d8');
+      grad.addColorStop(1, '#8d8a80');
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(cx, cy, 8.5, 0, Math.PI * 2);
+      g.fill();
+    }
+  return tex(c);
+}
+
+/** Vertical fade used on additive light-beam cones (bright at the lamp, gone at the ground). */
+export function beamTexture(): THREE.Texture {
+  const [c, g] = makeCanvas(8, 128);
+  const grad = g.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 8, 128);
+  return tex(c, false);
+}
+
+/** Soft cumulus cloud billboard. */
+export function cloudTexture(): THREE.Texture {
+  const [c, g] = makeCanvas(256, 128);
+  const rnd = seeded(5);
+  for (let i = 0; i < 14; i++) {
+    const x = 40 + rnd() * 176;
+    const y = 60 + (rnd() - 0.5) * 34 - Math.sin(((x - 40) / 176) * Math.PI) * 18;
+    const r = 18 + rnd() * 30;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.6, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // flat, slightly shaded base
+  const base = g.createLinearGradient(0, 70, 0, 110);
+  base.addColorStop(0, 'rgba(210,225,240,0)');
+  base.addColorStop(1, 'rgba(210,225,240,0)');
+  g.fillStyle = base;
+  g.fillRect(0, 70, 256, 40);
   return tex(c);
 }

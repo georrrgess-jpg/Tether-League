@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Quality } from './arenaView';
 
 export type QualitySetting = 'auto' | Quality;
@@ -15,12 +16,17 @@ export class Gfx {
   private setting: QualitySetting;
   private slowFrames = 0;
   private frames = 0;
+  private envTarget: THREE.WebGLRenderTarget | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement, setting: QualitySetting) {
     this.setting = setting;
     this.quality = setting === 'auto' ? Gfx.guessQuality() : setting;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: this.quality !== 'low', powerPreference: 'high-performance', alpha: false });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Filmic tone mapping keeps bright emissives (eyes, thrusters, floodlights) from clipping and gives the
+    // glossy shells a soft highlight roll-off. Scenes are lit for exposure 1.0 and tune it per venue.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.applyQuality();
     canvas.addEventListener('webglcontextlost', (e) => {
@@ -30,6 +36,9 @@ export class Gfx {
     });
     canvas.addEventListener('webglcontextrestored', () => {
       this.contextLost = false;
+      // The prefiltered environment lived in GPU memory: rebuild it before scenes render again.
+      if (this.envTarget) this.envTarget.dispose();
+      this.envTarget = null;
       this.onContextRestored?.();
     });
   }
@@ -85,6 +94,29 @@ export class Gfx {
       }
     }
     return false;
+  }
+
+  /**
+   * Prefiltered studio environment (three's RoomEnvironment through PMREM) for glossy reflections on
+   * robots, goal frames and the ball. Generated once per renderer on first use and shared by every scene.
+   * Returns null while the context is lost.
+   */
+  environment(): THREE.Texture | null {
+    if (this.contextLost) return null;
+    if (!this.envTarget) {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const room = new RoomEnvironment();
+      this.envTarget = pmrem.fromScene(room, 0.04);
+      room.dispose();
+      pmrem.dispose();
+    }
+    return this.envTarget.texture;
+  }
+
+  /** Releases GPU resources owned by this object (the environment map). */
+  dispose(): void {
+    this.envTarget?.dispose();
+    this.envTarget = null;
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {

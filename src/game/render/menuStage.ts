@@ -166,7 +166,7 @@ export class MenuStage {
     const shadows = this.gfx.quality === 'high';
     looks.forEach((look, i) => {
       if (!this.robots[i]) {
-        const rv = new RobotView(look, shadows);
+        const rv = new RobotView(look, shadows, this.gfx.quality);
         rv.scale = 1.45;
         this.robots[i] = rv;
         this.scene.add(rv.root);
@@ -253,6 +253,7 @@ export class MenuStage {
       this.shadows[i].scale.set(s, s, 1);
     }
     this.ring.emissiveIntensity = 1.0 + (this.reduced ? 0 : Math.sin(this.time * 2) * 0.25);
+    this.gfx.renderer.toneMappingExposure = 1.08;
     this.gfx.render(this.scene, cam);
   }
 

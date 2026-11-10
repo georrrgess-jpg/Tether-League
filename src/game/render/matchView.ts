@@ -87,7 +87,7 @@ class Trail {
     g.setIndex(idx);
     this.mesh = new THREE.Mesh(
       g,
-      new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
     );
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 2;
@@ -209,6 +209,7 @@ export class MatchView {
   private poses: RobotPose[] = [];
   private disposables: { dispose(): void }[] = [];
   private lookColors: string[] = [];
+  private lowEnv: THREE.Texture | null = null;
 
   constructor(private gfx: Gfx, opts: MatchViewOptions) {
     this.opts = opts;
@@ -219,6 +220,7 @@ export class MatchView {
     this.scene.add(this.arenaView.group);
     this.scene.background = this.arenaView.background;
     this.scene.fog = this.arenaView.fog;
+    this.applyEnvironment();
 
     const blob = blobTexture();
     const ringT = this.track(ringTexture(0.74));
@@ -226,7 +228,7 @@ export class MatchView {
     this.prev = new Float32Array((opts.looks.length + 1) * 2);
 
     opts.looks.forEach((look, i) => {
-      const rv = new RobotView(look, shadows);
+      const rv = new RobotView(look, shadows, this.quality);
       rv.scale = ROBOT_SCALE;
       this.robots.push(rv);
       this.scene.add(rv.root);
@@ -241,7 +243,7 @@ export class MatchView {
       const sameTeam = opts.human < 0 ? i < 2 : i < 2 === opts.human < 2;
       const ring = new THREE.Mesh(
         PLANE,
-        this.track(new THREE.MeshBasicMaterial({ map: sameTeam ? ringT : diamondT, color: isHuman ? '#ffffff' : look.primary, transparent: true, opacity: isHuman ? 0.95 : 0.8, depthWrite: false })),
+        this.track(new THREE.MeshBasicMaterial({ map: sameTeam ? ringT : diamondT, color: isHuman ? '#ffffff' : look.primary, transparent: true, opacity: isHuman ? 0.95 : 0.8, depthWrite: false, toneMapped: false })),
       );
       ring.rotation.x = -Math.PI / 2;
       ring.renderOrder = 1;
@@ -250,8 +252,8 @@ export class MatchView {
 
       const ropeColor = shade(look.primary, 0.35);
       this.ropeColors.push(ropeColor);
-      const rope = new THREE.Mesh(ROPE_GEO, this.track(new THREE.MeshBasicMaterial({ color: ropeColor })));
-      const glow = new THREE.Mesh(ROPE_GEO, this.track(new THREE.MeshBasicMaterial({ color: look.primary, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false })));
+      const rope = new THREE.Mesh(ROPE_GEO, this.track(new THREE.MeshBasicMaterial({ color: ropeColor, toneMapped: false })));
+      const glow = new THREE.Mesh(ROPE_GEO, this.track(new THREE.MeshBasicMaterial({ color: look.primary, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })));
       rope.visible = glow.visible = false;
       this.scene.add(rope, glow);
       this.ropes.push(rope);
@@ -270,10 +272,11 @@ export class MatchView {
     // Drawn a little larger than the collision circle (like the robots) so it reads at the match camera.
     const ballGeo = this.track(new THREE.SphereGeometry(TUNING.ball.radius * BALL_SCALE, 48, 32));
     const maps = ballMaps();
+    // Glossy match ball: panel texture with seam bump under a clear coat that picks up the studio reflections.
     const ballMat =
       this.quality === 'low'
-        ? new THREE.MeshStandardMaterial({ map: maps.map, roughness: 0.4 })
-        : new THREE.MeshPhysicalMaterial({ map: maps.map, bumpMap: maps.bump, bumpScale: 1.4, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.18 });
+        ? new THREE.MeshStandardMaterial({ map: maps.map, roughness: 0.36, envMap: gfx.environment(), envMapIntensity: 0.7 })
+        : new THREE.MeshPhysicalMaterial({ map: maps.map, bumpMap: maps.bump, bumpScale: 1.4, roughness: 0.42, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9 });
     this.ball = new THREE.Mesh(ballGeo, this.track(ballMat));
     this.ball.castShadow = shadows;
     this.scene.add(this.ball);
@@ -285,27 +288,27 @@ export class MatchView {
     this.ballShadow.scale.set(1.6, 1.6, 1);
     this.ballShadow.renderOrder = 1;
     this.scene.add(this.ballShadow);
-    this.ballRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: ringT, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false })));
+    this.ballRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: ringT, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, toneMapped: false })));
     this.ballRing.rotation.x = -Math.PI / 2;
     this.ballRing.renderOrder = 2;
     this.scene.add(this.ballRing);
 
     // player marker
     const cone = this.track(new THREE.ConeGeometry(0.22, 0.38, 4));
-    this.youMarker = new THREE.Mesh(cone, this.track(new THREE.MeshBasicMaterial({ color: '#ffe36a' })));
+    this.youMarker = new THREE.Mesh(cone, this.track(new THREE.MeshBasicMaterial({ color: '#ffe36a', toneMapped: false })));
     this.youMarker.rotation.x = Math.PI;
     this.youMarker.visible = opts.human >= 0;
     this.scene.add(this.youMarker);
 
-    this.aimRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: this.track(ringTexture(0.55, 30)), color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false })));
+    this.aimRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: this.track(ringTexture(0.55, 30)), color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false })));
     this.aimRing.rotation.x = -Math.PI / 2;
     this.aimRing.scale.set(0.9, 0.9, 1);
     this.aimRing.renderOrder = 3;
     this.scene.add(this.aimRing);
-    this.aimLine = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false })));
+    this.aimLine = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false })));
     this.aimLine.renderOrder = 2;
     this.scene.add(this.aimLine);
-    this.linkLine = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffe9a3', transparent: true, opacity: 0.38, depthWrite: false })));
+    this.linkLine = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffe9a3', transparent: true, opacity: 0.38, depthWrite: false, toneMapped: false })));
     this.linkLine.renderOrder = 2;
     this.scene.add(this.linkLine);
     const arcGeo = this.track(new THREE.RingGeometry(1.18, 1.34, 40, 1));
@@ -317,7 +320,7 @@ export class MatchView {
 
     // flash rings pool
     for (let i = 0; i < 8; i++) {
-      const mesh = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: ringT, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })));
+      const mesh = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: ringT, color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false })));
       mesh.rotation.x = -Math.PI / 2;
       mesh.visible = false;
       mesh.renderOrder = 3;
@@ -326,7 +329,7 @@ export class MatchView {
     }
 
     this.pCap = this.quality === 'low' ? 90 : 260;
-    this.pMesh = new THREE.InstancedMesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide })), this.pCap);
+    this.pMesh = new THREE.InstancedMesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide, toneMapped: false })), this.pCap);
     this.pMesh.count = 0;
     this.pMesh.frustumCulled = false;
     this.pMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -335,12 +338,37 @@ export class MatchView {
     this.scene.add(this.markerGroup);
     if (this.quality !== 'low') this.scene.add(this.goalLight);
 
+    this.lowEnv = null;
+    this.applyEnvironment();
     this.resize();
   }
 
   private track<T extends { dispose(): void }>(d: T): T {
     this.disposables.push(d);
     return d;
+  }
+
+  /**
+   * Studio reflections: medium / high light the whole scene with the shared PMREM environment (scaled per
+   * venue); low keeps the arena on plain lights and gives only the robots and ball reflections.
+   * Re-applied every frame so a restored WebGL context picks up the rebuilt map.
+   */
+  private applyEnvironment(): void {
+    const env = this.gfx.environment();
+    if (this.quality !== 'low') {
+      if (this.scene.environment !== env) {
+        this.scene.environment = env;
+        this.scene.environmentIntensity = this.arenaView.envIntensity;
+      }
+    } else if (this.lowEnv !== env) {
+      this.lowEnv = env;
+      for (const r of this.robots) r.setEnvironment(env, 0.85);
+      const bm = this.ball?.material as THREE.MeshStandardMaterial | undefined;
+      if (bm) {
+        bm.envMap = env;
+        bm.needsUpdate = true;
+      }
+    }
   }
 
   /** Fit the whole court (goals, anchors and a HUD margin) for the current aspect ratio. */
@@ -436,7 +464,7 @@ export class MatchView {
     for (const mk of markers) {
       const op = mk.opacity ?? 0.85;
       if (mk.kind === 'ring' || mk.kind === 'disc') {
-        const mesh = new THREE.Mesh(PLANE, new THREE.MeshBasicMaterial({ map: mk.kind === 'ring' ? ringT : discT, color: mk.color, transparent: true, opacity: op, depthWrite: false }));
+        const mesh = new THREE.Mesh(PLANE, new THREE.MeshBasicMaterial({ map: mk.kind === 'ring' ? ringT : discT, color: mk.color, transparent: true, opacity: op, depthWrite: false, toneMapped: false }));
         mesh.rotation.x = -Math.PI / 2;
         const s = (mk.r ?? 1) * 2;
         mesh.scale.set(s, s, 1);
@@ -449,7 +477,7 @@ export class MatchView {
         const x2 = mk.x2 ?? mk.x;
         const z2 = mk.z2 ?? mk.z;
         const len = Math.hypot(x2 - mk.x, z2 - mk.z);
-        const mesh = new THREE.Mesh(PLANE, new THREE.MeshBasicMaterial({ color: mk.color, transparent: true, opacity: op * (mk.kind === 'gate' ? 0.45 : 1), depthWrite: false }));
+        const mesh = new THREE.Mesh(PLANE, new THREE.MeshBasicMaterial({ color: mk.color, transparent: true, opacity: op * (mk.kind === 'gate' ? 0.45 : 1), depthWrite: false, toneMapped: false }));
         mesh.rotation.set(-Math.PI / 2, 0, -Math.atan2(z2 - mk.z, x2 - mk.x));
         mesh.scale.set(len, mk.width ?? 0.25, 1);
         mesh.position.set((mk.x + x2) / 2, 0.02, (mk.z + z2) / 2);
@@ -457,7 +485,7 @@ export class MatchView {
         this.markerGroup.add(mesh);
         if (mk.kind === 'gate') {
           for (const [px, pz] of [[mk.x, mk.z], [x2, z2]]) {
-            const post = new THREE.Mesh(POST_GEO, new THREE.MeshBasicMaterial({ color: mk.color }));
+            const post = new THREE.Mesh(POST_GEO, new THREE.MeshBasicMaterial({ color: mk.color, toneMapped: false }));
             post.position.set(px, 0.55, pz);
             this.markerGroup.add(post);
           }
@@ -767,7 +795,9 @@ export class MatchView {
     if (h >= 0) {
       const r = w.robots[h];
       const pose = this.poses[h];
-      this.youMarker.position.set(pose.x, 2.95 + this.robots[h].lift + (f.reduced ? 0 : Math.sin(t * 4) * 0.05), pose.z);
+      // Float the marker clear of the robot's head topper.
+      const top = Math.max(2.95, this.robots[h].topHeight + 0.42);
+      this.youMarker.position.set(pose.x, top + this.robots[h].lift + (f.reduced ? 0 : Math.sin(t * 4) * 0.05), pose.z);
       this.youMarker.rotation.y = t * 2;
       const dBall = Math.hypot(b.x - r.x, b.z - r.z);
       const kickable = dBall <= TUNING.kick.range && r.kickCd <= 0;
@@ -854,6 +884,8 @@ export class MatchView {
       this.camera.position.y += (Math.random() - 0.5) * this.shake;
     } else this.shake = 0;
     this.arenaView.update(dt, t, this.camera, f.reduced);
+    this.applyEnvironment();
+    this.gfx.renderer.toneMappingExposure = this.arenaView.exposure;
     this.gfx.render(this.scene, this.camera);
   }
 
