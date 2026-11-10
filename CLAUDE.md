@@ -7,10 +7,12 @@ before changing rules or scope.
 ## Commands
 
 - `npm run dev`: dev server. `npm run build`: type-check and production build. `npm run preview`.
-- `npm run check`: type-check and the 202-test rule suite. Run it before committing.
+- `npm run check`: type-check and the 232-test rule suite. Run it before committing.
 - `npm run sim -- <matches> <arena> <difficultyA> <difficultyB>`: headless bot matches for tuning.
 - `npm run feasibility`: confirms the tether trial layouts are achievable.
 - `npm run swingcheck`: smart-swing aim accuracy, time gain over running, bot swing use, trial scores.
+- `npm run balance`, `npm run sweep`, `npm run economy`: difficulty/scoring balance, broken-mechanics
+  sweep, progression pacing. Re-run after changing tuning, bots or rewards.
 
 ## Rules of the codebase
 
@@ -26,6 +28,10 @@ before changing rules or scope.
 - All gameplay numbers live in `src/content/tuning.ts`; content is data in `src/content/`.
 - Rewards are paid only inside `commitMatch`, `commitTrial` and `commitLesson`
   (`src/progression/progression.ts`), which are idempotent. Screens display committed records.
+  Progression content (road, objectives, achievements, mastery, prizes) is data in
+  `src/content/progression.ts`.
+- Scoring guards: mashed kicks are rushed, unaimed kicks never go backward, and an own-goal guard applies
+  with aim assist on. `tests/scoring.test.ts` and `tools/balance.ts` keep spam scoring and own goals low.
 - Save schema changes need a migration and validation in `src/storage/save.ts`.
 - UI text is real DOM. Do not ship a control that does nothing; hide or label unavailable features.
 - `window.__tether` exposes the app for automated checks only.

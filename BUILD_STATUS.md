@@ -1,6 +1,6 @@
 # Build status
 
-Last updated: 2026-11-10 (swing direction fix, pass button, new ball, goal celebrations). Release scope: the complete offline single-player game described in
+Last updated: 2026-11-10 (big update: scoring balance, progression, visual overhaul, UI polish). Release scope: the complete offline single-player game described in
 `design/docs/08_BUILD_PLAN_AND_ACCEPTANCE.md` (milestones A to D), minus the items listed under
 "Not done".
 
@@ -50,7 +50,7 @@ Production bundle: about 813 kB JS (227 kB gzipped), 46 kB CSS, no image assets.
 Commands used: `npm run check`, `npm run build`, `npm run sim`, `npm run feasibility`, plus
 Playwright scripts against the dev server and the production preview.
 
-**Automated (202 tests, about 1.5 s)**: tether acquisition, no retargeting, release preserving
+**Automated (232 tests, about 5 s)**: tether acquisition, no retargeting, release preserving
 velocity, speed cap, auto-release, cooldown, rope stability, pause detach without boost; ball drag
 against the analytic law, prediction against the stepped path, goals scoring once, misses not scoring,
 containment stress on every arena; kickoff resets, overtime, goal and clock on the same tick, own
@@ -89,6 +89,34 @@ thresholds are estimates. No real phone, Chromebook or gamepad was available, so
 device performance, touch comfort and gamepad mapping are untested. Frame rate was not measured on
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
+
+### Big update, stages 2–4: visuals, progression, UI (2026-11-10)
+
+- Visual overhaul (`src/game/render/`): ACES filmic tone mapping; one RoomEnvironment PMREM per
+  renderer (`Gfx.environment()`, rebuilt after a lost context) for reflections. Robots rebuilt with
+  merged per-material geometry cached per chassis (about 30 draw calls each): clear-coat shells,
+  glowing visor, eyes, collar and joint rings, panel seams, jet pack whose flames scale with speed and
+  swinging, stronger chassis silhouettes (scout antenna and fins, bulwark armour, glider wings), larger
+  outlined jersey numbers. Eight head accessories ("toppers") render and animate (spring antenna,
+  propeller, floating halo). Arenas: mown grass with blade texture and worn goalmouths, scrolling LED
+  boards that flash after goals, rounded goal frames with a sagging diamond net, floodlights and light
+  beams, instanced crowd with team-biased colours and waving flags, per-venue touches (bunting,
+  embers, tower beacons, camera flashes). Menu stage: reflective turntable, light sweep, spotlight.
+  Draw calls in a match: high 305–328 (was 340), medium 185–207, low 181–203. Triangles rose to
+  ~140k (low) and ~250–330k (high), mostly robot detail; no real-GPU frame timing was possible here.
+- Progression (`src/content/progression.ts`, `src/progression/`): a 40-level Club Road with a concrete
+  reward per level (credits, cosmetics, chassis at 4/6/8, titles, colours, Champion Crown at 40, then
+  120 credits per level); three rotating seeded objectives (quick / session / chase tier, no timers,
+  one free swap per completed match); 31 achievements with bronze/silver/gold tiers; chassis mastery
+  (10 levels each, cosmetic rewards only); season prize money by position and playoff stage; 23 new
+  badges, club titles and earned colours; earned-only items via an `unlock` field. Everything pays only
+  inside the idempotent commit functions. Save schema v2 with a migration that grants existing
+  progress without paying twice. New Progress screen, next-goal card on home, "Progress this match" on
+  results, Topper and title options in club customisation. Pacing (`tools/economy.ts`, 150 bot
+  matches): about a level per match for levels 1–5, every ~2 for 6–15, every ~3 after; every
+  5-match session had a level-up or objective; credits about 180 per match including bonuses. Known
+  limit: a heavy spender owns the whole shop by about match 30; more shop cosmetics would add sinks.
+- UI: see stage 1 notes; also fixed the results layout so stats, progress and rewards never overlap.
 
 ### Big update, stage 1: scoring balance, own goals, difficulty (2026-11-10)
 

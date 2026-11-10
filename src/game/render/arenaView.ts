@@ -91,14 +91,14 @@ const THEMES: Record<ArenaId, Theme> = {
   championship_dome: {
     sky: [[0, '#070c1f'], [0.6, '#101c44'], [1, '#1f3a7a']],
     fog: '#0b1330',
-    grassA: '#48aa86', grassB: '#3f9f7c', line: '#ffffff',
+    grassA: '#3f9e78', grassB: '#36916d', line: '#ffffff',
     wall: '#e6ebf5', wallTop: '#ffffff',
     floorA: '#1d2a4d', floorB: '#192545', grout: '#131c36',
     stand: '#243463', seat: '#2f6fe4', rail: '#8ea4d8', canopy: '#f6c542',
     sun: '#eef4ff', sunIntensity: 2.7, sunPos: [-6, 34, 10],
     hemiSky: '#b9ccff', hemiGround: '#2a3a66', hemiIntensity: 1.1,
     crowd: ['#12bcd2', '#f48a2c', '#f3f5ef', '#f6c542', '#5f7fd6', '#e96a64', '#51c998'],
-    exposure: 0.95, env: 0.2, rig: 'night', lamp: '#eaf3ff', beamOpacity: 0.085, ledAccent: '#f6c542',
+    exposure: 0.84, env: 0.18, rig: 'night', lamp: '#eaf3ff', beamOpacity: 0.085, ledAccent: '#f6c542',
   },
 };
 
@@ -216,7 +216,7 @@ export class ArenaView {
     this.fog = th.fog ? new THREE.Fog(th.fog, 70, 150) : null;
 
     // On medium / high the PMREM environment adds soft fill, so the hemisphere light steps back.
-    const hemi = new THREE.HemisphereLight(th.hemiSky, th.hemiGround, th.hemiIntensity * (quality === 'low' ? 0.95 : 0.6));
+    const hemi = new THREE.HemisphereLight(th.hemiSky, th.hemiGround, th.hemiIntensity * (quality === 'low' ? 0.8 : 0.6));
     this.group.add(hemi);
     this.sun = new THREE.DirectionalLight(th.sun, th.sunIntensity);
     this.sun.position.set(...th.sunPos);

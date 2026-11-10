@@ -50,7 +50,7 @@ module scripts on pages opened straight from disk.
 | Swing: tap = launch toward your aim automatically | right mouse | Space / Left Shift | tap SWING | triggers / bumpers |
 | Swing: tap again = let go now | tap again | tap again | tap again | tap again |
 | Swing: hold = let go yourself (rope glows green when lined up) | hold right mouse | hold Space | hold SWING | hold trigger |
-| Kick | left mouse | J / Enter | tap KICK | A / X |
+| Kick (one press; mashing scuffs the shot) | left mouse | J / Enter | tap KICK | A / X |
 | Pass to teammate (without the ball: call for it) | K / F | K / F | tap PASS | B / Y |
 | Override the chosen anchor | Q / E | Q / E | – | – |
 | Pause | Esc / P | Esc / P | pause button | Start |
@@ -75,7 +75,9 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 - **Quick Match**, **Academy** (five playable lessons), **six Skill Trials** with medals and personal bests,
   and a free **test drive** for every chassis.
 - **Four chassis** (sidegrades), **four arenas**, earned cosmetics (faces, jerseys, trails, celebrations,
-  badges), club colours, name and numbers.
+  badges, head accessories), club colours, titles, name and numbers.
+- **Progression**: a 40-level Club Road with a reward at every level, three rotating club objectives,
+  31 tiered achievements, chassis mastery, and season prize money. See the Progress screen.
 - **Saves** in the browser with a backup snapshot, export/import and validation.
 - **Settings**: audio, quality tiers, reduced motion, high contrast, text size, aim assist, aim mode,
   rebinding, touch layout.
@@ -88,12 +90,15 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (202 tests) |
+| `npm test` | Rule validation suite (232 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |
 | `npm run swingcheck` | Smart-swing accuracy and time gain from random spots on each arena |
 | `vite-node tools/swingdir.ts` | How often a swing starts backwards (should be 0%) |
+| `npm run balance -- 12 mash,club 0,1,1.9` | Win rates and goals for stand-in players per division |
+| `npm run sweep -- 8` | Broken-mechanics sweep over every arena |
+| `npm run economy -- 150 7` | Progression pacing over 150 simulated matches |
 
 ## Layout
 

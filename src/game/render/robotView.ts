@@ -89,12 +89,14 @@ class Parts {
 
 // ----------------------------------------------------------------------------- shared primitives
 
-const SPH = new THREE.SphereGeometry(1, 32, 20);
+const SPH = new THREE.SphereGeometry(1, 30, 18);
 const SPH_LO = new THREE.SphereGeometry(1, 14, 10);
+/** Mid-detail sphere for joints, hands and boots (small on screen). */
+const SPH_MID = new THREE.SphereGeometry(1, 22, 14);
 const HEMI = new THREE.SphereGeometry(1, 24, 9, 0, Math.PI * 2, 0, Math.PI / 2);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 24);
-const torus = (R: number, tube: number, seg = 40, arc = Math.PI * 2) => new THREE.TorusGeometry(R, tube, 8, seg, arc);
-const capsule = (r: number, len: number) => new THREE.CapsuleGeometry(r, len, 5, 16);
+const torus = (R: number, tube: number, seg = 32, arc = Math.PI * 2) => new THREE.TorusGeometry(R, tube, 6, seg, arc);
+const capsule = (r: number, len: number) => new THREE.CapsuleGeometry(r, len, 4, 14);
 const ROUND_BOX = (() => {
   // A softened box: a capsule squashed flat reads as a moulded panel at robot scale.
   return new THREE.CapsuleGeometry(0.5, 1, 4, 12);
@@ -116,8 +118,8 @@ const TORSO_GEO = (() => {
     new THREE.Vector2(0.15, 0.0), new THREE.Vector2(0.205, 0.035), new THREE.Vector2(0.245, 0.13), new THREE.Vector2(0.272, 0.25),
     new THREE.Vector2(0.266, 0.34), new THREE.Vector2(0.215, 0.41), new THREE.Vector2(0.12, 0.445), new THREE.Vector2(0.001, TORSO_H),
   ];
-  const pts = new THREE.SplineCurve(ctrl).getPoints(22);
-  const g = new THREE.LatheGeometry(pts, 44, Math.PI, Math.PI * 2);
+  const pts = new THREE.SplineCurve(ctrl).getPoints(18);
+  const g = new THREE.LatheGeometry(pts, 36, Math.PI, Math.PI * 2);
   const pos = g.attributes.position;
   const uv = g.attributes.uv;
   for (let i = 0; i < pos.count; i++) uv.setY(i, Math.max(0, Math.min(1, pos.getY(i) / TORSO_H)));
@@ -227,8 +229,8 @@ function chassisGeo(id: ChassisId): ChassisGeo {
   };
 
   // --- body (unscaled): pelvis and neck
-  P.body.add('navy', SPH, { p: [0, HIP_Y, 0], s: [0.162, 0.08, 0.128] });
-  P.body.add('navy', SPH, { p: [0, 0.8, 0], s: [0.094, 0.06, 0.094] });
+  P.body.add('navy', SPH_MID, { p: [0, HIP_Y, 0], s: [0.162, 0.08, 0.128] });
+  P.body.add('navy', SPH_MID, { p: [0, 0.8, 0], s: [0.094, 0.06, 0.094] });
 
   // --- torso (scaled per chassis; y = 0 at the hem)
   const T = P.torso;
@@ -252,9 +254,9 @@ function chassisGeo(id: ChassisId): ChassisGeo {
   H.add('shell', SPH, { s: [SKULL[0], SKULL[1], SKULL[2]] });
   H.add('accent', SPH, { p: [0, 0.012, -0.02], s: [0.3 * 0.42, 0.3 * 0.945, 0.3 * 0.99] }); // crown stripe
   // navy rim around the face screen: a clear lip proud of the skull (no near-coincident surfaces)
-  H.add('navy', new THREE.SphereGeometry(0.309, 64, 18, Math.PI / 2 - 1.06, 2.12, 1.02, 0.98), { p: [0, 0.035, 0.012], s: [1.14, 0.93, 1] });
+  H.add('navy', new THREE.SphereGeometry(0.309, 40, 12, Math.PI / 2 - 1.06, 2.12, 1.02, 0.98), { p: [0, 0.035, 0.012], s: [1.14, 0.93, 1] });
   // chin seam
-  H.add('navy', torus(1, 0.03, 64), { p: [0, -0.15, 0.0], r: [Math.PI / 2, 0, 0], s: [0.282, 0.249, 0.5] });
+  H.add('navy', torus(1, 0.03, 48), { p: [0, -0.15, 0.0], r: [Math.PI / 2, 0, 0], s: [0.282, 0.249, 0.5] });
   for (const sx of [-1, 1]) {
     H.add('navy', CYL, { p: [sx * 0.345, 0, 0], r: [0, 0, Math.PI / 2], s: [0.097, 0.075, 0.097] });
     H.add('accent', CYL, { p: [sx * 0.386, 0, 0], r: [0, 0, Math.PI / 2], s: [0.066, 0.022, 0.066] });
@@ -264,7 +266,7 @@ function chassisGeo(id: ChassisId): ChassisGeo {
   // --- arms (y = 0 at the shoulder, hanging down)
   const bulwark = id === 'bulwark';
   for (const [A, right] of [[P.armL, false], [P.armR, true]] as [Parts, boolean][]) {
-    A.add('navy', SPH, { s: 0.085 });
+    A.add('navy', SPH_MID, { s: 0.085 });
     if (!bulwark) {
       A.add('shell', HEMI, { p: [0, 0.008, 0], s: [0.118, 0.1, 0.118] });
       A.add('accent', torus(0.115, 0.012, 32), { p: [0, 0.008, 0], r: [Math.PI / 2, 0, 0] });
@@ -272,7 +274,7 @@ function chassisGeo(id: ChassisId): ChassisGeo {
     A.add('shell', capsule(0.058, 0.17), { p: [0, -0.17, 0] });
     A.add('navy', torus(0.058, 0.014, 28), { p: [0, -0.165, 0], r: [Math.PI / 2, 0, 0] }); // elbow seam
     A.add(right ? 'yellow' : 'accent', torus(0.06, 0.018, 28), { p: [0, -0.255, 0], r: [Math.PI / 2, 0, 0] });
-    A.add('navy', SPH, { p: [0, -0.34, 0], s: 0.092 });
+    A.add('navy', SPH_MID, { p: [0, -0.34, 0], s: 0.092 });
   }
 
   // --- legs (y = 0 at the hip)
@@ -282,8 +284,8 @@ function chassisGeo(id: ChassisId): ChassisGeo {
     L.add('shell', CYL, { p: [0, -0.215, 0.006], s: [0.07, 0.09, 0.075] }); // boot shaft
     L.add('navy', torus(0.07, 0.013, 28), { p: [0, -0.17, 0.006], r: [Math.PI / 2, 0, 0] });
     L.add('accent', ROUND_BOX, { p: [0, -0.215, 0.078], s: [0.03, 0.04, 0.014] });
-    L.add('shell', SPH, { p: [0, -0.285, 0.035], s: [0.105 * boot, 0.072 * boot, 0.155 * boot] });
-    L.add('accent', SPH, { p: [0, -0.32, 0.035], s: [0.108 * boot, 0.03, 0.16 * boot] });
+    L.add('shell', SPH_MID, { p: [0, -0.285, 0.035], s: [0.105 * boot, 0.072 * boot, 0.155 * boot] });
+    L.add('accent', SPH_MID, { p: [0, -0.32, 0.035], s: [0.108 * boot, 0.03, 0.16 * boot] });
   }
 
   // --- chassis identity
@@ -372,7 +374,7 @@ function topperGeo(id: string): TopperGeo | null {
         const a = t * Math.PI * 2 * 5;
         coil.push(new THREE.Vector3(Math.cos(a) * 0.022, 0.02 + t * 0.12, Math.sin(a) * 0.022));
       }
-      M.add('metal', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coil), 90, 0.0065, 6, false));
+      M.add('metal', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coil), 60, 0.0065, 5, false));
       M.add('navy', CYL, { p: [0, 0.24, 0], s: [0.009, 0.17, 0.009] });
       M.add('glow', SPH, { p: [0, 0.34, 0], s: 0.042 });
       M.add('accent', torus(0.03, 0.009, 20), { p: [0, 0.3, 0], r: [Math.PI / 2, 0, 0] });
@@ -434,9 +436,9 @@ function topperGeo(id: string): TopperGeo | null {
       break;
     }
     case 'topper_halo': {
-      pivot = [0, TOP_Y + 0.17, -0.01];
+      pivot = [0, TOP_Y + 0.13, -0.01];
       kind = 'float';
-      M.add('halo', torus(0.19, 0.02, 48), { r: [Math.PI / 2, 0, 0] });
+      M.add('halo', torus(0.2, 0.026, 56), { r: [Math.PI / 2, 0, 0] });
       height = pivot[1] + 0.05;
       break;
     }
@@ -945,7 +947,7 @@ export class RobotView {
       mv.rotation.y = this.spin;
     } else if (kind === 'float') {
       const geo = topperGeo(this.topperId);
-      const baseY = geo ? geo.pivot[1] : TOP_Y + 0.17;
+      const baseY = geo ? geo.pivot[1] : TOP_Y + 0.13;
       mv.position.y = baseY + (reduced ? 0 : Math.sin(t * 2.2) * 0.022);
       mv.rotation.x = reduced ? 0 : Math.sin(t * 1.3) * 0.08;
       mv.rotation.z = reduced ? 0 : Math.cos(t * 1.1) * 0.08;
@@ -964,7 +966,7 @@ export class RobotView {
   }
 }
 
-const VISOR_GEO = new THREE.SphereGeometry(0.312, 48, 16, Math.PI / 2 - 1.0, 2.0, 1.08, 0.86);
+const VISOR_GEO = new THREE.SphereGeometry(0.312, 36, 12, Math.PI / 2 - 1.0, 2.0, 1.08, 0.86);
 const HALO_SPRITE = new THREE.PlaneGeometry(1, 1);
 
 export function setShadowFlags(obj: THREE.Object3D, cast: boolean, receive: boolean): void {

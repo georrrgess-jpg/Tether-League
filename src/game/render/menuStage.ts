@@ -3,7 +3,7 @@ import type { RobotLook } from '../../content/cosmetics';
 import { buildHarborScenery, makePalm } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
-import { blobTexture, skyTexture, tileTexture, type Expression } from './textures';
+import { beamTexture, blobTexture, skyTexture, tileTexture, type Expression } from './textures';
 
 export type StageShot = 'duo' | 'solo' | 'hidden';
 
@@ -29,6 +29,11 @@ export class MenuStage {
   private disposables: { dispose(): void }[] = [];
   private shadows: THREE.Mesh[] = [];
   private platform = new THREE.Group();
+  private sweep: THREE.Mesh;
+  private sweepMat: THREE.MeshBasicMaterial;
+  private spotMat: THREE.MeshBasicMaterial | null = null;
+  private bannerGrp = new THREE.Group();
+  private lowEnv: THREE.Texture | null = null;
   reduced = false;
 
   constructor(private gfx: Gfx) {
@@ -38,8 +43,15 @@ export class MenuStage {
     };
     const shadows = gfx.quality === 'high';
     this.scene.background = track(skyTexture([[0, '#3f9fe6'], [0.5, '#8fd0f5'], [0.78, '#dff4ff'], [1, '#f7fbff']]));
-    this.scene.add(new THREE.HemisphereLight('#e8f5ff', '#b9a98c', 1.15));
-    const sun = new THREE.DirectionalLight('#fff0d0', 2.4);
+    const low = gfx.quality === 'low';
+    // Medium / high light the clubhouse with the shared studio environment for glossy shells and a
+    // reflective platform; the hemisphere light steps back to keep the same overall level.
+    this.scene.add(new THREE.HemisphereLight('#e8f5ff', '#b9a98c', low ? 1.1 : 0.7));
+    // cool rim light from behind separates the robots from the bright harbour backdrop
+    const rim = new THREE.DirectionalLight('#cfe6ff', 1.4);
+    rim.position.set(4, 6, -8);
+    this.scene.add(rim);
+    const sun = new THREE.DirectionalLight('#fff0d0', 2.6);
     sun.position.set(-6, 10, 8);
     if (shadows) {
       sun.castShadow = true;
@@ -66,19 +78,38 @@ export class MenuStage {
     floor.receiveShadow = shadows;
     this.scene.add(floor);
 
-    // platform
-    const base = new THREE.Mesh(track(new THREE.CylinderGeometry(2.55, 2.75, 0.34, 48)), std('#c9ced3', 0.45, { metalness: 0.25 }));
+    // platform: brushed-metal plinth, a dark lacquered turntable top that reflects the robots' surroundings,
+    // a glowing club-colour ring and a light that sweeps slowly round the rim
+    const base = new THREE.Mesh(track(new THREE.CylinderGeometry(2.55, 2.75, 0.34, 64)), std('#d3d8de', 0.3, { metalness: low ? 0.2 : 0.7 }));
     base.position.y = 0.17;
     base.receiveShadow = shadows;
     base.castShadow = shadows;
-    const top = new THREE.Mesh(track(new THREE.CylinderGeometry(2.3, 2.3, 0.06, 48)), std('#aab1b9', 0.4, { metalness: 0.3 }));
+    const topMat = low
+      ? std('#2a3446', 0.25, { metalness: 0.2 })
+      : track(new THREE.MeshPhysicalMaterial({ color: '#253045', roughness: 0.32, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.06 }));
+    const top = new THREE.Mesh(track(new THREE.CylinderGeometry(2.3, 2.3, 0.06, 64)), topMat);
     top.position.y = 0.36;
     top.receiveShadow = shadows;
-    this.ring = std('#12bcd2', 0.4, { emissive: new THREE.Color('#12bcd2'), emissiveIntensity: 1.1 });
-    const ring = new THREE.Mesh(track(new THREE.TorusGeometry(2.42, 0.05, 8, 64)), this.ring);
+    const inlay = new THREE.Mesh(track(new THREE.RingGeometry(1.55, 1.6, 64)), track(new THREE.MeshBasicMaterial({ color: '#8fa3c2', transparent: true, opacity: 0.35 })));
+    inlay.rotation.x = -Math.PI / 2;
+    inlay.position.y = 0.392;
+    this.ring = std('#12bcd2', 0.3, { emissive: new THREE.Color('#12bcd2'), emissiveIntensity: 1.1 });
+    const ring = new THREE.Mesh(track(new THREE.TorusGeometry(2.42, 0.05, 10, 96)), this.ring);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.36;
-    this.platform.add(base, top, ring);
+    this.sweepMat = track(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.sweep = new THREE.Mesh(track(new THREE.TorusGeometry(2.42, 0.075, 8, 32, Math.PI * 0.35)), this.sweepMat);
+    this.sweep.rotation.x = Math.PI / 2;
+    this.sweep.position.y = 0.36;
+    this.platform.add(base, top, inlay, ring, this.sweep);
+    // soft overhead spotlight cone onto the platform (medium / high)
+    if (!low) {
+      this.spotMat = track(new THREE.MeshBasicMaterial({ map: track(beamTexture()), color: '#fff6e4', transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      const cone = new THREE.Mesh(track(new THREE.ConeGeometry(2.6, 9, 40, 1, true)), this.spotMat);
+      cone.position.set(0, 4.9, 0);
+      cone.renderOrder = 2;
+      this.platform.add(cone);
+    }
     const blockG = track(new THREE.BoxGeometry(0.75, 0.3, 0.42));
     const yellow = std('#f6c542', 0.5);
     for (let i = 0; i < 4; i++) {
@@ -121,16 +152,19 @@ export class MenuStage {
     // club banner
     this.banner = std('#12bcd2', 0.8, { side: THREE.DoubleSide });
     this.bannerStripe = std('#17273e', 0.8, { side: THREE.DoubleSide });
+    // The banner hangs from its pole and sways gently (the group pivots at the pole).
+    this.bannerGrp.position.set(-6, 6.55, -9.9);
     const cloth = new THREE.Mesh(track(new THREE.PlaneGeometry(1.5, 2.6)), this.banner);
-    cloth.position.set(-6, 5.2, -9.9);
+    cloth.position.set(0, -1.35, 0);
     const stripe = new THREE.Mesh(track(new THREE.PlaneGeometry(1.5, 0.4)), this.bannerStripe);
-    stripe.position.set(-6, 4.25, -9.88);
-    const emblem = new THREE.Mesh(track(new THREE.RingGeometry(0.28, 0.46, 24)), std('#ffffff', 0.7, { side: THREE.DoubleSide }));
-    emblem.position.set(-6, 5.45, -9.88);
-    const pole = new THREE.Mesh(track(new THREE.CylinderGeometry(0.05, 0.05, 1.9, 8)), std('#8d949c', 0.4));
+    stripe.position.set(0, -2.3, 0.02);
+    const emblem = new THREE.Mesh(track(new THREE.RingGeometry(0.28, 0.46, 32)), std('#ffffff', 0.7, { side: THREE.DoubleSide }));
+    emblem.position.set(0, -1.1, 0.02);
+    this.bannerGrp.add(cloth, stripe, emblem);
+    const pole = new THREE.Mesh(track(new THREE.CylinderGeometry(0.05, 0.05, 1.9, 12)), std('#8d949c', 0.3, { metalness: 0.6 }));
     pole.rotation.z = Math.PI / 2;
     pole.position.set(-6, 6.55, -9.9);
-    this.scene.add(cloth, stripe, emblem, pole);
+    this.scene.add(this.bannerGrp, pole);
 
     // plants
     this.scene.add(makePalm(-9.5, 0, -6.5, 4.6, track), makePalm(9.8, 0, -7, 5.2, track));
@@ -155,9 +189,24 @@ export class MenuStage {
     }
   }
 
+  /** Studio reflections (see MatchView): scene-wide on medium / high, robots only on low. */
+  private applyEnvironment(): void {
+    const env = this.gfx.environment();
+    if (this.gfx.quality !== 'low') {
+      if (this.scene.environment !== env) {
+        this.scene.environment = env;
+        this.scene.environmentIntensity = 0.25;
+      }
+    } else if (this.lowEnv !== env) {
+      this.lowEnv = env;
+      for (const r of this.robots) r.setEnvironment(env, 0.85);
+    }
+  }
+
   setColors(primary: string, secondary: string): void {
     this.ring.color.set(primary);
     this.ring.emissive.set(primary);
+    this.sweepMat?.color.set(primary).lerp(new THREE.Color('#ffffff'), 0.5);
     this.banner.color.set(primary);
     this.bannerStripe.color.set(secondary);
   }
@@ -168,6 +217,7 @@ export class MenuStage {
       if (!this.robots[i]) {
         const rv = new RobotView(look, shadows, this.gfx.quality);
         rv.scale = 1.45;
+        if (this.lowEnv) rv.setEnvironment(this.lowEnv, 0.85);
         this.robots[i] = rv;
         this.scene.add(rv.root);
       } else if (JSON.stringify(this.looks[i]) !== JSON.stringify(look)) this.robots[i].setLook(look);
@@ -253,7 +303,15 @@ export class MenuStage {
       this.shadows[i].scale.set(s, s, 1);
     }
     this.ring.emissiveIntensity = 1.0 + (this.reduced ? 0 : Math.sin(this.time * 2) * 0.25);
-    this.gfx.renderer.toneMappingExposure = 1.08;
+    // calm ambient motion: a slow light sweep round the platform rim and a gently swaying banner
+    if (!this.reduced) {
+      this.sweep.rotation.z = this.time * 0.6;
+      this.bannerGrp.rotation.x = Math.sin(this.time * 0.9) * 0.05;
+      this.bannerGrp.rotation.z = Math.sin(this.time * 0.6 + 1) * 0.02;
+    }
+    this.sweepMat.opacity = this.reduced ? 0 : 0.55 + Math.sin(this.time * 1.3) * 0.2;
+    this.applyEnvironment();
+    this.gfx.renderer.toneMappingExposure = this.gfx.quality === 'low' ? 0.88 : 0.86;
     this.gfx.render(this.scene, cam);
   }
 

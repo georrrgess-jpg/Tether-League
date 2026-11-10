@@ -501,14 +501,18 @@
   @media not all and (orientation: portrait) and (max-width: 1000px) {
     .results .content {
       grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-      grid-template-areas: 'head head head' 'stats slot rewards' 'prog prog rewards' 'rec rec rec' 'act act act';
+      grid-template-areas: 'head head head' 'stats slot rewards' 'stats prog rewards' 'rec rec rec' 'act act act';
+    }
+    .results-stats {
+      max-height: 100%;
+      overflow: auto;
     }
     .results-rewards {
       max-height: 100%;
       overflow: auto;
     }
     .results .ps-list {
-      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     }
   }
 }
