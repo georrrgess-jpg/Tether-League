@@ -250,7 +250,9 @@
   font-size: 1.32rem;
   line-height: 0.98;
   color: var(--navy);
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
   min-width: 0;
   max-width: 100%;
 }
@@ -3473,7 +3475,12 @@ button.earned-color:active:not([disabled]) {
 }
 .prog-road {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+}
+.prog-road > *,
+.prog-single > * {
+  grid-area: auto;
 }
 .road-track {
   list-style: none;
@@ -3493,6 +3500,7 @@ button.earned-color:active:not([disabled]) {
 }
 .prog-single {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 .mastery-list {
@@ -4057,4 +4065,11 @@ button.earned-color:active:not([disabled]) {
 .trophy-card {
   position: relative;
   z-index: 2;
+}
+
+/* content grids never grow wider than the screen (tab rows scroll inside themselves) */
+.settings .content,
+.league .content,
+.club .content {
+  grid-template-columns: minmax(0, 1fr);
 }

@@ -365,7 +365,7 @@ export class App {
       },
       onLeave: () => {
         this.end();
-        this.navigate('academy', true);
+        this.navigate(`academy?tab=trials&trial=${id}`, true);
       },
       onRestart: () => {
         this.end();

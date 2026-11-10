@@ -222,7 +222,15 @@
     opacity: 1;
   }
   100% {
-    opacity: 0.45;
+    opacity: 0.72;
+  }
+}
+.reduced-motion .hud-legend {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-legend {
+    animation: none !important;
   }
 }
 .hud-arena {
@@ -286,8 +294,10 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-.play-layer.is-match .hint {
-  bottom: calc(62px + var(--safe-b));
+@media (min-width: 761px) and (min-height: 481px) {
+  .play-layer.is-match .hint {
+    bottom: calc(62px + var(--safe-b));
+  }
 }
 @media (pointer: coarse), (max-width: 900px), (max-height: 560px) {
   .hud-legend,

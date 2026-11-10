@@ -266,6 +266,12 @@
     grid-area: stage;
     height: min(46vh, 420px);
   }
+  .league .content {
+    display: block;
+  }
+  .league .content > * + * {
+    margin-top: 12px;
+  }
   .home-stage .stage-slot {
     inset: 70px 0 0 0;
   }
@@ -851,15 +857,34 @@
   .ad-preview {
     min-height: 150px;
   }
+  .league .content {
+    display: block;
+  }
+  .league .content > * + * {
+    margin-top: 10px;
+  }
   .hub-hero {
-    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(300px, 1.1fr);
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 0.9fr) minmax(300px, 1.2fr);
+    grid-template-areas: 'stage title next';
     min-height: 0;
+    padding-top: 8px;
   }
   .hub-hero .stage-slot {
     min-height: 150px;
   }
   .hub-title {
     padding-top: 40px;
+  }
+  .hub-next .vs-team {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hub-next .vs-name {
+    justify-items: center;
+    text-align: center;
+  }
+  .hub-next .vs-name b {
+    font-size: 0.9rem;
   }
   .ht-name {
     font-size: 1.8rem;
@@ -878,8 +903,8 @@
     grid-row: 1 / 3;
   }
   .prog-overview {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: 'lvl lvl' 'road obj' 'ach mas';
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'lvl' 'road' 'obj' 'mas' 'ach';
   }
   .lvl-next {
     display: none;
@@ -953,5 +978,45 @@
   }
   .lvl-medal b {
     font-size: 1.8rem;
+  }
+}
+
+/* portrait phones: keep Play next match above the fold */
+@media (orientation: portrait) and (max-width: 600px) {
+  .home-stage {
+    height: max(200px, 30vh);
+  }
+  .home-hello {
+    padding-top: 0;
+  }
+  .hh-badge {
+    width: 42px;
+    height: 42px;
+  }
+  .home-hello .hh-title {
+    font-size: 1.7rem;
+  }
+  .home-stage .stage-slot {
+    inset: 50px 0 0 0;
+  }
+  .fixture-card .badge.big {
+    width: 54px;
+    height: 54px;
+  }
+  .fixture-card .fc-meta .chip {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+  }
+}
+
+/* ---------- large screens: scale the whole menu frame up so it reads like the concepts ---------- */
+@media (min-width: 1700px) and (min-height: 940px) {
+  .screen {
+    zoom: 1.2;
+  }
+}
+@media (min-width: 2300px) and (min-height: 1300px) {
+  .screen {
+    zoom: 1.5;
   }
 }

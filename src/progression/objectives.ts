@@ -48,11 +48,12 @@ export function matchFacts(result: MatchResult): MatchFacts {
     goalAndSave: p.goals >= 1 && p.saves >= 1 ? 1 : 0,
     arenaWin: won ? 1 : 0,
     teamGoals: result.score[0],
-    plays: p.longBalls + p.giveAndGos + p.wallPasses + p.oneTouchGoals,
-    longBalls: p.longBalls,
-    giveAndGos: p.giveAndGos,
-    wallPasses: p.wallPasses,
-    oneTouchGoals: p.oneTouchGoals,
+    // Play counters default to 0 for results recorded before plays existed.
+    plays: (p.longBalls ?? 0) + (p.giveAndGos ?? 0) + (p.wallPasses ?? 0) + (p.oneTouchGoals ?? 0),
+    longBalls: p.longBalls ?? 0,
+    giveAndGos: p.giveAndGos ?? 0,
+    wallPasses: p.wallPasses ?? 0,
+    oneTouchGoals: p.oneTouchGoals ?? 0,
   };
 }
 

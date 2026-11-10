@@ -115,7 +115,7 @@ export function academyScreen(app: App, params: URLSearchParams): ScreenView {
     );
     dock.replaceChildren(
       h('div', { class: 'dock-info' }, h('b', null, l.name), h('small', null, done ? 'Completed · replay any time' : 'About a minute · first completion pays a reward')),
-      h('button', { class: 'btn btn-primary btn-big', type: 'button', 'data-autofocus': true, onclick: () => app.startLesson(l.id) }, icon('play'), done ? 'Replay lesson' : 'Play lesson'),
+      h('button', { class: 'btn btn-primary btn-big', type: 'button', 'data-autofocus': true, onclick: () => app.startLesson(l.id, 'academy?tab=lessons') }, icon('play'), done ? 'Replay lesson' : 'Play lesson'),
     );
   };
 
