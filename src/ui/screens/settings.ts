@@ -209,7 +209,9 @@ export function settingsScreen(app: App): ScreenView {
   const jump = (id: string, label: string, ic: string) => h('button', { onclick: () => {
     const card = root.querySelector<HTMLElement>(`#${id}`);
     if (!card) return;
-    card.scrollIntoView({ behavior: document.body.classList.contains('reduced-motion') ? 'auto' : 'smooth', block: 'start' });
+    // Scroll only the content panel: scrollIntoView would also shift the fixed app frame.
+    const sc = root.closest<HTMLElement>('.content');
+    if (sc) sc.scrollTo({ top: sc.scrollTop + card.getBoundingClientRect().top - sc.getBoundingClientRect().top - 8, behavior: document.body.classList.contains('reduced-motion') ? 'auto' : 'smooth' });
     card.classList.remove('flash');
     void card.offsetWidth;
     card.classList.add('flash');

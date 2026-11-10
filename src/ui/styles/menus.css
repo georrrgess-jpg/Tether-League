@@ -624,6 +624,7 @@
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
+  max-width: 440px;
 }
 .swatch {
   aspect-ratio: 1.25;
@@ -3393,6 +3394,9 @@ button.swatch:not([disabled]):hover {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .results-stats .stat:nth-child(5) {
+    grid-column: 1 / -1;
+  }
   .stat b {
     font-size: 1.15rem;
   }
@@ -3436,6 +3440,28 @@ button.swatch:not([disabled]):hover {
   }
   .settings-grid {
     columns: 2;
+  }
+}
+
+/* very short landscape (phone browsers with toolbars): icon-only rail, labels kept for screen readers */
+@media (max-height: 430px) and (orientation: landscape) {
+  .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .nav-btn {
+    max-height: 46px;
+  }
+  .nav-ic {
+    width: 34px;
+    height: 34px;
+  }
+  .setup-panel .panel-title small {
+    display: none;
   }
 }
 

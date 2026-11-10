@@ -53,7 +53,7 @@ export function shell(app: App, o: ShellOptions, ...content: (Node | null)[]): H
   const lp = levelProgress(app.save.xp);
   const nav = h('nav', { class: 'nav', 'aria-label': 'Main' },
     NAV.map((n) =>
-      h('button', { class: `nav-btn n-${n.id}${n.id === o.nav ? ' is-active' : ''}`, 'aria-current': n.id === o.nav ? 'page' : null, onclick: () => app.navigate(n.route) },
+      h('button', { class: `nav-btn n-${n.id}${n.id === o.nav ? ' is-active' : ''}`, title: n.label, 'aria-current': n.id === o.nav ? 'page' : null, onclick: () => app.navigate(n.route) },
         h('span', { class: 'nav-ic' }, icon(n.icon)), h('span', { class: 'nav-label' }, n.label)),
     ),
   );
