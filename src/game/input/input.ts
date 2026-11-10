@@ -35,7 +35,7 @@ export class InputManager {
   private mouseY = 0;
   private kickQueued = false;
   private passQueued = false;
-  private passId = -1;
+  private passId: number | null = null;
   private padPassPrev = false;
   private kickByKey = false;
   private tetherMouse = false;
@@ -53,19 +53,20 @@ export class InputManager {
   swingTargetX = 0;
   private mouseMovedAt = -1e9;
   swingTargetZ = 0;
-  private stickId = -1;
+  /** Active touch ids, or null. Touch ids are arbitrary integers (iOS can report negative or huge ones), so never test their sign. */
+  private stickId: number | null = null;
   private stickOX = 0;
   private stickOY = 0;
   private stickX = 0;
   private stickY = 0;
-  private kickId = -1;
+  private kickId: number | null = null;
   private kickSX = 0;
   private kickSY = 0;
   private dragX = 0;
   private dragZ = 0;
   private dragAim = false;
   private aimOnce: { x: number; z: number } | null = null;
-  private tetherId = -1;
+  private tetherId: number | null = null;
   private touchRoot: HTMLElement | null = null;
   private stickBase: HTMLElement | null = null;
   private stickKnob: HTMLElement | null = null;
@@ -138,16 +139,16 @@ export class InputManager {
     this.keys.clear();
     this.kickQueued = false;
     this.passQueued = false;
-    this.passId = -1;
+    this.passId = null;
     this.tetherMouse = false;
     this.tetherTouch = false;
     this.padTether = false;
     this.tetherLatch = false;
     this.swing.reset();
-    this.stickId = -1;
+    this.stickId = null;
     this.stickX = this.stickY = 0;
-    this.kickId = -1;
-    this.tetherId = -1;
+    this.kickId = null;
+    this.tetherId = null;
     this.dragAim = false;
     this.aimOnce = null;
     if (this.stickKnob) this.stickKnob.style.transform = '';
@@ -231,14 +232,14 @@ export class InputManager {
     this.device = 'touch';
     const btn = target?.closest?.('[data-touch]') as HTMLElement | null;
     const kind = btn?.dataset.touch;
-    if (kind === 'pass' && this.passId < 0) {
+    if (kind === 'pass' && this.passId === null) {
       this.passId = id;
       this.passQueued = true;
       this.used.pass++;
       btn!.classList.add('is-down');
       return true;
     }
-    if (kind === 'kick' && this.kickId < 0) {
+    if (kind === 'kick' && this.kickId === null) {
       this.kickId = id;
       this.kickSX = x;
       this.kickSY = y;
@@ -246,7 +247,7 @@ export class InputManager {
       btn!.classList.add('is-down');
       return true;
     }
-    if (kind === 'tether' && this.tetherId < 0) {
+    if (kind === 'tether' && this.tetherId === null) {
       this.tetherId = id;
       this.tetherTouch = true;
       this.tetherLatch = true;
@@ -254,7 +255,7 @@ export class InputManager {
       btn!.classList.add('is-down');
       return true;
     }
-    if (kind || this.stickId >= 0 || target?.closest?.('button, a, .no-game-input')) return false;
+    if (kind || this.stickId !== null || target?.closest?.('button, a, .no-game-input')) return false;
     const swap = this.settings().touchSwap;
     const leftSide = x < window.innerWidth * 0.5;
     if (leftSide === swap) return false;
@@ -354,7 +355,7 @@ export class InputManager {
 
   private touchEnd(id: number): void {
     if (id === this.stickId) {
-      this.stickId = -1;
+      this.stickId = null;
       this.stickX = this.stickY = 0;
       if (this.stickKnob) this.stickKnob.style.transform = '';
       if (this.stickBase) {
@@ -363,10 +364,10 @@ export class InputManager {
         this.stickBase.style.top = '';
       }
     } else if (id === this.passId) {
-      this.passId = -1;
+      this.passId = null;
       this.touchRoot?.querySelector('[data-touch="pass"]')?.classList.remove('is-down');
     } else if (id === this.kickId) {
-      this.kickId = -1;
+      this.kickId = null;
       this.kickQueued = true;
       this.kickByKey = !this.dragAim;
       this.used.kick++;
@@ -374,7 +375,7 @@ export class InputManager {
       this.dragAim = false;
       this.touchRoot?.querySelector('[data-touch="kick"]')?.classList.remove('is-down');
     } else if (id === this.tetherId) {
-      this.tetherId = -1;
+      this.tetherId = null;
       this.tetherTouch = false;
       this.touchRoot?.querySelector('[data-touch="tether"]')?.classList.remove('is-down');
     }
@@ -503,7 +504,7 @@ export class InputManager {
     const s = this.settings();
     let mx = (this.held('right') ? 1 : 0) - (this.held('left') ? 1 : 0);
     let mz = (this.held('down') ? 1 : 0) - (this.held('up') ? 1 : 0);
-    if (this.stickId >= 0) {
+    if (this.stickId !== null) {
       mx = this.stickX;
       mz = this.stickY;
     }

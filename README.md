@@ -90,7 +90,7 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (232 tests) |
+| `npm test` | Rule validation suite (238 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |
