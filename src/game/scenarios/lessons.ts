@@ -4,7 +4,8 @@ import { LESSONS, type LessonId } from '../../content/trials';
 import { DT, TUNING } from '../../content/tuning';
 import { keyLabel, type Settings } from '../../storage/settings';
 import type { Command, SimEvent } from '../sim/types';
-import { Scenario, runTo, type ScenarioRobot } from './scenario';
+import { lobPlan } from '../sim/world';
+import { OPPONENT_LOOK, Scenario, runTo, type ScenarioRobot } from './scenario';
 
 const YELLOW = '#ffe36a';
 const CYAN = '#7ff3ff';
@@ -43,13 +44,14 @@ export class LessonMode extends Scenario {
     this.setTask(def.name, def.summary);
     this.touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
     this.ready = 0.9;
-    this.world.goalsOpen = id === 'kick' || id === 'pass' || id === 'defend';
+    this.world.goalsOpen = id === 'kick' || id === 'pass' || id === 'defend' || id === 'plays';
     this.build();
     this.next();
   }
 
   private static robots(id: LessonId, looks: RobotLook[]): ScenarioRobot[] {
     const me: ScenarioRobot = { team: 0, look: looks[0] };
+    if (id === 'plays') return [me, { team: 0, look: looks[1] }, { team: 1, look: OPPONENT_LOOK }];
     return id === 'pass' ? [me, { team: 0, look: looks[1] }] : [me];
   }
 
@@ -262,6 +264,52 @@ export class LessonMode extends Scenario {
           },
         ];
         break;
+      case 'plays':
+        this.steps = [
+          {
+            text: `A defender blocks the lane. Hold ${k.pass} to charge a long ball, then let go to loft it over them.`,
+            sub: 'The ring at your feet fills while you hold. The dot shows where the ball will land.',
+            enter: () => this.lobDrill(false),
+            check: (ev) => this.lobReceived(ev, false),
+          },
+          {
+            text: 'Now a perfect one: let go when the ring reaches the gold notch.',
+            sub: 'Perfect weight lands right on your teammate. Early drops short; late sails long.',
+            enter: () => this.lobDrill(true),
+            check: (ev) => this.lobReceived(ev, true),
+          },
+          {
+            text: `Give-and-go: pass with ${k.pass}, sprint toward goal, and press ${k.pass} again while your teammate has the ball. Finish the return.`,
+            sub: 'Call before your teammate settles it and the return comes first time, into your stride.',
+            enter: () => {
+              this.a = -4;
+              this.b = 2.5;
+              this.place(0, -5, 2.5, 0);
+              this.place(1, 3, 6, Math.PI);
+              this.place(2, PARK[0] + 26, -PARK[1], Math.PI);
+              this.ball(-4, 2.5);
+              this.flag = false;
+              this.ggCall = false;
+              this.ggReturned = false;
+              this.target(8, 0.5, 1.8);
+            },
+            check: (ev) => {
+              for (const e of ev) if (e.type === 'kick' && e.robot === 1 && e.giveGo) this.ggReturned = true;
+              for (const e of ev) {
+                if (e.type === 'goal' && e.side === 1) {
+                  if (this.ggReturned) {
+                    audio.play('goal');
+                    return true;
+                  }
+                  this.toast('Goal, but use the give-and-go: pass, run, then call for it back', 'bad');
+                }
+              }
+              this.resetGiveGo(ev);
+              return false;
+            },
+          },
+        ];
+        break;
       case 'defend':
         this.steps = [
           {
@@ -299,6 +347,58 @@ export class LessonMode extends Scenario {
     if (p.tState !== 'attached' && Math.hypot(p.vx, p.vz) >= 5.9) return true;
     this.toast(p.tState === 'attached' ? 'Release before the gate' : 'Too slow: launch from a swing', 'bad');
     return false;
+  }
+
+  private ggCall = false;
+  private ggReturned = false;
+
+  /** Long-ball drill: ball at your feet, teammate up the pitch, a defender parked in the straight lane. */
+  private lobDrill(perfectOnly: boolean): void {
+    this.a = -8.2;
+    this.b = perfectOnly ? -2 : 1;
+    this.place(0, -9, this.b, 0);
+    this.place(1, 7, perfectOnly ? -4 : 3, Math.PI);
+    this.place(2, -1.2, perfectOnly ? -2.6 : 1.6, Math.PI);
+    this.ball(this.a, this.b);
+    this.flag = false;
+    const plan = lobPlan(this.world, this.me());
+    if (plan) this.target(plan.x, plan.z, 1.4);
+  }
+
+  /** A long ball the teammate collects completes the step (a perfect one when required). */
+  private lobReceived(ev: SimEvent[], perfectOnly: boolean): boolean {
+    for (const e of ev) {
+      if (e.type === 'kick' && e.robot === 0) {
+        if (!e.lob) this.toast(`Hold ${this.keys().pass} longer: a tap is a ground pass the defender can block`, 'bad');
+        else if (perfectOnly && !e.perfect) this.toast(e.perfect ? '' : 'Off the notch. Watch the ring and try again', 'bad');
+        this.flag = e.lob && (!perfectOnly || e.perfect);
+      }
+      if (e.type === 'touch' && e.robot === 2 && this.flag) {
+        this.flag = false;
+        this.toast('The defender got to it. Try again', 'bad');
+      }
+      if ((e.type === 'touch' || e.type === 'kick') && e.robot === 1 && this.flag) {
+        this.flag = false;
+        this.toast(perfectOnly ? 'Perfect long ball!' : 'Long ball received!', 'good');
+        this.wait2 = 1;
+        return true;
+      }
+    }
+    if (this.wait2 <= 0) this.resetStrayBall(ev);
+    return false;
+  }
+
+  /** Give-and-go drill: reset when the ball goes dead without a goal. */
+  private resetGiveGo(ev: SimEvent[]): void {
+    const b = this.world.ball;
+    const dead = Math.hypot(b.vx, b.vz) < 0.4 && Math.hypot(b.x - this.a, b.z - this.b) > 1.5 && Math.hypot(b.x - this.world.robots[1].x, b.z - this.world.robots[1].z) > 2;
+    this.stepT = dead ? this.stepT + DT : 0;
+    if (this.stepT > 2.2 || ev.some((e) => e.type === 'goal')) {
+      const s = this.steps[this.index];
+      s.enter();
+      this.stepT = 0;
+      this.toast('Reset: pass, run, call it back');
+    }
   }
 
   /** Put the ball back on its spot when it has rolled away and stopped. */
@@ -421,6 +521,10 @@ export class LessonMode extends Scenario {
   }
 
   protected override before(cmds: Command[]): void {
+    if (this.id === 'plays') {
+      this.playsMate(cmds);
+      return;
+    }
     if (this.id !== 'pass') return;
     const w = this.world;
     const mate = w.robots[1];
@@ -442,6 +546,35 @@ export class LessonMode extends Scenario {
       } else if (bd < 5 && b.lastTouchRobot === 0) runTo(c, b.x + b.vx * 0.2, b.z + b.vz * 0.2, mate.x, mate.z, 0.2);
       else runTo(c, 5, 4.5, mate.x, mate.z, 0.3);
     } else if (bd < 4 && Math.hypot(b.vx, b.vz) > 1) runTo(c, b.x + b.vx * 0.2, b.z + b.vz * 0.2, mate.x, mate.z, 0.2);
+  }
+
+  /** Plays lesson teammate: collects long balls; in the give-and-go step, returns the ball first time when called. */
+  private playsMate(cmds: Command[]): void {
+    const w = this.world;
+    const mate = w.robots[1];
+    const me = w.robots[0];
+    const c = cmds[1];
+    const b = w.ball;
+    if (this.wait2 > 0) this.wait2 -= DT;
+    const bd = Math.hypot(b.x - mate.x, b.z - mate.z);
+    // The defender stays put (it only blocks the straight lane).
+    if (this.index === 2) {
+      // Player pressed PASS without the ball after passing: the call for a give-and-go.
+      if (cmds[0].pass && Math.hypot(b.x - me.x, b.z - me.z) > TUNING.kick.range + 0.4) this.ggCall = true;
+      if (bd < TUNING.kick.range - 0.05 && b.lastTouchRobot !== 1 && mate.kickCd <= 0 && this.ggCall) {
+        c.pass = true;
+        c.giveGo = true;
+        this.ggCall = false;
+      } else if (bd < 6 && b.lastTouchRobot === 0 && b.h < TUNING.ball.headHeight) runTo(c, b.x + b.vx * 0.2, b.z + b.vz * 0.2, mate.x, mate.z, 0.2);
+      return;
+    }
+    // Long-ball steps: meet the ball where it comes down.
+    if (b.lastTouchRobot === 0 && (b.h > 0 || Math.hypot(b.vx, b.vz) > 1)) {
+      const plan = lobPlan(w, me);
+      const tx = b.h > 0 ? (plan ? plan.x : b.x) : b.x + b.vx * 0.2;
+      const tz = b.h > 0 ? (plan ? plan.z : b.z) : b.z + b.vz * 0.2;
+      if (bd < 7) runTo(c, tx, tz, mate.x, mate.z, 0.2);
+    }
   }
 
   protected after(events: SimEvent[]): void {
