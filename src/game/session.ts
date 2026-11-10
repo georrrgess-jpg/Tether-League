@@ -216,7 +216,7 @@ export class PlaySession {
           row('Move / steer swing', `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])} or arrows`),
           row('Swing: tap = auto launch toward your aim', `Right mouse or ${keyLabel(k.tether[0])}`),
           row('Swing: tap again = let go now; hold = let go yourself (rope glows green when lined up)', 'same button'),
-          row('Kick toward aim', `Left mouse or ${keyLabel(k.kick[0])}`),
+          row('Kick toward aim (one press; mashing scuffs the shot)', `Left mouse or ${keyLabel(k.kick[0])}`),
           row('Pass to teammate (without the ball: call for it)', `${keyLabel(k.pass[0])} / ${keyLabel(k.pass[1])}`),
           row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
           row('Pause', keyLabel(k.pause[0])),

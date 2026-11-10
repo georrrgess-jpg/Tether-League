@@ -77,6 +77,8 @@ export interface Robot {
   kickPower: number;
   /** The buffered kick is a pass. */
   kickPass: boolean;
+  /** Kick-button mashing level (see TUNING.kick.mashThreshold). */
+  mash: number;
   ghost: number;
 
   /** Seconds since release from a swing while still above run speed (used for "swing kick" detection). */
@@ -103,7 +105,7 @@ export interface Ball {
 }
 
 export type SimEvent =
-  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean }
+  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean }
   | { type: 'touch'; robot: number; speed: number }
   | { type: 'wall'; speed: number; x: number; z: number; nx: number; nz: number }
   | { type: 'post'; speed: number; x: number; z: number }

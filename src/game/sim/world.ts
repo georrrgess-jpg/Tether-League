@@ -50,6 +50,7 @@ export function createRobot(id: number, team: 0 | 1, slot: number, chassis: Chas
     kickBuffer: 0,
     kickPower: 1,
     kickPass: false,
+    mash: 0,
     ghost: 0,
     carry: 99,
     lastKickTick: -999,
@@ -206,6 +207,8 @@ function controlRobot(w: World, r: Robot, c: Command): void {
   if (r.kickCd > 0) r.kickCd -= DT;
   if (r.ghost > 0) r.ghost -= DT;
   r.carry += DT;
+  r.mash = Math.max(0, r.mash - TUNING.kick.mashDecay * DT);
+  if (c.kick || c.pass) r.mash += 1;
   if (c.pass) {
     r.kickBuffer = TUNING.kick.passBufferSeconds;
     r.kickPower = 1;
@@ -418,8 +421,43 @@ function tryKick(w: World, r: Robot): void {
     az = Math.sin(bestAng);
   }
 
-  const fwd = Math.max(0, r.vx * ax + r.vz * az);
+  // Own-goal guard (players with aim assist on): a kick that would roll into our own goal mouth becomes a
+  // clearance toward the nearer wing. With assist off an own goal is still possible.
+  if (r.assist > 0 && !mate && w.goalsOpen) {
+    const own = -attackDir(r.team);
+    const ownX = own * w.hx;
+    if (ax * own > 0.15) {
+      const t = (ownX - b.x) / ax;
+      const zAt = b.z + az * t;
+      if (t > 0 && Math.abs(ownX - b.x) < 14 && Math.abs(zAt) < w.arena.goalWidth / 2 + 1) {
+        const side = Math.sign(b.z || az || 1);
+        const cx = -own * 0.45;
+        const cz = side * 0.9;
+        const cl = Math.hypot(cx, cz);
+        ax = cx / cl;
+        az = cz / cl;
+        assisted = 'none';
+      }
+    }
+  }
+  // Mashing the kick button scuffs the kick: deterministic (seeded by tick and robot) aim error and less power.
+  const rushed = !mate && r.mash > K.mashThreshold;
+  if (rushed) {
+    const h = Math.sin((w.tick + 1) * 12.9898 + r.id * 78.233) * 43758.5453;
+    const err = ((h - Math.floor(h)) * 2 - 1) * K.rushedError;
+    const ca = Math.cos(err);
+    const sa = Math.sin(err);
+    const nx = ax * ca - az * sa;
+    az = ax * sa + az * ca;
+    ax = nx;
+  }
+  const along = r.vx * ax + r.vz * az;
+  const fwd = Math.max(0, along);
   let speed = Math.min(K.speedCap, K.baseSpeed + K.forwardVelocityFactor * fwd);
+  // You cannot blast the ball back against your own run.
+  const rs = Math.hypot(r.vx, r.vz);
+  if (rs > 3 && along < -0.3 * rs) speed *= K.backwardPower;
+  if (rushed) speed *= K.rushedPower;
   speed = Math.min(speed, speedLimit) * r.kickPower;
   b.vx = ax * speed;
   b.vz = az * speed;
@@ -427,7 +465,7 @@ function tryKick(w: World, r: Robot): void {
   b.lastTouchTick = w.tick;
   b.lastTouchDeliberate = true;
   const wasPass = !!mate;
-  r.kickCd = K.cooldownSeconds;
+  r.kickCd = rushed ? K.rushedCooldown : K.cooldownSeconds;
   r.kickBuffer = 0;
   r.kickPass = false;
   r.ghost = K.ghostSeconds;
@@ -444,6 +482,7 @@ function tryKick(w: World, r: Robot): void {
     swing,
     target,
     pass: wasPass,
+    rushed,
   });
 }
 

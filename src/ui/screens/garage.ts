@@ -51,7 +51,25 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
     const isOwned = owned(selected);
     const parts: (HTMLElement | null)[] = [
       h('div', { class: 'panel-title' }, c.name, h('small', null, c.tagline)),
-      h('div', { class: 'bars' }, chassisBars(c).map((b) => h('div', { class: 'bar-row' }, h('span', null, b.label), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(b.value * 100)}%` }))))),
+      (() => {
+        // Each bar shows a marker for the chassis currently equipped on the robot being edited.
+        const eq = chassisBars(CHASSIS[who === 'me' ? save.club.chassis : save.club.mateChassis]);
+        const same = (who === 'me' ? save.club.chassis : save.club.mateChassis) === selected;
+        return h('div', { class: 'bars' },
+          chassisBars(c).map((b, i) => {
+            const d = b.value - eq[i].value;
+            return h('div', { class: 'bar-row' },
+              h('span', null, b.label),
+              h('div', { class: 'bar compare' },
+                h('i', { style: `width:${Math.round(b.value * 100)}%` }),
+                same ? null : h('em', { class: 'eq-mark', style: `left:${Math.round(eq[i].value * 100)}%`, title: 'Equipped' }),
+              ),
+              same || Math.abs(d) < 0.03 ? h('b', { class: 'delta' }) : h('b', { class: `delta ${d > 0 ? 'up' : 'down'}` }, d > 0 ? '▲' : '▼'),
+            );
+          }),
+          same ? null : h('p', { class: 'muted compare-note' }, 'White marks show the chassis you have equipped.'),
+        );
+      })(),
       h('div', { class: 'trait good' }, icon('check'), h('span', null, c.strength)),
       h('div', { class: 'trait bad' }, icon('info'), h('span', null, c.weakness)),
       h('p', { class: 'muted' }, 'All chassis share the same size, kick reach and tether range. These are sidegrades, not upgrades.'),

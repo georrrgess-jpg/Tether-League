@@ -14,6 +14,8 @@
     "check": "tsc --noEmit && vitest run",
     "feasibility": "vite-node tools/feasibility.ts && vite-node tools/bank.ts",
     "sim": "vite-node tools/simulate.ts",
+    "balance": "vite-node tools/balance.ts",
+    "sweep": "vite-node tools/sweep.ts",
     "swingcheck": "vite-node tools/swingcheck.ts && vite-node tools/swingstats.ts 4 harbor_park club && vite-node tools/trialswing.ts"
   },
   "dependencies": {

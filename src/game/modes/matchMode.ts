@@ -80,6 +80,8 @@ export class MatchMode implements PlayMode {
   private lastClock = '';
   private hintKey = '';
   private lastCall = -999;
+  private rushedTold = 0;
+  private lastRushed = -999;
 
   constructor(readonly setup: MatchSetup, private settings: () => Settings) {
     const look = setup.looks;
@@ -126,7 +128,11 @@ export class MatchMode implements PlayMode {
     this.elCount = h('div', { class: 'countdown' });
     this.elToasts = h('div', { class: 'toasts' });
     this.elHint = h('div', { class: 'hint' });
+    // Short team-coloured wipe as the match opens.
+    const wipe = h('div', { class: 'match-wipe', style: `--home:${setup.home.primary};--away:${setup.away.primary}` }, h('b', null, `${setup.home.name}  v  ${setup.away.name}`));
+    setTimeout(() => wipe.remove(), 1600);
     this.hud = h('div', { class: 'hud' },
+      wipe,
       h('div', { class: 'scorebar' }, homeEl, h('div', { class: 'clock' }, this.elClock, this.elPhase), awayEl),
       this.elBanner,
       this.elCount,
@@ -184,6 +190,13 @@ export class MatchMode implements PlayMode {
     }
     this.prevPhase = m.phase;
 
+    for (const e of this.world.events) {
+      if (e.type === 'kick' && e.robot === 0 && e.rushed && this.rushedTold < 4 && this.world.tick - this.lastRushed > 240) {
+        this.rushedTold++;
+        this.lastRushed = this.world.tick;
+        this.toast('Rushed shot! One press per kick is stronger', 'bad');
+      }
+    }
     for (const e of m.events) {
       switch (e.type) {
         case 'countdown':

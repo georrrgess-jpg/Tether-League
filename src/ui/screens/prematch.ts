@@ -6,6 +6,9 @@ import { DIFFICULTY, DIFFICULTY_ORDER, TENDENCY, type TendencyId } from '../../g
 import { careerMatchInfo, careerSetup, opponentTeam, quickSetup } from '../../game/setup';
 import { unlockedArenas } from '../../progression/progression';
 import { h, icon } from '../dom';
+import { controlsStrip } from '../controls';
+import { standings } from '../../career/career';
+import { REWARDS } from '../../progression/progression';
 import { clubBadge, shell } from '../shell';
 import { clubBadgeFor } from './league';
 
@@ -74,6 +77,26 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
     }
   };
 
+  /** Opponent's league position and recent form in this season (career only). */
+  function scouting(): HTMLElement {
+    const table = standings(save.career);
+    const pos = table.findIndex((r) => r.club === oppId) + 1;
+    const row = table.find((r) => r.club === oppId);
+    const form = save.career.fixtures
+      .filter((f) => f.done && (f.home === oppId || f.away === oppId))
+      .slice(-3)
+      .map((f) => {
+        const won = f.home === oppId ? f.hg > f.ag : f.ag > f.hg;
+        return h('i', { class: `form ${won ? 'w' : 'l'}`, title: won ? 'Win' : 'Loss' }, won ? 'W' : 'L');
+      });
+    if (!row || row.played === 0) return h('div', { class: 'scouting one' }, h('span', null, h('small', null, 'Scouting'), h('b', null, `First meeting of the season · ${opp.styleLabel}`)));
+    return h('div', { class: 'scouting' },
+      h('span', null, h('small', null, 'League position'), h('b', null, pos ? `${pos}${pos === 1 ? 'st' : pos === 2 ? 'nd' : pos === 3 ? 'rd' : 'th'}` : '–')),
+      h('span', null, h('small', null, 'Record'), h('b', null, row ? `${row.wins}W ${row.losses}L` : '–')),
+      h('span', null, h('small', null, 'Form'), h('b', { class: 'forms' }, form.length ? form : '–')),
+    );
+  }
+
   const tend = TENDENCY[prefs.tendency];
   const row = (label: string, control: Node, note?: string) => h('div', { class: 'opt' }, h('div', { class: 'opt-head' }, h('b', null, label), control), note ? h('p', { class: 'muted' }, note) : null);
 
@@ -107,6 +130,12 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
       h('div', { class: 'vs-team' }, clubBadgeFor(app, oppId, 'big'), h('b', null, opp.name), h('small', null, opp.styleLabel)),
     ),
     kit.awayKit ? h('p', { class: 'muted center' }, `${opp.name} wear their away kit so the teams are easy to tell apart.`) : null,
+    info ? scouting() : null,
+    h('div', { class: 'stakes' },
+      h('span', { class: 'chip' }, icon('coin'), `Play: +${Math.round(REWARDS.matchComplete.credits * (mode === 'quick' ? REWARDS.quickFactor : 1))}`),
+      h('span', { class: 'chip chip-yellow' }, icon('trophy'), `Win: +${Math.round((REWARDS.matchComplete.credits + REWARDS.winBonus.credits) * (mode === 'quick' ? REWARDS.quickFactor : 1))} credits`),
+      h('span', { class: 'chip' }, icon('star'), 'Passes, saves and goals add a bonus'),
+    ),
     oppPick,
     h('div', { class: 'arena-line' },
       arenaDiagram(arena),
@@ -115,6 +144,7 @@ export function prematchScreen(app: App, params: URLSearchParams): ScreenView {
     ),
     h('button', { class: 'btn btn-primary btn-big', 'data-autofocus': true, onclick: start }, icon('play'), 'Start match'),
     h('p', { class: 'muted center' }, mode === 'career' ? 'Three minutes. Leaving mid-match keeps the fixture unplayed.' : 'Quick matches pay 60% rewards and never change the league.'),
+    controlsStrip(save.settings),
   );
 
   const el = shell(app, { nav: 'play', title: 'Pre-match', subtitle: info ? info.label : 'Quick match', back: mode === 'career' ? 'league' : 'home', dim: true, cls: 'prematch' }, h('div', { class: 'prematch-grid' }, matchup, options));

@@ -65,7 +65,7 @@ export const TUNING = {
     drag: 0.42,
     /** Constant rolling deceleration (units/s^2). */
     rolling: 0.55,
-    robotRestitution: 0.3,
+    robotRestitution: 0.12,
   },
   kick: {
     range: 1.48,
@@ -83,6 +83,17 @@ export const TUNING = {
     passPerUnit: 0.62,
     /** The pass button buffers a little longer than a kick so it can be pressed just before the ball arrives. */
     passBufferSeconds: 0.22,
+    /** Kick-button mashing: each press adds 1, decaying at this rate per second. */
+    mashDecay: 3.2,
+    /** Above this level a kick is "rushed": weaker and less accurate. A deliberate press or double tap stays below. */
+    mashThreshold: 2.6,
+    rushedPower: 0.68,
+    /** Cooldown after a rushed kick: a masher cannot chain pokes. */
+    rushedCooldown: 0.7,
+    /** Max aim error of a rushed kick (radians). */
+    rushedError: 0.26,
+    /** Kicking against your own running direction keeps this share of the base speed. */
+    backwardPower: 0.72,
     /** How far ahead (seconds of teammate movement, capped) a pass is led. */
     passLeadMax: 0.6,
   },

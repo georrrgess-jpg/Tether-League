@@ -434,7 +434,7 @@ describe('deliberate kick', () => {
     expect(tooEarly.w.ball.lastTouchDeliberate).toBe(false);
   });
 
-  it('a kick while moving toward the aim is faster than a standing kick, and moving away adds nothing', () => {
+  it('a kick while moving toward the aim is faster than a standing kick, and kicking against your run loses power', () => {
     const standing = kickSetup(1.2);
     const s0 = eventsOf(step(standing.w, cmd({ kick: true, ax: 10, az: 0 })), 'kick')[0].speed;
 
@@ -450,7 +450,7 @@ describe('deliberate kick', () => {
     step(away.w, cmd({ mx: -1 }), 30);
     placeBall(away.w, away.r.x + 1.2, 0);
     const s2 = eventsOf(step(away.w, cmd({ mx: -1, kick: true, ax: 30, az: 0 })), 'kick')[0].speed;
-    expect(s2).toBeCloseTo(s0, 9);
+    expect(s2).toBeCloseTo(s0 * K.backwardPower, 9);
   });
 
   it('never exceeds the kick speed cap, whatever the robot speed', () => {

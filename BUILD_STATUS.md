@@ -90,6 +90,43 @@ device performance, touch comfort and gamepad mapping are untested. Frame rate w
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
 
+### Big update, stage 1: scoring balance, own goals, difficulty (2026-11-10)
+
+Reported: mashing shoot scored easily; frequent own goals; bot difficulty needed tuning.
+Measured with `tools/balance.ts` (full matches, stand-ins for the player) and `tools/sweep.ts`.
+
+- Spam scoring. A player that runs at the ball and presses kick every tick scored 10–13 goals a match
+  and won 100% even in the top division. Causes: the defending bots' second robot pushed up whenever
+  its team touched the ball, leaving the net empty (70% of spam goals had no defender within 6 units);
+  every touch could be an instant full-power poke; keyboard kicks snapped into the goal from up to
+  5 units outside the posts. Fixes: support robots only push up with real possession and no opponent
+  near the ball; a keeper reaction steps into the path of goal-bound shots after the bot's reaction
+  time; contested loose balls are tackled directly; mashed kicks (the button pressed repeatedly) are
+  rushed: 68% power, up to 15° error and a 0.7 s recovery, with a HUD note; kicking against your own
+  run keeps 72% power; keyboard goal snapping only tidies shots already within about 1 unit of a post
+  (3 with strong assist). After: mashing at 8 presses/s scores 0.75–0.85 goals a match and wins
+  25% at the middle division and above (Rookie League stays forgiving).
+- Own goals. Bots rarely scored own goals; the player did, because a keyboard kick (or a click with a
+  cursor untouched for 3 s) went the way you were running, which while defending is your own net.
+  Fixes: those kicks never go backward (clearance to the wing or a pass to an open teammate ahead); an
+  own-goal guard in the simulation turns a kick into our own goal mouth into a clearance while aim
+  assist is on (with assist off you can still own-goal); defending bots loop round the ball instead of
+  running through it; softer body touches (ball/robot restitution 0.3 to 0.12). After: 2 own goals in
+  72 matches (298 goals), both genuine body-contact accidents; the sweep saw 0 in 32 bot matches.
+- Difficulty. Stand-in win rates by division (Rookie / Harbor / Metro / Premier / Championship):
+  beginner-level 88 / 50 / 19 / 13 / 6%, average 100 / 75 / 63 / 31 / 31%, strong 100 / 100 / 63 /
+  63 / 44%. Goals per match 3–6 at every level (previously up to 10–12 at Pro).
+- Sweep: 32 seeded matches across all arenas with random chassis, styles and tiers: no NaN, nothing
+  out of bounds, no stuck ball (longest still 1.1 s), no robot pinned over 4 s, every match finished
+  with a winner and consistent goal credit.
+- UI: polish layer (`src/ui/styles/polish.css`): content cascade on screen entry, panel depth, button
+  light sweep and breathing primary action, nav accent, versus badges, table and progress-bar sheen,
+  scoreboard gloss, clock pulse in the last 10 s, score flip, team-coloured match-open wipe. Pre-match
+  shows the opponent's position, record and form, what a match and a win pay, and a controls strip
+  for the current device and key bindings. The garage compares each chassis against the equipped one.
+- Tests: `tests/scoring.test.ts` (mashing, double taps, bots never mash, own-goal guard with and
+  without assist, mash balance and own-goal rate in seeded matches).
+
 ### Swing direction, pass button, ball and goal celebration update (2026-11-10)
 
 Reported: swings often went backwards ("because of my orientation or the way I hook onto the rim").

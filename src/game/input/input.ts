@@ -370,18 +370,38 @@ export class InputManager {
 
   /** Aim for kicks made without an explicit aim (keyboard, tap, pad face button). */
   private smartAim(w: World, r: Robot, dx: number, dz: number, out: { x: number; z: number }): void {
+    // Aim used when the player has not pointed anywhere (keyboard, tap, pad face button, stale cursor).
+    // It follows the direction of movement, but never sends the ball back toward your own goal: a kick while
+    // running back becomes a clearance toward the wing, or a pass to a teammate who is open ahead.
     const b = w.ball;
+    const att = attackDir(r.team);
+    const assist = this.settings().aimAssistance;
+    if (dx * att < -0.25) {
+      for (const m of w.robots) {
+        if (m.team !== r.team || m.id === r.id) continue;
+        if ((m.x - b.x) * att > 2.5 && Math.hypot(m.x - b.x, m.z - b.z) > 3) {
+          out.x = m.x + m.vx * 0.4;
+          out.z = m.z + m.vz * 0.4;
+          return;
+        }
+      }
+      const side = Math.sign(b.z || r.z || dz || 1);
+      out.x = b.x + att * 8;
+      out.z = side * (w.hz - 1.5);
+      return;
+    }
     out.x = b.x + dx * 8;
     out.z = b.z + dz * 8;
-    if (this.settings().aimAssistance === 'off') return;
-    const att = attackDir(r.team);
+    if (assist === 'off') return;
     const gx = att * w.hx;
     const gdx = gx - b.x;
     const gd = Math.hypot(gdx, b.z);
-    if (w.goalsOpen && dx * att > 0.3 && gd < 17 && gdx * att > 0.5) {
+    // Only shots already heading close to the goal are tidied inside the posts (light: about a metre outside).
+    const reach = assist === 'strong' ? 3 : 1.2;
+    if (w.goalsOpen && dx * att > 0.3 && gd < 15 && gdx * att > 0.5) {
       const zAt = b.z + (dz / (dx * att)) * Math.abs(gdx);
       const lim = w.arena.goalWidth / 2 - 0.9;
-      if (Math.abs(zAt) < lim + 5) {
+      if (Math.abs(zAt) < lim + reach) {
         out.x = gx;
         out.z = Math.max(-lim, Math.min(lim, zAt));
         return;
@@ -400,6 +420,7 @@ export class InputManager {
       }
     }
   }
+
 
   /** Fill the command for one simulation tick. */
   sample(w: World, r: Robot, c: Command): void {
@@ -501,7 +522,8 @@ export class InputManager {
       if (this.aimOnce) {
         c.ax = w.ball.x + this.aimOnce.x * 8;
         c.az = w.ball.z + this.aimOnce.z * 8;
-      } else if (this.kickByKey && !(pad && pad.aim)) {
+      } else if ((this.kickByKey || (ml > 0.2 && performance.now() - this.mouseMovedAt > 3000)) && !(pad && pad.aim)) {
+        // Keyboard kick, or a click with a cursor you have not touched for a while: aim from movement instead.
         this.smartAim(w, r, dirX, dirZ, this.tmp);
         c.ax = this.tmp.x;
         c.az = this.tmp.z;

@@ -1,0 +1,494 @@
+/*
+ * Visual polish layer (loaded after base/menus/hud). Keeps the established ivory / navy / cyan / yellow
+ * language and adds depth, motion and feedback. Everything respects .reduced-motion (base.css disables
+ * animations and transitions there).
+ */
+
+:root {
+  --glow-cyan: 0 0 0 1px rgba(18, 188, 210, 0.35), 0 8px 26px rgba(18, 188, 210, 0.28);
+  --glow-yellow: 0 0 0 1px rgba(246, 197, 66, 0.4), 0 10px 28px rgba(246, 197, 66, 0.32);
+  --ease-out: cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* ---------- screen entrance: content cascades in ---------- */
+.screen .content > * {
+  animation: rise-in 0.32s var(--ease-out) both;
+}
+.screen .content > *:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.screen .content > *:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.screen .content > *:nth-child(4) {
+  animation-delay: 0.12s;
+}
+.screen .content > *:nth-child(n + 5) {
+  animation-delay: 0.16s;
+}
+.screen .nav {
+  animation: slide-in-left 0.3s var(--ease-out) both;
+}
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+/* subtle animated light behind dimmed menu screens */
+.screen.dim::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 30% at 20% 15%, rgba(18, 188, 210, 0.16), transparent 70%),
+    radial-gradient(35% 28% at 85% 80%, rgba(246, 197, 66, 0.1), transparent 70%);
+  animation: ambient-drift 18s ease-in-out infinite alternate;
+}
+@keyframes ambient-drift {
+  to {
+    transform: translate(3%, -2%) scale(1.05);
+  }
+}
+
+/* ---------- panels ---------- */
+.panel {
+  background: linear-gradient(180deg, #fbfcf8 0%, var(--panel) 55%, #eceee6 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 0 0 1px rgba(23, 39, 62, 0.06), var(--shadow);
+}
+.panel-dark {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 25%, transparent 25% 50%, rgba(255, 255, 255, 0.05) 50% 75%, transparent 75%) 0 0 / 18px 18px,
+    linear-gradient(180deg, rgba(38, 62, 99, 0.97), rgba(21, 36, 58, 0.98));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.09) inset, 0 1px 0 rgba(255, 255, 255, 0.12) inset, var(--shadow);
+}
+.panel-title {
+  position: relative;
+  padding-bottom: 8px;
+}
+.panel-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--cyan), var(--yellow));
+}
+.section-head {
+  letter-spacing: 0.03em;
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn::after {
+  /* light sweep on hover */
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.btn:hover::after {
+  animation: btn-shine 0.7s var(--ease-out);
+}
+@keyframes btn-shine {
+  0% {
+    left: -60%;
+    opacity: 1;
+  }
+  100% {
+    left: 130%;
+    opacity: 0;
+  }
+}
+.btn-primary {
+  background: linear-gradient(180deg, #ffe183 0%, #ffd04f 45%, var(--yellow) 100%);
+}
+.btn-primary:hover {
+  box-shadow: 0 4px 0 var(--yellow-d), var(--glow-yellow), inset 0 2px 0 rgba(255, 255, 255, 0.55);
+}
+.btn-cyan:hover {
+  box-shadow: 0 4px 0 var(--cyan-d), var(--glow-cyan), inset 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+.btn-big.btn-primary {
+  animation: primary-breathe 2.8s ease-in-out infinite;
+}
+@keyframes primary-breathe {
+  50% {
+    box-shadow: 0 4px 0 var(--yellow-d), 0 0 0 6px rgba(246, 197, 66, 0.18), 0 12px 26px rgba(10, 22, 40, 0.25), inset 0 2px 0 rgba(255, 255, 255, 0.55);
+  }
+}
+.btn .icon {
+  transition: transform 0.18s var(--ease-out);
+}
+.btn:hover .icon {
+  transform: translateX(2px) scale(1.08);
+}
+
+/* ---------- navigation ---------- */
+.nav-btn {
+  position: relative;
+  transition: transform 0.14s var(--ease-out), background 0.14s ease, box-shadow 0.14s ease;
+}
+.nav-btn.is-active::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 22%;
+  bottom: 22%;
+  width: 4px;
+  border-radius: 4px;
+  background: var(--yellow);
+  box-shadow: 0 0 10px rgba(246, 197, 66, 0.8);
+}
+.nav-btn .icon {
+  transition: transform 0.2s var(--ease-out);
+}
+.nav-btn:hover .icon {
+  transform: rotate(-8deg) scale(1.12);
+}
+
+/* ---------- top bar ---------- */
+.credits,
+.club-chip {
+  transition: transform 0.15s var(--ease-out), box-shadow 0.15s ease;
+}
+.club-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3), inset 0 0 0 2px rgba(255, 255, 255, 0.18), var(--glow-cyan);
+}
+.credits .icon {
+  filter: drop-shadow(0 0 6px rgba(246, 197, 66, 0.6));
+}
+
+/* ---------- cards & interactive items ---------- */
+.mode-card,
+.arena-card,
+.chassis-item,
+.trial-item,
+.lesson-item,
+.item {
+  transition: transform 0.16s var(--ease-out), box-shadow 0.16s ease, background 0.16s ease;
+}
+.mode-card:hover,
+.arena-card:not(.is-locked):hover,
+.chassis-item:hover,
+.item:hover {
+  transform: translateY(-3px);
+}
+.mode-card {
+  border-top: 5px solid var(--cyan);
+}
+.mode-card:first-child {
+  border-top-color: var(--yellow);
+}
+.mode-card.is-future {
+  border-top-color: rgba(23, 39, 62, 0.2);
+}
+.mode-icon {
+  background: linear-gradient(160deg, var(--ink-3), var(--ink));
+  box-shadow: 0 4px 12px rgba(10, 22, 40, 0.3);
+}
+
+/* versus cards: team-coloured split behind the badges */
+.versus {
+  position: relative;
+  padding: 6px 0;
+}
+.versus .vs {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--yellow) !important;
+  font-size: 1.05rem;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7), 0 6px 14px rgba(10, 22, 40, 0.35);
+}
+.versus .badge.big {
+  transition: transform 0.25s var(--ease-out);
+}
+.versus:hover .badge.big {
+  transform: scale(1.06) rotate(-3deg);
+}
+
+/* league table rows */
+.table tbody tr {
+  transition: transform 0.12s ease;
+}
+.table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.14);
+}
+.table tr.is-me td {
+  background: linear-gradient(90deg, rgba(18, 188, 210, 0.6), rgba(18, 188, 210, 0.3));
+}
+.table .pts {
+  color: var(--yellow);
+}
+
+/* progress bars get a moving sheen */
+.bar > i {
+  position: relative;
+  overflow: hidden;
+}
+.bar > i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: translateX(-100%);
+  animation: bar-sheen 2.6s ease-in-out infinite;
+}
+@keyframes bar-sheen {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* chips */
+.chip-yellow,
+.chip-cyan,
+.chip-green {
+  box-shadow: 0 2px 0 rgba(10, 22, 40, 0.18);
+}
+
+/* ---------- settings ---------- */
+.settings-card .opt-head b {
+  font-weight: 800;
+}
+.key {
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.key:hover {
+  transform: translateY(-1px);
+  background: var(--ink-3);
+}
+
+/* ---------- dialog ---------- */
+.overlay .panel.dialog {
+  animation: dialog-in 0.22s var(--ease-out);
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+
+/* ---------- match HUD ---------- */
+.scorebar {
+  filter: drop-shadow(0 8px 14px rgba(10, 22, 40, 0.4));
+}
+.scorebar .team {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--team) 82%, #fff 18%), var(--team) 55%, color-mix(in srgb, var(--team) 80%, #000 20%));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+.scorebar .clock {
+  background: linear-gradient(180deg, #2a4366, var(--ink));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12);
+}
+.scorebar .time.late {
+  animation: clock-pulse 1s ease-in-out infinite;
+}
+@keyframes clock-pulse {
+  50% {
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255, 120, 100, 0.9);
+  }
+}
+.scorebar .score.bump {
+  animation: score-flip 0.6s var(--ease-out);
+}
+@keyframes score-flip {
+  0% {
+    transform: skewX(10deg) rotateX(90deg) scale(1.4);
+  }
+  60% {
+    transform: skewX(10deg) scale(1.25);
+  }
+  100% {
+    transform: skewX(10deg) scale(1);
+  }
+}
+.toast {
+  box-shadow: 0 6px 14px rgba(10, 22, 40, 0.35);
+}
+.hint {
+  backdrop-filter: blur(4px);
+}
+
+/* match start wipe (added by the session on entry) */
+.match-wipe {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(115deg, var(--home, #12bcd2) 0 49.6%, #ffffff 49.6% 50.4%, var(--away, #f48a2c) 50.4% 100%);
+  animation: wipe-out 0.9s 0.55s var(--ease-out) forwards;
+}
+.match-wipe b {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(2rem, 6vw, 4rem);
+  color: #fff;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  text-transform: uppercase;
+  animation: pop-in 0.4s var(--ease-out);
+}
+@keyframes wipe-out {
+  to {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0.6;
+  }
+}
+.reduced-motion .match-wipe {
+  display: none;
+}
+
+/* ---------- pre-match additions ---------- */
+.scouting {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.scouting > span {
+  display: grid;
+  justify-items: center;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.scouting small {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a9b8cf;
+}
+.scouting b {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.forms {
+  display: flex;
+  gap: 4px;
+}
+.form {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-style: normal;
+  font-size: 0.75rem;
+}
+.form.w {
+  background: var(--green);
+  color: #06281c;
+}
+.form.l {
+  background: var(--coral);
+  color: #fff;
+}
+.stakes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.controls-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.ctl {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+.ctl small {
+  font-size: 0.68rem;
+  color: #cfdaea;
+}
+.caps {
+  display: flex;
+  gap: 3px;
+}
+.cap {
+  min-width: 24px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f3f5ef;
+  color: var(--ink);
+  font: 800 0.72rem var(--font-body);
+  text-align: center;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+.scouting.one {
+  grid-template-columns: 1fr;
+}
+.scouting.one b {
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+}
+
+/* ---------- garage comparison ---------- */
+.bar-row {
+  grid-template-columns: 7.2em 1fr 1.2em !important;
+}
+.bar.compare {
+  position: relative;
+  overflow: visible;
+}
+.bar.compare > i {
+  overflow: hidden;
+}
+.eq-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--ink);
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.delta {
+  font-size: 0.7rem;
+  text-align: center;
+}
+.delta.up {
+  color: #1b9e6b;
+}
+.delta.down {
+  color: var(--coral);
+}
+.compare-note {
+  font-size: 0.72rem;
+}

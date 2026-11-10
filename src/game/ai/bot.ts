@@ -143,6 +143,8 @@ interface BotState {
   tether: { anchor: number; dir: 1 | -1; age: number; tx: number; tz: number } | null;
   swingRest: number;
   hesitate: number;
+  /** Tick a shot at our goal was first seen by this bot (0 = none). */
+  threatSince: number;
   stuckT: number;
   sx: number;
   sz: number;
@@ -202,6 +204,7 @@ export class BotDirector {
         tether: null,
         swingRest: 0,
         hesitate: 0,
+        threatSince: 0,
         stuckT: 0,
         sx: 0,
         sz: 0,
@@ -213,6 +216,37 @@ export class BotDirector {
       this.bots.push(st);
       this.byId[s.robot] = st;
     }
+  }
+
+  /** Shot threat on each team's goal from the latest prediction. */
+  private threat: ({ i: number; z: number } | null)[] = [null, null];
+
+  /** Is the ball (as predicted, ignoring robots) heading into this team's goal mouth soon? */
+  private detectThreat(team: 0 | 1): { i: number; z: number } | null {
+    const w = this.w;
+    const b = w.ball;
+    if (Math.hypot(b.vx, b.vz) < 3) return null;
+    const ownX = -attackDir(team) * w.hx;
+    for (let i = 0; i < 16; i++) {
+      const qx = this.pred[i * 2];
+      const qz = this.pred[i * 2 + 1];
+      if (Math.abs(qx - ownX) < 0.6 && Math.abs(qz) < w.arena.goalWidth / 2 + 0.5) return { i, z: qz };
+    }
+    return null;
+  }
+
+  /** Point where this robot can get in front of a goal-bound ball, or the goal-line spot as a last resort. */
+  private interceptShot(r: Robot, th: { i: number; z: number }): [number, number] {
+    const w = this.w;
+    const ownX = -attackDir(r.team) * w.hx;
+    const speed = TUNING.robot.maxRunSpeed;
+    for (let k = 0; k <= th.i; k++) {
+      const qx = this.pred[k * 2];
+      const qz = this.pred[k * 2 + 1];
+      if (Math.hypot(qx - r.x, qz - r.z) - 0.8 <= speed * (k + 1) * PRED_DT) return [qx, qz];
+    }
+    const lim = w.arena.goalWidth / 2 - 0.4;
+    return [ownX + attackDir(r.team) * 0.7, Math.max(-lim, Math.min(lim, th.z))];
   }
 
   /** Human-readable role for the debug overlay. */
@@ -250,6 +284,8 @@ export class BotDirector {
       predictBall(w, this.pred, PRED_STEPS, PRED_DT);
       this.predTick = w.tick;
       for (const r of w.robots) this.computeIntercept(r);
+      this.threat[0] = this.detectThreat(0);
+      this.threat[1] = this.detectThreat(1);
     }
     if (w.tick - this.roleTick >= 12) {
       this.assignRoles();
@@ -358,7 +394,10 @@ export class BotDirector {
     const control = ourEta < minOppEta - 0.2;
     const attacking = ball.x * att > -2 || control;
     // The support robot only leaves its guard position when the team clearly reaches the ball first.
-    const supportUp = control && ball.x * att > -w.hx * 0.35;
+    let pressure = 99;
+    for (const o of w.robots) if (o.team !== r.team) pressure = Math.min(pressure, Math.hypot(o.x - ball.x, o.z - ball.z));
+    const mateHasIt = !!mate && Math.hypot(mate.x - ball.x, mate.z - ball.z) < 2.2;
+    const supportUp = control && ball.x * att > -w.hx * 0.35 && (pressure > 4 || (mateHasIt && pressure > 2.5));
 
     if (b.role === 'challenger' || this.eta[r.id] < 0.45) {
       // Arrive slightly behind the ball relative to the direction we want to send it.
@@ -369,7 +408,14 @@ export class BotDirector {
       gz /= gl;
       const behind = (px - r.x) * gx + (pz - r.z) * gz;
       const dist = Math.hypot(px - r.x, pz - r.z);
-      if (attacking && dist > 1.4) {
+      // Between the ball and the opponents' goal: running straight at the ball would push it toward our own net.
+      const wrongSide = (r.x - px) * att > 0.4;
+      const contested = minOppEta < this.eta[r.id] + 0.35;
+      if (contested && !wrongSide && dist > 0.6) {
+        // A loose ball an opponent is about to reach: go straight in rather than taking the long way round.
+        b.tx = px;
+        b.tz = pz;
+      } else if (attacking && dist > 1.4) {
         if (behind > -0.3 * dist) {
           b.tx = px - gx * 0.55;
           b.tz = pz - gz * 0.55;
@@ -380,12 +426,18 @@ export class BotDirector {
           b.tz = pz - gz * 0.9 + gx * side * 0.9;
         }
       } else if (!attacking) {
-        // Defending: get goal-side of the ball.
+        // Defending: get goal-side of the ball. From the wrong side, loop round it instead of running through it.
         const ox = ownX - px;
         const oz = -pz;
         const ol = Math.hypot(ox, oz) || 1;
-        b.tx = px + (ox / ol) * 0.35;
-        b.tz = pz + (oz / ol) * 0.35;
+        if (wrongSide && dist < 4) {
+          const side = r.z >= pz ? 1 : -1;
+          b.tx = px + (ox / ol) * 1.2;
+          b.tz = pz + side * 1.6;
+        } else {
+          b.tx = px + (ox / ol) * 0.35;
+          b.tz = pz + (oz / ol) * 0.35;
+        }
       } else {
         b.tx = px;
         b.tz = pz;
@@ -568,6 +620,19 @@ export class BotDirector {
       tx = ball.x + ball.vx * 0.08;
       tz = ball.z + ball.vz * 0.08;
     }
+
+    // --- shot reaction: the support robot (or a lone defender) gets in front of a goal-bound ball after
+    // its reaction time. Faster tiers react sooner; nothing about the robot's speed changes.
+    const th = this.threat[r.team];
+    const mate2 = this.mate(r);
+    const saver = b.role === 'support' || !mate2 || mate2.human;
+    if (th && saver) {
+      if (!b.threatSince) b.threatSince = w.tick;
+      if ((w.tick - b.threatSince) * DT >= b.diff.reaction[0]) {
+        [tx, tz] = this.interceptShot(r, th);
+        b.tether = null;
+      }
+    } else b.threatSince = 0;
 
     // --- unstuck ---
     b.stuckT += DT;
