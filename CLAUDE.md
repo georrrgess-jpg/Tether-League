@@ -7,15 +7,18 @@ before changing rules or scope.
 ## Commands
 
 - `npm run dev`: dev server. `npm run build`: type-check and production build. `npm run preview`.
-- `npm run check`: type-check and the 179-test rule suite. Run it before committing.
+- `npm run check`: type-check and the 193-test rule suite. Run it before committing.
 - `npm run sim -- <matches> <arena> <difficultyA> <difficultyB>`: headless bot matches for tuning.
 - `npm run feasibility`: confirms the tether trial layouts are achievable.
+- `npm run swingcheck`: smart-swing aim accuracy, time gain over running, bot swing use, trial scores.
 
 ## Rules of the codebase
 
 - `src/game/sim/` is pure and deterministic per seed: no DOM, no rendering, no `Math.random`.
   Rendering reads simulation state and never writes it.
 - Humans and bots both produce `Command` objects. Bots must not get different physics.
+- Swing decisions (anchor, direction, when to let go) live in `src/game/sim/swing.ts` and are shared by the
+  player's smart swing and the bots. Change the planner there, not in two places.
 - All gameplay numbers live in `src/content/tuning.ts`; content is data in `src/content/`.
 - Rewards are paid only inside `commitMatch`, `commitTrial` and `commitLesson`
   (`src/progression/progression.ts`), which are idempotent. Screens display committed records.

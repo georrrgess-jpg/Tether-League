@@ -31,6 +31,7 @@ function robotsFor(id: TrialId, looks: RobotLook[]): ScenarioRobot[] {
 export class TrialMode extends Scenario {
   readonly title: string;
   readonly leaveNote = 'Leave this trial? The attempt is discarded; your best score is kept.';
+  readonly swingAssist?: boolean;
   private result: number | null = null;
   private step = 0;
   private count = 0;
@@ -46,6 +47,7 @@ export class TrialMode extends Scenario {
     super(TRIALS[id].arena, robotsFor(id, looks), settings);
     const def = TRIALS[id];
     this.title = def.name;
+    if (id === 'clean_release') this.swingAssist = false;
     this.setTask(def.name, def.objective);
     this.world.goalsOpen = id === 'bank_shot' || id === 'last_second_save' || id === 'counterattack';
     this.setup();

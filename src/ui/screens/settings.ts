@@ -62,7 +62,7 @@ export function settingsScreen(app: App): ScreenView {
   const controls = () =>
     h('section', { class: 'panel settings-card controls-card' },
       h('h2', { class: 'section-head' }, icon('edit'), 'Controls'),
-      h('p', { class: 'muted' }, 'Mouse: move to aim, left button kicks, right button tethers. Click a key to rebind it, then press the new key.'),
+      h('p', { class: 'muted' }, 'Mouse: move to aim, left button kicks, right button swings. Click a key to rebind it, then press the new key.'),
       h('div', { class: 'bind-table' },
         ACTIONS.map((a) =>
           h('div', { class: 'bind-row' }, h('span', null, ACTION_LABELS[a]),
@@ -160,7 +160,8 @@ export function settingsScreen(app: App): ScreenView {
       h('section', { class: 'panel settings-card' },
         h('h2', { class: 'section-head' }, icon('target'), 'Assistance'),
         choice('Aim assist', 'aimAssistance', [{ value: 'off', label: 'Off' }, { value: 'light', label: 'Light' }, { value: 'strong', label: 'Strong' }], 'Nudges kicks that are already close to the goal or a teammate. It never moves the ball for you.'),
-        toggle('Anchor link line', 'anchorAssistance', 'Draws a faint line to the anchor you would attach to.'),
+        toggle('Smart swing', 'swingAssist', 'A quick tap on tether swings round the best anchor and lets go automatically, launching you toward your aim. Holding the button always gives full manual control.'),
+        toggle('Swing preview', 'anchorAssistance', 'Shows the planned swing arc before you press, green when a swing beats running.'),
         toggle('Ball outline', 'ballOutline', 'Keeps a bright ring under the ball at all times.'),
         toggle('Show hints', 'showHints', 'Contextual control hints during your first matches.'),
       ),

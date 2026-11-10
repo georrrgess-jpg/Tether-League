@@ -241,6 +241,7 @@ export class MatchMode implements PlayMode {
     // One contextual hint at a time, retired once the action has been used a few times.
     let key = '';
     let text = '';
+    const w = this.world;
     if (this.setup.hints && this.settings().showHints && m.phase === 'play') {
       const u = session.input.used;
       const k = this.settings().keys;
@@ -253,7 +254,12 @@ export class MatchMode implements PlayMode {
         text = touch ? 'Tap KICK near the ball, or drag it to aim' : `Left click (or ${keyLabel(k.kick[0])}) near the ball to kick toward your aim`;
       } else if (u.tether < 3) {
         key = 'tether';
-        text = touch ? 'Hold TETHER near a glowing anchor, steer, then let go to launch' : `Hold right mouse (or ${keyLabel(k.tether[0])}) to swing from the glowing anchor. Release to launch`;
+        text = touch
+          ? 'Tap SWING to swing round the glowing anchor and launch where you are heading'
+          : `Point where you want to go and tap right mouse (or ${keyLabel(k.tether[0])}): you swing there and launch automatically`;
+      } else if (u.tether < 8 && (session.input.swing.plan?.gain ?? 0) > 0.8 && w.robots[0].tState === 'ready') {
+        key = 'swingcue';
+        text = touch ? 'Green arc: a swing gets you there faster. Tap SWING' : `Green arc: a swing gets you there faster. Tap right mouse or ${keyLabel(k.tether[0])}`;
       }
     }
     if (key !== this.hintKey) {

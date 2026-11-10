@@ -31,6 +31,8 @@ export interface PlayMode {
   /** True when positions were reset this tick (view must not interpolate across it). */
   teleported: boolean;
   markers?: { version: number; list: Marker[] };
+  /** Forces smart swing on or off for this mode, regardless of the player's setting. */
+  readonly swingAssist?: boolean;
   inputLive(): boolean;
   /** Advance one fixed tick. cmds[human] is already filled from input. */
   tick(cmds: Command[]): void;
@@ -70,6 +72,7 @@ export class PlaySession {
   private markerVersion = -1;
   private fps = 60;
   private hum = false;
+  private cuePrev = false;
   private pausedAt = 0;
   private onResize = () => this.resize();
   private onVis = () => {
@@ -103,6 +106,7 @@ export class PlaySession {
       ballOutline: s.ballOutline || s.highContrast,
     });
     this.input = new InputManager(this.layer, ctx.settings, () => this.view, () => this.togglePause());
+    if (mode.swingAssist !== undefined) this.input.assistOverride = mode.swingAssist;
     this.cmds = mode.world.robots.map(() => emptyCommand());
     this.moods = mode.world.robots.map(() => 'play' as RobotMood);
     this.exprs = mode.world.robots.map(() => null);
@@ -208,11 +212,12 @@ export class PlaySession {
         h('div', { class: 'pause-controls' },
           h('h3', null, 'Controls'),
           row('Move / steer swing', `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])} or arrows`),
-          row('Tether (hold, release to launch)', `Right mouse or ${keyLabel(k.tether[0])}`),
+          row('Swing: tap = auto launch toward your aim', `Right mouse or ${keyLabel(k.tether[0])}`),
+          row('Swing: hold = steer it yourself, let go on green', 'same button'),
           row('Kick toward aim', `Left mouse or ${keyLabel(k.kick[0])}`),
           row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
           row('Pause', keyLabel(k.pause[0])),
-          h('p', { class: 'muted' }, 'Touch: left thumb moves, hold TETHER, tap KICK or drag it to aim. Gamepad: left stick, right stick aim, trigger tether, A kick.'),
+          h('p', { class: 'muted' }, 'Touch: left thumb moves, tap SWING, tap KICK or drag it to aim. Gamepad: left stick, right stick aim, trigger swing, A kick. A green arc means a swing beats running.'),
         ),
       );
       (body.querySelector('.btn-primary') as HTMLElement | null)?.focus();
@@ -290,6 +295,9 @@ export class PlaySession {
       const on = r.tState === 'attached';
       if (on || this.hum) audio.setTetherHum(on, Math.hypot(r.vx, r.vz) / TUNING.tether.maxSpeed);
       this.hum = on;
+      const cue = this.input.swing.cue;
+      if (cue && !this.cuePrev) audio.play('uiSelect', { intensity: 0.5 });
+      this.cuePrev = cue;
     }
   }
 
@@ -351,6 +359,15 @@ export class PlaySession {
       dt: this.paused ? 0 : dt,
       preview: live && mode.human >= 0 ? this.input.preview : -1,
       link: s.anchorAssistance,
+      swing: live && mode.human >= 0
+        ? {
+            plan: this.input.swing.plan,
+            tx: this.input.swing.auto ? this.input.swing.auto.tx : this.input.swingTargetX,
+            tz: this.input.swing.auto ? this.input.swing.auto.tz : this.input.swingTargetZ,
+            auto: !!this.input.swing.auto,
+            cue: this.input.swing.cue,
+          }
+        : undefined,
       aimX: this.input.aimX,
       aimZ: this.input.aimZ,
       showAim: live && this.input.showAim,

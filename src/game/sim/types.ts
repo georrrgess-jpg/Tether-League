@@ -17,10 +17,12 @@ export interface Command {
   power: number;
   /** Previewed anchor index, -1 when none is legal. */
   anchor: number;
+  /** Preferred swing direction on attach (from the swing planner); 0 lets the simulation choose. */
+  swingDir: 0 | 1 | -1;
 }
 
 export function emptyCommand(): Command {
-  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1 };
+  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0 };
 }
 
 export function clearCommand(c: Command): void {
@@ -30,6 +32,7 @@ export function clearCommand(c: Command): void {
   c.kick = false;
   c.power = 1;
   c.anchor = -1;
+  c.swingDir = 0;
 }
 
 export type TetherState = 'ready' | 'attached' | 'cooldown';

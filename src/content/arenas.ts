@@ -40,19 +40,29 @@ function railAnchors(length: number, width: number, xs: number[], endZ: number):
   return out;
 }
 
+/** Overhead gantry anchors over each half: they make a useful swing available from mid-pitch. */
+function gantries(x: number, z: number): AnchorDef[] {
+  return [
+    { id: 'gantry_w_n', x: -x, z: -z, kind: 'gantry' },
+    { id: 'gantry_w_s', x: -x, z, kind: 'gantry' },
+    { id: 'gantry_e_n', x, z: -z, kind: 'gantry' },
+    { id: 'gantry_e_s', x, z, kind: 'gantry' },
+  ];
+}
+
 export const ARENAS: Record<ArenaId, ArenaDef> = {
   harbor_park: {
     id: 'harbor_park',
     name: 'Harbor Park',
     tag: 'Balanced',
-    blurb: 'The standard seaside court. Even spacing, clear swing lanes on both wings.',
+    blurb: 'The standard seaside court. Rail anchors on every wall and four overhead gantries for mid-pitch swings.',
     unlockHint: 'Home ground, always available.',
     length: 30,
     width: 20,
     goalWidth: 6,
     goalDepth: 2,
     corner: 2.4,
-    anchors: railAnchors(30, 20, [-10.5, -3.5, 3.5, 10.5], 6),
+    anchors: [...railAnchors(30, 20, [-10.5, -3.5, 3.5, 10.5], 6), ...gantries(7, 3.5)],
   },
   foundry_court: {
     id: 'foundry_court',
@@ -65,13 +75,13 @@ export const ARENAS: Record<ArenaId, ArenaDef> = {
     goalWidth: 6,
     goalDepth: 2,
     corner: 2.1,
-    anchors: railAnchors(27, 16.5, [-9.4, -3.2, 3.2, 9.4], 5.4),
+    anchors: [...railAnchors(27, 16.5, [-9.4, -3.2, 3.2, 9.4], 5.4), ...gantries(6.2, 3)],
   },
   skyline_stadium: {
     id: 'skyline_stadium',
     name: 'Skyline Stadium',
     tag: 'Wide open',
-    blurb: 'A wide rooftop pitch with room for support runs and two midfield gantry anchors for full-circle swings.',
+    blurb: 'A wide rooftop pitch with room for support runs and a cross of overhead gantries for long swings.',
     unlockHint: 'Win the Harbor Division title.',
     length: 31,
     width: 24,
@@ -82,6 +92,8 @@ export const ARENAS: Record<ArenaId, ArenaDef> = {
       ...railAnchors(31, 24, [-11, -3.7, 3.7, 11], 7),
       { id: 'gantry_n', x: 0, z: -4.5, kind: 'gantry' },
       { id: 'gantry_s', x: 0, z: 4.5, kind: 'gantry' },
+      { id: 'gantry_w', x: -8.5, z: 0, kind: 'gantry' },
+      { id: 'gantry_e', x: 8.5, z: 0, kind: 'gantry' },
     ],
   },
   championship_dome: {
@@ -95,7 +107,7 @@ export const ARENAS: Record<ArenaId, ArenaDef> = {
     goalWidth: 6,
     goalDepth: 2,
     corner: 3.2,
-    anchors: railAnchors(30, 20, [-10.5, -3.5, 3.5, 10.5], 6),
+    anchors: [...railAnchors(30, 20, [-10.5, -3.5, 3.5, 10.5], 6), ...gantries(7, 3.5)],
   },
 };
 

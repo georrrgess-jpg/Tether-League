@@ -1,6 +1,7 @@
 import { DT, TUNING } from '../../content/tuning';
 import { Rng } from '../sim/rng';
 import { attackDir, type Command, type Robot, type World } from '../sim/types';
+import { releaseNow, planSwing } from '../sim/swing';
 import { predictBall } from '../sim/world';
 
 /**
@@ -21,6 +22,8 @@ export interface Difficulty {
   anticipation: number;
   /** Chance per eligible decision to use a tether route. */
   tetherUse: number;
+  /** Seconds a bot waits after one swing before planning another. */
+  swingRest: [number, number];
   passSkill: number;
   dribble: number;
   /** Chance per decision to hesitate briefly. */
@@ -36,7 +39,8 @@ export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
     kickDelay: [0.22, 0.45],
     aimError: 0.32,
     anticipation: 0.35,
-    tetherUse: 0.1,
+    tetherUse: 0.3,
+    swingRest: [5, 8],
     passSkill: 0.3,
     dribble: 0.25,
     mistake: 0.1,
@@ -49,7 +53,8 @@ export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
     kickDelay: [0.12, 0.26],
     aimError: 0.15,
     anticipation: 0.75,
-    tetherUse: 0.45,
+    tetherUse: 0.7,
+    swingRest: [4, 6.5],
     passSkill: 0.6,
     dribble: 0.5,
     mistake: 0.03,
@@ -62,7 +67,8 @@ export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
     kickDelay: [0.06, 0.14],
     aimError: 0.07,
     anticipation: 1,
-    tetherUse: 0.85,
+    tetherUse: 0.95,
+    swingRest: [3, 5],
     passSkill: 0.8,
     dribble: 0.6,
     mistake: 0,
@@ -134,7 +140,8 @@ interface BotState {
   kick: KickPlan | null;
   kickWait: number;
   redecide: number;
-  tether: { anchor: number; dir: 1 | -1; age: number } | null;
+  tether: { anchor: number; dir: 1 | -1; age: number; tx: number; tz: number } | null;
+  swingRest: number;
   hesitate: number;
   stuckT: number;
   sx: number;
@@ -191,6 +198,7 @@ export class BotDirector {
         kickWait: 0,
         redecide: 0,
         tether: null,
+        swingRest: 0,
         hesitate: 0,
         stuckT: 0,
         sx: 0,
@@ -414,69 +422,19 @@ export class BotDirector {
     b.tx = Math.max(-w.hx + R, Math.min(w.hx - R, b.tx));
     b.tz = Math.max(-w.hz + R, Math.min(w.hz - R, b.tz));
 
-    // Tether route: only when it is meaningfully faster than running.
-    if (!b.tether && r.tState === 'ready' && rng.chance(b.diff.tetherUse)) {
+    // Tether route: the shared swing planner (same one the player's smart swing uses). Only taken when the
+    // swing clearly beats running; difficulty decides how often the bot spots it.
+    if (!b.tether && b.swingRest <= 0 && r.tState === 'ready' && rng.chance(b.diff.tetherUse)) {
       const dist = Math.hypot(b.tx - r.x, b.tz - r.z);
-      const ballNear = Math.hypot(ball.x - r.x, ball.z - r.z) < 3;
-      if (dist > 7 && !ballNear) this.planTether(b, r);
-    }
-  }
-
-  private planTether(b: BotState, r: Robot): void {
-    const w = this.w;
-    const T = TUNING.tether;
-    const run = TUNING.robot.maxRunSpeed;
-    const tx = b.tx;
-    const tz = b.tz;
-    const runTime = Math.hypot(tx - r.x, tz - r.z) / run;
-    let bestTime = runTime * 0.82;
-    let best = -1;
-    let bestDir: 1 | -1 = 1;
-    const anchors = w.arena.anchors;
-    for (let i = 0; i < anchors.length; i++) {
-      const c = anchors[i];
-      const rr = Math.hypot(r.x - c.x, r.z - c.z);
-      if (rr < 3.2 || rr > T.acquisitionRange - 0.3) continue;
-      const dT = Math.hypot(tx - c.x, tz - c.z);
-      if (dT <= rr * 1.08) continue;
-      const phiT = Math.atan2(tz - c.z, tx - c.x);
-      const alpha = Math.acos(rr / dT);
-      const th0 = Math.atan2(r.z - c.z, r.x - c.x);
-      const nx = (r.x - c.x) / rr;
-      const nz = (r.z - c.z) / rr;
-      const vt = r.vx * -nz + r.vz * nx;
-      for (let s = -1; s <= 1; s += 2) {
-        if (vt * s < -0.8) continue;
-        const thr = phiT - s * alpha;
-        let arc = s * (thr - th0);
-        while (arc < 0) arc += Math.PI * 2;
-        while (arc >= Math.PI * 2) arc -= Math.PI * 2;
-        if (arc < 0.3 || arc > 2.3) continue;
-        const swingTime = (arc * rr) / 8;
-        if (swingTime > T.maxHoldSeconds - 0.15) continue;
-        // The arc must stay on the field.
-        let ok = true;
-        for (let k = 1; k <= 3; k++) {
-          const th = th0 + s * arc * (k / 3);
-          const qx = c.x + Math.cos(th) * rr;
-          const qz = c.z + Math.sin(th) * rr;
-          if (Math.abs(qx) > w.hx - R - 0.1 || Math.abs(qz) > w.hz - R - 0.1) {
-            ok = false;
-            break;
-          }
-        }
-        if (!ok) continue;
-        const rem = Math.sqrt(Math.max(0, dT * dT - rr * rr));
-        const remTime = rem <= 9 ? rem / 8.5 : 9 / 8.5 + (rem - 9) / run;
-        const total = swingTime + remTime;
-        if (total < bestTime) {
-          bestTime = total;
-          best = i;
-          bestDir = s as 1 | -1;
+      const ballNear = Math.hypot(ball.x - r.x, ball.z - r.z) < 2.5;
+      if (dist > 6.5 && !ballNear) {
+        const p = planSwing(w, r, b.tx, b.tz);
+        if (p && p.gain > 0.55 && p.totalTime < p.runTime * 0.8) {
+          b.tether = { anchor: p.anchor, dir: p.dir, age: 0, tx: p.tx, tz: p.tz };
+          b.swingRest = rng.range(b.diff.swingRest[0], b.diff.swingRest[1]);
         }
       }
     }
-    if (best >= 0) b.tether = { anchor: best, dir: bestDir, age: 0 };
   }
 
   private decideKick(b: BotState): KickPlan {
@@ -572,12 +530,14 @@ export class BotDirector {
     c.kick = false;
     c.power = 1;
     c.anchor = -1;
+    c.swingDir = 0;
     c.mx = 0;
     c.mz = 0;
     c.ax = ball.x;
     c.az = ball.z;
 
     b.thinkIn -= DT;
+    if (b.swingRest > 0 && r.tState !== 'attached') b.swingRest -= DT;
     if (b.thinkIn <= 0) this.think(b);
 
     const ballDist = Math.hypot(ball.x - r.x, ball.z - r.z);
@@ -619,27 +579,18 @@ export class BotDirector {
     } else if (b.tether && (r.tState === 'attached' || r.tState === 'ready')) {
       const plan = b.tether;
       plan.age += DT;
-      const a = w.arena.anchors[plan.anchor];
-      const dx = r.x - a.x;
-      const dz = r.z - a.z;
-      const d = Math.hypot(dx, dz) || 1;
-      c.mx = (-dz / d) * plan.dir;
-      c.mz = (dx / d) * plan.dir;
+      const gx = plan.tx - r.x;
+      const gz = plan.tz - r.z;
+      const gl = Math.hypot(gx, gz) || 1;
+      c.mx = gx / gl;
+      c.mz = gz / gl;
       c.anchor = plan.anchor;
+      c.swingDir = plan.dir;
       c.tether = true;
       if (r.tState === 'attached') {
-        const sp = Math.hypot(r.vx, r.vz);
-        const gx = tx - r.x;
-        const gz = tz - r.z;
-        const gl = Math.hypot(gx, gz);
-        if (sp > 1 && gl > 0.5) {
-          const cos = (r.vx * gx + r.vz * gz) / (sp * gl);
-          const cross = (r.vx * gz - r.vz * gx) * plan.dir;
-          // Release when the velocity points at the target, or has just swung past it.
-          if (cos > 0.992 || (cos > 0.6 && cross < 0) || gl < 2 || ballDist < 1.3) {
-            c.tether = false;
-            b.tether = null;
-          }
+        if (releaseNow(r, plan.tx, plan.tz) || ballDist < 1.3) {
+          c.tether = false;
+          b.tether = null;
         }
         if (r.tTime > TUNING.tether.maxHoldSeconds - 0.08) b.tether = null;
       } else if (plan.age > 0.15) {
@@ -721,6 +672,7 @@ export function difficultyAt(level: number): Difficulty {
     aimError: mix(a.aimError, b.aimError),
     anticipation: mix(a.anticipation, b.anticipation),
     tetherUse: mix(a.tetherUse, b.tetherUse),
+    swingRest: [mix(a.swingRest[0], b.swingRest[0]), mix(a.swingRest[1], b.swingRest[1])],
     passSkill: mix(a.passSkill, b.passSkill),
     dribble: mix(a.dribble, b.dribble),
     mistake: mix(a.mistake, b.mistake),

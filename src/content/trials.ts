@@ -24,15 +24,15 @@ export interface TrialDef {
 export const TRIALS: Record<TrialId, TrialDef> = {
   swing_school: {
     id: 'swing_school', name: 'Swing School', skill: 'Tether movement', icon: 'swing', arena: 'harbor_park',
-    objective: 'Swing through the three glowing gates in order. Each gate only counts while you are faster than running speed.',
+    objective: 'Swing through the three glowing gates in order. Each gate only counts while you are faster than running speed. Tip: point past the next gate and tap swing.',
     scoring: 'Fastest time. Crossing a gate too slowly does not count.',
-    unit: 'time', bronze: 16, silver: 11, gold: 8, rulesVersion: 1,
+    unit: 'time', bronze: 12, silver: 7, gold: 4.8, rulesVersion: 2,
   },
   clean_release: {
     id: 'clean_release', name: 'Clean Release', skill: 'Release timing', icon: 'target', arena: 'harbor_park',
-    objective: 'Tether, swing and let go so your launch carries you through the marked lane before you slow down.',
+    objective: 'Manual release test: smart swing is off here. Hold swing, and let go when the launch line points through the marked lane.',
     scoring: 'Successful launches out of 8 attempts.',
-    unit: 'count', bronze: 3, silver: 5, gold: 7, rulesVersion: 1,
+    unit: 'count', bronze: 3, silver: 5, gold: 7, rulesVersion: 2,
   },
   bank_shot: {
     id: 'bank_shot', name: 'Bank Shot', skill: 'Wall play', icon: 'ball', arena: 'foundry_court',
@@ -56,7 +56,7 @@ export const TRIALS: Record<TrialId, TrialDef> = {
     id: 'counterattack', name: 'Counterattack', skill: 'Transition', icon: 'intercept', arena: 'championship_dome',
     objective: 'Cut out the opponents\' pass, then carry the ball up the pitch and score before they recover.',
     scoring: 'Fastest time from the pass to your goal.',
-    unit: 'time', bronze: 12, silver: 7.5, gold: 5.5, rulesVersion: 1,
+    unit: 'time', bronze: 10, silver: 6.5, gold: 4.5, rulesVersion: 2,
   },
 };
 
@@ -85,7 +85,7 @@ export interface LessonDef {
 
 export const LESSONS: LessonDef[] = [
   { id: 'move', name: 'Movement', summary: 'Run, stop and find your goal.', icon: 'next' },
-  { id: 'tether', name: 'Tether Basics', summary: 'Aim, hold and release with momentum.', icon: 'swing' },
+  { id: 'tether', name: 'Swing Basics', summary: 'Tap to launch, hold to steer, swing into a power shot.', icon: 'swing' },
   { id: 'kick', name: 'Kicking', summary: 'Aim a kick and score a practice goal.', icon: 'ball' },
   { id: 'pass', name: 'Passing', summary: 'Find your teammate in space.', icon: 'pass' },
   { id: 'defend', name: 'Defending', summary: 'Get goal-side and stop a shot.', icon: 'save' },

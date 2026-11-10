@@ -5,7 +5,7 @@ export const ACTION_LABELS: Record<Action, string> = {
   down: 'Move down',
   left: 'Move left',
   right: 'Move right',
-  tether: 'Tether (hold)',
+  tether: 'Swing (tap or hold)',
   kick: 'Kick',
   anchorPrev: 'Previous anchor',
   anchorNext: 'Next anchor',
@@ -24,6 +24,8 @@ export interface Settings {
   quality: 'auto' | 'low' | 'medium' | 'high';
   /** Show the linking hint to the previewed anchor. */
   anchorAssistance: boolean;
+  /** Smart swing: a tap on tether swings and launches toward your aim automatically. */
+  swingAssist: boolean;
   aimAssistance: 'off' | 'light' | 'strong';
   /** auto = follow the last device used; mouse = cursor aim; keyboard = aim along movement. */
   aimMode: 'auto' | 'mouse' | 'keyboard';
@@ -62,6 +64,7 @@ export function defaultSettings(): Settings {
     cameraShake: false,
     quality: 'auto',
     anchorAssistance: true,
+    swingAssist: true,
     aimAssistance: 'light',
     aimMode: 'auto',
     ballOutline: false,
@@ -111,6 +114,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     cameraShake: bool(r.cameraShake, d.cameraShake),
     quality: oneOf(r.quality, ['auto', 'low', 'medium', 'high'] as const, d.quality),
     anchorAssistance: bool(r.anchorAssistance, d.anchorAssistance),
+    swingAssist: bool(r.swingAssist, d.swingAssist),
     aimAssistance: oneOf(r.aimAssistance, ['off', 'light', 'strong'] as const, d.aimAssistance),
     aimMode: oneOf(r.aimMode, ['auto', 'mouse', 'keyboard'] as const, d.aimMode),
     ballOutline: bool(r.ballOutline, d.ballOutline),

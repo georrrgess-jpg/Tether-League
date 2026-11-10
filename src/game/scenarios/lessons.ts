@@ -62,7 +62,7 @@ export class LessonMode extends Scenario {
 
   private keys(): { move: string; tether: string; kick: string } {
     const k = this.settings().keys;
-    if (this.touch) return { move: 'the left side of the screen', tether: 'TETHER', kick: 'KICK' };
+    if (this.touch) return { move: 'the left side of the screen', tether: 'SWING', kick: 'KICK' };
     return {
       move: `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])}`,
       tether: `right mouse or ${keyLabel(k.tether[0])}`,
@@ -121,33 +121,21 @@ export class LessonMode extends Scenario {
       case 'tether':
         this.steps = [
           {
-            text: `An anchor in reach glows. Hold ${k.tether} to attach your tether.`,
-            sub: this.touch ? 'Move toward an anchor to choose it.' : 'Point the mouse near an anchor to choose it, or use Q / E.',
+            text: this.touch ? 'Move toward the glowing circle and tap SWING.' : `Point at the glowing circle and tap ${k.tether}.`,
+            sub: 'Your robot picks an anchor, swings round it and lets go so the launch carries you there. Green arc = faster than running.',
             enter: () => {
-              this.place(0, -8, 4.5, 0);
+              this.place(0, -9, 5, 0);
               this.ball(PARK[0], PARK[1]);
-              this.setMarkers([]);
+              this.flag = false;
+              this.target(4, 5.5, 1.6);
             },
-            check: (ev) => ev.some((e) => e.type === 'attach' && e.robot === 0),
-          },
-          {
-            text: 'Keep holding and steer along the swing to build speed.',
-            sub: 'Steering toward the anchor tightens the turn; the ring under you shows the time left.',
-            instant: true,
-            enter: () => {},
-            check: () => {
-              const p = this.me();
-              return p.tState === 'attached' && Math.hypot(p.vx, p.vz) >= 8.2;
+            check: (ev) => {
+              if (ev.some((e) => e.type === 'release' && e.robot === 0)) this.flag = true;
+              return this.flag && this.reach(4, 5.5, 2);
             },
           },
           {
-            text: 'Let go to launch! You fly off in the direction you were travelling.',
-            sub: 'Release earlier or later to change where you go. If the tether timed out, attach again first.',
-            enter: () => {},
-            check: (ev) => ev.some((e) => e.type === 'release' && e.robot === 0 && e.speed >= 6.5),
-          },
-          {
-            text: 'Swing, then release so your launch carries you through the gate.',
+            text: this.touch ? 'Head beyond the gate and tap SWING to launch through it.' : `Point beyond the gate and tap ${k.tether} to launch through it.`,
             sub: 'You must still be faster than running speed when you cross it.',
             enter: () => {
               this.place(0, -8, 5, 0);
@@ -156,13 +144,28 @@ export class LessonMode extends Scenario {
             check: () => this.gate(1, 1.4, 1, 7),
           },
           {
-            text: 'Once more on the other wing.',
-            sub: 'Any anchor works. Pick the one that sends you where you want to go.',
+            text: this.touch ? 'Now hold SWING to steer it yourself. Let go when the line under you turns green.' : `Now hold ${k.tether} to swing yourself. Let go when the line under you turns green.`,
+            sub: 'Holding keeps you on the rope as long as you like (up to the ring timer). Letting go launches you along that line.',
             enter: () => {
               this.place(0, -8, -5, 0);
               this.setMarkers([{ kind: 'gate', x: 1, z: -7, x2: 1, z2: -1.4, color: YELLOW, width: 0.5 }]);
             },
             check: () => this.gate(1, -7, 1, -1.4),
+          },
+          {
+            text: this.touch ? 'Swing into the ball, then tap KICK as you arrive.' : `Aim at the ball, tap ${k.tether}, then kick as you arrive.`,
+            sub: 'A kick at launch speed is a power shot, much harder than a running kick.',
+            enter: () => {
+              this.a = 4;
+              this.b = -2;
+              this.place(0, -9, -5, 0);
+              this.ball(4, -2);
+              this.setMarkers([]);
+            },
+            check: (ev) => {
+              this.resetStrayBall(ev);
+              return ev.some((e) => e.type === 'kick' && e.robot === 0 && e.swing);
+            },
           },
         ];
         break;
@@ -277,7 +280,7 @@ export class LessonMode extends Scenario {
             check: (ev) => this.saved(ev, () => this.shot(-10, 0.5, -1, -6, 1.2, 9.5, 1.4)),
           },
           {
-            text: 'Caught upfield! Tether to an anchor and swing back to cover your goal.',
+            text: 'Caught upfield! Point back at your goal and tap swing to get there in time.',
             sub: 'A swing recovers much faster than running.',
             enter: () => this.shot(4, 6.5, 5, -6, -1.4, 9, 2.6),
             check: (ev) => this.saved(ev, () => this.shot(4, 6.5, 5, -6, -1.4, 9, 2.6)),

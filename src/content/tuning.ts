@@ -25,10 +25,14 @@ export const TUNING = {
     maxRunSpeed: 5.2,
     acceleration: 24,
     braking: 26,
-    /** Deceleration while carrying more than run speed with input held (momentum retention). */
-    carryDecel: 3.6,
-    /** Deceleration above run speed with no input. */
-    coastDecel: 8,
+    /** Deceleration while carrying more than run speed (momentum retention). */
+    carryDecel: 3.2,
+    /** Deceleration above run speed with no input, once the launch window has passed. */
+    coastDecel: 4.5,
+    /** Right after a tether release the robot keeps its launch speed almost fully for this long. */
+    launchWindow: 0.5,
+    /** Deceleration during the launch window (applies with or without input). */
+    launchDecel: 1.3,
     /** Sideways steering authority while above run speed. */
     steerAccel: 13,
     bumpRestitution: 0.25,
@@ -40,17 +44,15 @@ export const TUNING = {
     maxHoldSeconds: 1.9,
     warnSeconds: 0.45,
     cooldownSeconds: 0.35,
-    /** Passive reel-in while attached. */
-    reelUnitsPerSecond: 1.2,
-    /** Extra reel-in / pay-out when steering toward / away from the anchor. */
-    steerReel: 3.4,
-    maxSpeed: 10.5,
-    /** Tangential acceleration while swinging (scaled 55%..100% by steering along the swing). */
-    swingAccel: 10.5,
+    /** Passive reel-in while attached. Shortening the rope speeds the swing up (angular momentum). */
+    reelUnitsPerSecond: 1.5,
+    maxSpeed: 12.2,
+    /** Tangential acceleration while swinging. Movement input does not brake or steer a swing. */
+    swingAccel: 13,
     /** Fraction of outward speed converted to swing speed when the rope first snaps taut. */
-    snapConvert: 0.7,
-    /** Minimum swing speed granted on attach so a stationary beginner starts moving. */
-    startSpeed: 3.2,
+    snapConvert: 0.85,
+    /** Minimum swing speed granted on attach so a stationary robot is immediately moving. */
+    startSpeed: 5.5,
     pressBuffer: 0.22,
   },
   ball: {

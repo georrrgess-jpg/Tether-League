@@ -6,6 +6,7 @@ import type { SimEvent, World } from '../sim/types';
 import { ArenaView, type Quality } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
+import { launchCarry, type SwingPlan } from '../sim/swing';
 import { ballTexture, blobTexture, ringTexture, shade, type Expression } from './textures';
 
 export interface Marker {
@@ -28,6 +29,15 @@ export interface ViewFrame {
   preview: number;
   /** Draw the faint link line to the previewed anchor. */
   link: boolean;
+  /** Smart swing preview for the human robot. */
+  swing?: {
+    plan: SwingPlan | null;
+    /** Target the swing will launch toward (locked during an automatic swing). */
+    tx: number;
+    tz: number;
+    auto: boolean;
+    cue: boolean;
+  };
   aimX: number;
   aimZ: number;
   showAim: boolean;
@@ -153,6 +163,67 @@ class Trail {
   }
 }
 
+/** Flat ground ribbon through a list of points (planned swing arc, launch line). */
+class Ribbon {
+  readonly mesh: THREE.Mesh;
+  private pos: Float32Array;
+  private max: number;
+
+  constructor(max: number, color: string) {
+    this.max = max;
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(max * 2 * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    const idx: number[] = [];
+    for (let i = 0; i < max - 1; i++) {
+      const a = i * 2;
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    g.setIndex(idx);
+    this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 2;
+    this.mesh.visible = false;
+  }
+
+  /** pts: flat [x0, z0, x1, z1, ...]; width tapers to `tail` at the end. */
+  set(pts: number[], width: number, tail = 1): void {
+    const n = Math.min(this.max, pts.length / 2);
+    if (n < 2) {
+      this.mesh.visible = false;
+      return;
+    }
+    const p = this.pos;
+    for (let i = 0; i < this.max; i++) {
+      const k = Math.min(i, n - 1);
+      const x = pts[k * 2];
+      const z = pts[k * 2 + 1];
+      const k0 = Math.max(0, k - 1);
+      const k1 = Math.min(n - 1, k + 1);
+      let dx = pts[k1 * 2] - pts[k0 * 2];
+      let dz = pts[k1 * 2 + 1] - pts[k0 * 2 + 1];
+      const dl = Math.hypot(dx, dz) || 1;
+      dx /= dl;
+      dz /= dl;
+      const wv = (width / 2) * (1 - (1 - tail) * (k / (n - 1)));
+      p[i * 6] = x - dz * wv;
+      p[i * 6 + 1] = 0.035;
+      p[i * 6 + 2] = z + dx * wv;
+      p[i * 6 + 3] = x + dz * wv;
+      p[i * 6 + 4] = 0.035;
+      p[i * 6 + 5] = z - dx * wv;
+    }
+    this.mesh.geometry.attributes.position.needsUpdate = true;
+    this.mesh.visible = true;
+  }
+
+  style(color: string, opacity: number): void {
+    const m = this.mesh.material as THREE.MeshBasicMaterial;
+    m.color.set(color);
+    m.opacity = opacity;
+  }
+}
+
 interface Particle {
   x: number; y: number; z: number;
   vx: number; vy: number; vz: number;
@@ -182,6 +253,10 @@ export class MatchView {
   private aimRing: THREE.Mesh;
   private aimLine: THREE.Mesh;
   private linkLine: THREE.Mesh;
+  private arcRibbon = new Ribbon(40, '#fff3c2');
+  private launchRibbon = new Ribbon(2, '#ffffff');
+  private targetRing: THREE.Mesh;
+  private pts: number[] = [];
   private holdArc: THREE.Mesh;
   private flashes: { mesh: THREE.Mesh; life: number; max: number; size: number }[] = [];
   private particles: Particle[] = [];
@@ -287,6 +362,13 @@ export class MatchView {
     this.linkLine = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ color: '#ffe9a3', transparent: true, opacity: 0.38, depthWrite: false })));
     this.linkLine.renderOrder = 2;
     this.scene.add(this.linkLine);
+    this.scene.add(this.arcRibbon.mesh, this.launchRibbon.mesh);
+    this.disposables.push(this.arcRibbon.mesh.geometry, this.arcRibbon.mesh.material as THREE.Material, this.launchRibbon.mesh.geometry, this.launchRibbon.mesh.material as THREE.Material);
+    this.targetRing = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: this.track(ringTexture(0.7)), color: '#8dffb0', transparent: true, opacity: 0.8, depthWrite: false })));
+    this.targetRing.rotation.x = -Math.PI / 2;
+    this.targetRing.renderOrder = 3;
+    this.targetRing.visible = false;
+    this.scene.add(this.targetRing);
     const arcGeo = this.track(new THREE.RingGeometry(1.18, 1.34, 40, 1));
     this.holdArc = new THREE.Mesh(arcGeo, this.track(new THREE.MeshBasicMaterial({ color: '#ffe36a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide })));
     this.holdArc.rotation.x = -Math.PI / 2;
@@ -597,7 +679,9 @@ export class MatchView {
     const hz = TUNING.sim.hz;
     const n = w.robots.length;
 
-    this.arenaView.setAnchorGlow(f.preview, f.human >= 0 && w.robots[f.human].tState === 'attached' ? 2 : 1);
+    const humanAttached = f.human >= 0 && w.robots[f.human].tState === 'attached';
+    const goodSwing = !!f.swing?.plan && f.swing.plan.anchor === f.preview && f.swing.plan.gain > 0.4;
+    this.arenaView.setAnchorGlow(f.preview, humanAttached ? 2 : goodSwing ? 3 : 1);
 
     for (let i = 0; i < n; i++) {
       const r = w.robots[i];
@@ -721,7 +805,46 @@ export class MatchView {
         this.placeStrip(this.aimLine, bx + dx * 0.5, bz + dz * 0.5, bx + dx * (0.5 + len), bz + dz * (0.5 + len), 0.1);
       }
       // linking hint to the previewed anchor
-      const showLink = f.link && f.preview >= 0 && r.tState !== 'attached';
+      const sw = f.swing;
+      const plan = sw?.plan && sw.plan.anchor === f.preview && r.tState !== 'attached' ? sw.plan : null;
+      // Before pressing: the planned arc and the start of the launch, brighter when the swing beats running.
+      if (plan && f.link) {
+        const pts = this.pts;
+        pts.length = 0;
+        const steps = Math.max(4, Math.min(30, Math.ceil(plan.arc * 9)));
+        for (let k = 0; k <= steps; k++) {
+          const th = plan.startAngle + plan.dir * plan.arc * (k / steps);
+          pts.push(plan.cx + Math.cos(th) * plan.radius, plan.cz + Math.sin(th) * plan.radius);
+        }
+        const len = Math.min(4, Math.hypot(plan.tx - plan.releaseX, plan.tz - plan.releaseZ));
+        for (let k = 1; k <= 4; k++) pts.push(plan.releaseX + plan.lx * len * (k / 4), plan.releaseZ + plan.lz * len * (k / 4));
+        this.arcRibbon.set(pts, 0.3, 0.7);
+        const good = plan.gain > 0.4;
+        this.arcRibbon.style(good ? '#8dffb0' : '#fff3c2', good ? 0.75 + (f.reduced ? 0 : Math.sin(t * 6) * 0.1) : 0.3);
+      } else this.arcRibbon.mesh.visible = false;
+      // While swinging: where you would go if you let go now. Green when it points at the target.
+      if (r.tState === 'attached' && sw) {
+        const sp = Math.hypot(r.vx, r.vz) || 1;
+        const reach = Math.min(10, Math.max(2.5, launchCarry(sp, r.chassis.mod.releaseDrag)));
+        const ux = r.vx / sp;
+        const uz = r.vz / sp;
+        this.launchRibbon.set([pose.x, pose.z, pose.x + ux * reach, pose.z + uz * reach], 0.32, 0.25);
+        const dx = sw.tx - r.x;
+        const dz = sw.tz - r.z;
+        const al = (ux * dx + uz * dz) / (Math.hypot(dx, dz) || 1);
+        const lined = sw.cue || al > 0.97;
+        this.launchRibbon.style(lined ? '#8dffb0' : '#ffffff', lined ? 0.95 : 0.5);
+        this.targetRing.visible = sw.auto;
+        if (sw.auto) {
+          this.targetRing.position.set(sw.tx, 0.03, sw.tz);
+          const ts = 1.3 + (f.reduced ? 0 : Math.sin(t * 8) * 0.08);
+          this.targetRing.scale.set(ts, ts, 1);
+        }
+      } else {
+        this.launchRibbon.mesh.visible = false;
+        this.targetRing.visible = false;
+      }
+      const showLink = f.link && !plan && f.preview >= 0 && r.tState !== 'attached';
       this.linkLine.visible = showLink;
       if (showLink) {
         const an = w.arena.anchors[f.preview];
@@ -739,6 +862,7 @@ export class MatchView {
       } else this.holdArc.visible = false;
     } else {
       this.aimRing.visible = this.aimLine.visible = this.linkLine.visible = this.holdArc.visible = false;
+      this.arcRibbon.mesh.visible = this.launchRibbon.mesh.visible = this.targetRing.visible = false;
       (this.ballRing.material as THREE.MeshBasicMaterial).opacity = this.opts.ballOutline ? 0.55 : 0;
       this.ballRing.position.set(bx, 0.022, bz);
       this.ballRing.scale.set(1.4, 1.4, 1);

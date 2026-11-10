@@ -339,11 +339,14 @@ export class ArenaView {
         ring.position.copy(head);
         ring.rotation.y = onEnd ? Math.PI / 2 : 0;
       } else {
-        head.set(a.x, 3.6, a.z);
-        box(capM, 0.6, 0.45, 0.6, a.x, 4.05, a.z, 0);
+        // Hovering anchor drone: a yellow body with the ring underneath; no structure crosses the pitch.
+        head.set(a.x, 3.2, a.z);
+        box(capM, 0.7, 0.32, 0.7, a.x, 3.62, a.z, 0);
+        box(std('#24344e', 0.5), 1.5, 0.08, 0.16, a.x, 3.82, a.z, Math.PI / 4, false);
+        box(std('#24344e', 0.5), 1.5, 0.08, 0.16, a.x, 3.82, a.z, -Math.PI / 4, false);
         ring.position.copy(head);
         ring.rotation.x = Math.PI / 2;
-        const gr = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: groundRingT, color: ANCHOR_YELLOW, transparent: true, opacity: 0.75, depthWrite: false })));
+        const gr = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: groundRingT, color: ANCHOR_YELLOW, transparent: true, opacity: 0.45, depthWrite: false })));
         gr.rotation.x = -Math.PI / 2;
         gr.scale.set(1.5, 1.5, 1);
         gr.position.set(a.x, 0.016, a.z);
@@ -356,15 +359,6 @@ export class ArenaView {
       this.group.add(halo);
       this.anchors.push({ head, ring, ringMat, halo, glow: 0 });
     }
-    if (arena.anchors.some((a) => a.kind === 'gantry')) {
-      const trussM = std('#5c6078', 0.6, { metalness: 0.3 });
-      box(trussM, 0.22, 0.22, arena.width + 3, 0, 4.4, 0, 0);
-      for (const s of [-1, 1]) {
-        box(trussM, 0.3, 4.5, 0.3, 0, 2.25, s * (hz + 1.3), 0);
-        box(capM, 0.5, 0.25, 0.5, 0, 4.6, s * (hz + 1.3), 0);
-      }
-    }
-
     this.buildSurroundings(th, hx, hz, std, box);
     flushBoxes();
   }
@@ -629,7 +623,8 @@ export class ArenaView {
       hm.opacity += ((target > 0 ? 0.95 : 0) - hm.opacity) * Math.min(1, dt * 16);
       a.halo.visible = hm.opacity > 0.02;
       if (a.halo.visible) {
-        hm.color.set(target >= 2 ? '#7ff3ff' : '#fff3c2');
+        // 1 = previewed, 2 = attached, 3 = previewed and a swing is clearly worth it
+        hm.color.set(target >= 3 ? '#8dffb0' : target >= 2 ? '#7ff3ff' : '#fff3c2');
         a.halo.quaternion.copy(camera.quaternion);
         const s = 1.5 + (reduced ? 0 : Math.sin(time * 7) * 0.1);
         a.halo.scale.set(s, s, 1);

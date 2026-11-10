@@ -65,7 +65,8 @@ describe('anchor preview (pickAnchor)', () => {
   });
 
   it('has hysteresis: the previous candidate is kept while scores are close, but a clear aim change switches', () => {
-    const arena = ARENAS.harbor_park;
+    // Rail anchors only: the overhead gantries would otherwise be the nearest candidates at midfield.
+    const arena = { ...ARENAS.harbor_park, anchors: ARENAS.harbor_park.anchors.filter((a) => a.kind === 'rail') };
     const n1 = anchorIndex(arena, 'north_1'); // (-3.5, -10.5)
     const n2 = anchorIndex(arena, 'north_2'); // (3.5, -10.5)
     const s1 = anchorIndex(arena, 'south_1'); // (-3.5, 10.5)

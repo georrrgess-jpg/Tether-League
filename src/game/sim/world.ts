@@ -134,7 +134,7 @@ export function detach(w: World, r: Robot, auto: boolean, emit = true): void {
   if (emit) w.events.push({ type: 'release', robot: r.id, speed: Math.hypot(r.vx, r.vz), auto });
 }
 
-function tryAttach(w: World, r: Robot, anchor: number): boolean {
+function tryAttach(w: World, r: Robot, anchor: number, want: 0 | 1 | -1 = 0): boolean {
   if (!anchorInRange(w, r, anchor)) return false;
   const T = TUNING.tether;
   const a = w.arena.anchors[anchor];
@@ -151,7 +151,8 @@ function tryAttach(w: World, r: Robot, anchor: number): boolean {
   let dir: 1 | -1;
   const mt = r.mx * tx + r.mz * tz;
   const at = (r.aimX - r.x) * tx + (r.aimZ - r.z) * tz;
-  if (Math.abs(vt) > 0.8) dir = vt > 0 ? 1 : -1;
+  if (want !== 0 && (Math.abs(vt) < 3 || Math.sign(vt) === want)) dir = want;
+  else if (Math.abs(vt) > 0.8) dir = vt > 0 ? 1 : -1;
   else if (Math.abs(mt) > 0.25) dir = mt > 0 ? 1 : -1;
   else if (Math.abs(at) > 0.5) dir = at > 0 ? 1 : -1;
   else dir = tx * attackDir(r.team) >= 0 ? 1 : -1;
@@ -225,7 +226,7 @@ function controlRobot(w: World, r: Robot, c: Command): void {
     if (!c.tether) detach(w, r, false);
     else if (r.tTime >= T.maxHoldSeconds) detach(w, r, true);
   } else if (r.tState === 'ready' && c.tether && r.tBuffer > 0 && !r.tConsumed) {
-    tryAttach(w, r, c.anchor);
+    tryAttach(w, r, c.anchor, c.swingDir);
   }
   if (r.tBuffer > 0) r.tBuffer -= DT;
   if (!c.tether) r.tBuffer = 0;
@@ -246,27 +247,16 @@ function controlRobot(w: World, r: Robot, c: Command): void {
       const tz = nx;
       let vt = r.vx * tx + r.vz * tz;
       if (Math.abs(vt) > 0.6) r.tDir = vt > 0 ? 1 : -1;
-      const inT = (mx * tx + mz * tz) * r.tDir;
-      const inR = mx * nx + mz * nz;
+      // The swing always drives itself forward; movement input never brakes or reverses it.
       const maxSpeed = T.maxSpeed;
-      if (inT < -0.45) {
-        // Steering against the swing brakes it and can reverse it.
-        const before = vt;
-        vt = moveToward(vt, 0, RT.braking * mod.braking * 0.7 * DT);
-        if (Math.abs(vt) < 0.3 && Math.abs(before) < 0.6) {
-          r.tDir = r.tDir === 1 ? -1 : 1;
-          vt = r.tDir * 0.6;
-        }
-      } else {
-        const acc = T.swingAccel * mod.swing * (0.55 + 0.45 * Math.max(0, inT));
-        if (Math.abs(vt) < maxSpeed) vt = Math.max(-maxSpeed, Math.min(maxSpeed, vt + r.tDir * acc * DT));
-      }
+      vt = Math.max(-maxSpeed, Math.min(maxSpeed, vt + r.tDir * T.swingAccel * mod.swing * DT));
+      // Reeling in conserves angular momentum, so the swing speeds up as the rope shortens.
+      const newLen = Math.max(T.minLength, r.tLen - T.reelUnitsPerSecond * DT);
+      if (newLen < r.tLen) vt = Math.sign(vt) * Math.min(maxSpeed, (Math.abs(vt) * r.tLen) / newLen);
+      r.tLen = newLen;
       r.vx = tx * vt;
       r.vz = tz * vt;
-      const reel = T.reelUnitsPerSecond + (inR < -0.3 ? -inR * T.steerReel : 0);
-      const pay = inR > 0.3 ? inR * T.steerReel : 0;
-      r.tPaying = pay > reel;
-      r.tLen = Math.min(T.maxLength, Math.max(T.minLength, r.tLen + (pay - reel) * DT));
+      r.tPaying = false;
     } else {
       r.tPaying = false;
     }
@@ -300,10 +290,12 @@ function controlRobot(w: World, r: Robot, c: Command): void {
       let nvx = r.vx + px * RT.steerAccel * mod.steer * DT;
       let nvz = r.vz + pz * RT.steerAccel * mod.steer * DT;
       let decel: number;
-      if (ml < 0.05) decel = RT.coastDecel;
-      else if (along < -0.25) decel = RT.braking * mod.braking * 0.85;
+      const launching = r.carry < RT.launchWindow;
+      if (along < -0.25) decel = RT.braking * mod.braking * 0.85;
+      else if (launching) decel = RT.launchDecel * mod.releaseDrag;
+      else if (ml < 0.05) decel = RT.coastDecel;
       else decel = RT.carryDecel * mod.releaseDrag;
-      const floor = ml < 0.05 || along < -0.25 ? 0 : maxRun;
+      const floor = along < -0.25 || (ml < 0.05 && !launching) ? 0 : maxRun;
       const ns = Math.max(floor, speed - decel * DT);
       const nl = Math.max(1e-6, Math.hypot(nvx, nvz));
       nvx = (nvx / nl) * ns;

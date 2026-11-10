@@ -1,7 +1,8 @@
 import { TUNING } from '../../content/tuning';
 import type { Action, Settings } from '../../storage/settings';
 import { attackDir, type Command, type Robot, type World } from '../sim/types';
-import { anchorInRange, pickAnchor } from '../sim/world';
+import { SmartSwing } from '../sim/swing';
+import { anchorInRange } from '../sim/world';
 
 /**
  * Converts keyboard, mouse, touch and gamepad state into the normalised Command the simulation consumes.
@@ -37,6 +38,14 @@ export class InputManager {
   private padKickPrev = false;
   private padPausePrev = false;
   private override = -1;
+  /** A tether press seen since the last sample (so a click shorter than one tick still counts). */
+  private tetherLatch = false;
+  /** Smart swing controller: plans the anchor / direction and auto-releases taps. */
+  readonly swing = new SmartSwing();
+  /** Set by modes that require manual swings (or always smart ones). */
+  assistOverride: boolean | null = null;
+  swingTargetX = 0;
+  swingTargetZ = 0;
   private stickId = -1;
   private stickOX = 0;
   private stickOY = 0;
@@ -102,6 +111,8 @@ export class InputManager {
     this.tetherMouse = false;
     this.tetherTouch = false;
     this.padTether = false;
+    this.tetherLatch = false;
+    this.swing.reset();
     this.stickId = -1;
     this.stickX = this.stickY = 0;
     this.kickId = -1;
@@ -133,6 +144,7 @@ export class InputManager {
       if (this.settings().aimMode === 'auto') this.device = 'keys';
     } else if (a === 'tether') {
       this.used.tether++;
+      this.tetherLatch = true;
       if (this.settings().aimMode === 'auto') this.device = 'keys';
     } else if (a === 'anchorPrev' || a === 'anchorNext') {
       this.cycle = a === 'anchorNext' ? 1 : -1;
@@ -163,6 +175,7 @@ export class InputManager {
         this.used.kick++;
       } else if (e.button === 2) {
         this.tetherMouse = true;
+        this.tetherLatch = true;
         this.used.tether++;
       }
       return;
@@ -181,6 +194,7 @@ export class InputManager {
     } else if (kind === 'tether' && this.tetherId < 0) {
       this.tetherId = e.pointerId;
       this.tetherTouch = true;
+      this.tetherLatch = true;
       this.used.tether++;
       target.closest('[data-touch]')!.classList.add('is-down');
       e.preventDefault();
@@ -276,7 +290,7 @@ export class InputManager {
     root.className = 'touch-ui';
     root.innerHTML = `
       <div class="stick-base"><div class="stick-knob"></div></div>
-      <div class="tbtn tbtn-tether" data-touch="tether"><span>TETHER</span><small>hold</small></div>
+      <div class="tbtn tbtn-tether" data-touch="tether"><span>SWING</span><small>tap · hold</small></div>
       <div class="tbtn tbtn-kick" data-touch="kick"><span>KICK</span><small>drag to aim</small></div>`;
     this.layer.appendChild(root);
     this.touchRoot = root;
@@ -305,7 +319,10 @@ export class InputManager {
     const aim = Math.hypot(rx, ry) > 0.4;
     const b = (i: number) => !!pad!.buttons[i]?.pressed;
     const tether = b(7) || b(5) || b(6) || b(4);
-    if (tether && !this.padTether) this.used.tether++;
+    if (tether && !this.padTether) {
+      this.used.tether++;
+      this.tetherLatch = true;
+    }
     this.padTether = tether;
     const kick = b(0) || b(2);
     if (kick && !this.padKickPrev) {
@@ -408,23 +425,40 @@ export class InputManager {
     }
     this.showAim = explicit;
 
-    // anchor preview (never retargets while attached)
-    if (r.tState === 'attached') {
-      this.preview = r.tAnchor;
-      this.override = -1;
+    // Swing target: where the player is pointing (cursor or aim stick), else where they are moving, else the ball.
+    let tx: number;
+    let tz: number;
+    if (pad && pad.aim && this.device === 'pad') {
+      const l = Math.hypot(pad.ax, pad.az);
+      tx = r.x + (pad.ax / l) * 10;
+      tz = r.z + (pad.az / l) * 10;
+    } else if (explicit && mouseAim) {
+      tx = this.aimX;
+      tz = this.aimZ;
+    } else if (ml > 0.2) {
+      tx = r.x + dirX * 10;
+      tz = r.z + dirZ * 10;
     } else {
-      const base = explicit && mouseAim ? pickAnchor(w, r, this.aimX, this.aimZ, this.preview) : pickAnchor(w, r, r.x + dirX * 6, r.z + dirZ * 6, this.preview);
-      if (this.cycle !== 0) {
-        this.override = this.cycleAnchor(w, r, this.override >= 0 ? this.override : base, this.cycle);
-        this.cycle = 0;
-      }
-      if (this.override >= 0 && !anchorInRange(w, r, this.override)) this.override = -1;
-      this.preview = this.override >= 0 ? this.override : base;
+      tx = w.ball.x;
+      tz = w.ball.z;
+    }
+    this.swingTargetX = tx;
+    this.swingTargetZ = tz;
+
+    // Q / E override the planner's anchor choice (never while attached).
+    if (r.tState === 'attached') this.override = -1;
+    else if (this.cycle !== 0) {
+      this.override = this.cycleAnchor(w, r, this.override >= 0 ? this.override : this.swing.preview, this.cycle);
     }
     this.cycle = 0;
+    if (this.override >= 0 && !anchorInRange(w, r, this.override)) this.override = -1;
 
-    c.anchor = this.preview;
-    c.tether = this.enabled && (this.tetherMouse || this.tetherTouch || this.padTether || this.held('tether'));
+    const held = this.enabled && (this.tetherMouse || this.tetherTouch || this.padTether || this.held('tether') || this.tetherLatch);
+    this.tetherLatch = false;
+    this.swing.update(w, r, c, { held, tx, tz, anchor: this.override, assist: this.assistOverride ?? s.swingAssist });
+    if (!this.enabled) c.tether = false;
+    this.preview = this.swing.preview;
+
     c.kick = this.enabled && this.kickQueued;
     c.power = 1;
     if (this.kickQueued) {
