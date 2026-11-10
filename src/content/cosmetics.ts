@@ -1,4 +1,4 @@
-export type CosmeticKind = 'face' | 'pattern' | 'trail' | 'celebration' | 'badge';
+export type CosmeticKind = 'face' | 'pattern' | 'trail' | 'celebration' | 'badge' | 'topper';
 
 export interface CosmeticDef {
   id: string;
@@ -39,6 +39,15 @@ export const COSMETICS: CosmeticDef[] = [
   { id: 'badge_star', kind: 'badge', name: 'Star Crest', blurb: 'A simple star.', credits: 0 },
   { id: 'badge_sunburst', kind: 'badge', name: 'Sunburst Badge', blurb: 'A radiant sun.', credits: 150 },
   { id: 'badge_anchor', kind: 'badge', name: 'Anchor Badge', blurb: 'The tether hook itself.', credits: 200 },
+  // Toppers (head accessories; rendered by robotView)
+  { id: 'topper_none', kind: 'topper', name: 'No Topper', blurb: 'Clean dome.', credits: 0 },
+  { id: 'topper_antenna', kind: 'topper', name: 'Signal Antenna', blurb: 'A springy antenna with a glowing tip.', credits: 0 },
+  { id: 'topper_fin', kind: 'topper', name: 'Aero Fin', blurb: 'A swept racing fin.', credits: 150 },
+  { id: 'topper_headset', kind: 'topper', name: 'Pro Headset', blurb: 'Over-ear headset with a mic boom.', credits: 200 },
+  { id: 'topper_horns', kind: 'topper', name: 'Bolt Horns', blurb: 'Two short lightning horns.', credits: 250 },
+  { id: 'topper_propeller', kind: 'topper', name: 'Propeller Cap', blurb: 'Spins when you swing.', credits: 300 },
+  { id: 'topper_halo', kind: 'topper', name: 'Hover Halo', blurb: 'A floating glowing ring.', credits: 400 },
+  { id: 'topper_crown', kind: 'topper', name: 'Champion Crown', blurb: 'Earned, not bought.', credits: -2 },
   // Opponent-only badges (never sold)
   { id: 'badge_gear', kind: 'badge', name: 'Gear', blurb: '', credits: -1 },
   { id: 'badge_skyline', kind: 'badge', name: 'Skyline', blurb: '', credits: -1 },
@@ -82,4 +91,6 @@ export interface RobotLook {
   pattern: string;
   trail: string;
   celebration: string;
+  /** Head accessory cosmetic id (see COSMETICS kind 'topper'); undefined or 'topper_none' = none. */
+  topper?: string;
 }
