@@ -131,6 +131,8 @@ interface KickPlan {
 interface BotState {
   id: number;
   diff: Difficulty;
+  /** The declared difficulty; `diff` may be an eased copy of it (mercy rule). */
+  base: Difficulty;
   style: BotStyle;
   role: 'challenger' | 'support';
   thinkIn: number;
@@ -179,6 +181,17 @@ export class BotDirector {
   private passCall: number[] = [];
   private roleTick = -999;
 
+  /**
+   * Mercy rule: bots on `team` play an eased copy of their difficulty (t = 0 restores it).
+   * Only decision quality changes (reactions, aim, anticipation); physics stay identical.
+   */
+  setTeamEase(team: 0 | 1, t: number): void {
+    for (const st of this.bots) {
+      if (this.w.robots[st.id].team !== team) continue;
+      st.diff = t > 0 ? easedDifficulty(st.base, t) : st.base;
+    }
+  }
+
   constructor(world: World, specs: BotSpec[], seed: number) {
     this.w = world;
     this.rng = new Rng(seed);
@@ -192,6 +205,7 @@ export class BotDirector {
       const st: BotState = {
         id: s.robot,
         diff: s.difficulty,
+        base: s.difficulty,
         style: s.style,
         role: 'support',
         thinkIn: this.rng.range(0, 0.15),
@@ -741,6 +755,21 @@ export class BotDirector {
       b.kick = null;
     }
   }
+}
+
+/** A difficulty eased by t (0..1): slower reactions and kicks, looser aim, less anticipation, more slips. */
+export function easedDifficulty(d: Difficulty, t: number): Difficulty {
+  const k = Math.max(0, Math.min(1, t));
+  const slow = 1 + 0.35 * k;
+  return {
+    ...d,
+    reaction: [d.reaction[0] * slow, d.reaction[1] * slow],
+    kickDelay: [d.kickDelay[0] * slow, d.kickDelay[1] * slow],
+    aimError: d.aimError + 0.08 * k,
+    anticipation: d.anticipation * (1 - 0.25 * k),
+    tetherUse: d.tetherUse * (1 - 0.3 * k),
+    mistake: d.mistake + 0.05 * k,
+  };
 }
 
 /** Blends the declared tiers: level 0 = Rookie, 1 = Club, 2 = Pro. Used for career divisions. */

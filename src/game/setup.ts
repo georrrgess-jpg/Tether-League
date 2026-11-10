@@ -81,6 +81,28 @@ export interface CareerMatchInfo {
   label: string;
   level: number;
   difficulty: Difficulty;
+  /** Set when recent defeats have eased this opponent ("comeback boost"). */
+  ease: { losses: number; amount: number } | null;
+}
+
+/** The player's teammate: a notch above the opposition, never below Club+. */
+export function mateLevel(oppLevel: number): number {
+  return Math.min(2, Math.max(1.2, oppLevel + 0.35));
+}
+
+/** Level eased per consecutive career defeat (1, 2, 3+). Losing streaks are not fun; this softens them. */
+const EASE_BY_LOSSES = [0, 0.12, 0.25, 0.4];
+
+/** Consecutive career/playoff defeats, most recent first. Quick matches do not count. */
+export function careerLosingStreak(save: SaveGame): number {
+  let n = 0;
+  for (let i = save.results.length - 1; i >= 0; i--) {
+    const r = save.results[i];
+    if (r.kind === 'quick') continue;
+    if (r.won) break;
+    n++;
+  }
+  return n;
 }
 
 export function careerMatchInfo(save: SaveGame): CareerMatchInfo | null {
@@ -90,9 +112,14 @@ export function careerMatchInfo(save: SaveGame): CareerMatchInfo | null {
   const club = CLUBS[next.opponent];
   const arena = next.kind === 'final' ? div.homeArena : next.home ? div.homeArena : div.awayArena;
   const label = next.kind === 'league' ? `${div.name} · Round ${next.round}` : next.kind === 'semi' ? `${div.name} · Semi-final` : `${div.name} · Final`;
-  // The declared "Relaxed" option lowers opponent level by half a tier; nothing else is adjusted.
-  const level = Math.max(0, div.level + club.rating * 0.2 - (save.prefs.relaxed ? 0.5 : 0));
-  return { next, club, arena, label, level, difficulty: difficultyAt(level) };
+  // The declared "Relaxed" option lowers opponent level by half a tier. After career defeats the
+  // next opponent eases off a little (shown to the player as a comeback boost).
+  const losses = careerLosingStreak(save);
+  const amount = EASE_BY_LOSSES[Math.min(EASE_BY_LOSSES.length - 1, losses)];
+  const base = div.level + club.rating * 0.2 - (save.prefs.relaxed ? 0.5 : 0);
+  const level = Math.max(0, base - amount);
+  const ease = amount > 0 && base > 0 ? { losses, amount: Math.min(amount, base) } : null;
+  return { next, club, arena, label, level, difficulty: difficultyAt(level), ease };
 }
 
 export function careerSetup(save: SaveGame): MatchSetup | null {
@@ -112,8 +139,8 @@ export function careerSetup(save: SaveGame): MatchSetup | null {
     looks: [mine[0], mine[1], opp[0], opp[1]],
     oppDifficulty: info.difficulty,
     oppStyle: CLUB_STYLE[info.club.style],
-    // The teammate plays at Club level at least, so it stays useful in every division.
-    mateDifficulty: difficultyAt(Math.max(1, info.level)),
+    // The teammate plays a notch above the opposition (Club+ at least), so it carries its share.
+    mateDifficulty: difficultyAt(mateLevel(info.level)),
     mateStyle: TENDENCY[save.prefs.tendency].style,
     assist: assistLevel(save),
     regulationSeconds: 180,

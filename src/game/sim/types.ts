@@ -102,10 +102,13 @@ export interface Ball {
   lastTouchRobot: number;
   lastTouchTick: number;
   lastTouchDeliberate: boolean;
+  /** Robot that last passed the ball (pass button or assisted pass) and when; -1 when an opponent has touched it since. */
+  passBy: number;
+  passTick: number;
 }
 
 export type SimEvent =
-  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean }
+  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean; bank: boolean; oneTouch: boolean }
   | { type: 'touch'; robot: number; speed: number }
   | { type: 'wall'; speed: number; x: number; z: number; nx: number; nz: number }
   | { type: 'post'; speed: number; x: number; z: number }

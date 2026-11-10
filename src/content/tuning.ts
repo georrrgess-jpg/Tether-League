@@ -59,8 +59,13 @@ export const TUNING = {
     radius: 0.42,
     mass: 0.35,
     maxSpeed: 18,
-    wallRestitution: 0.82,
+    wallRestitution: 0.9,
+    /** Lively walls: a real impact (normal speed above wallBoostMin) leaves the wall this much faster. */
+    wallBoost: 1.3,
+    wallBoostMin: 2.2,
     netRestitution: 0.12,
+    /** Posts keep their old, deader bounce. */
+    postRestitution: 0.74,
     /** Exponential drag coefficient (1/s). */
     drag: 0.42,
     /** Constant rolling deceleration (units/s^2). */
@@ -70,7 +75,7 @@ export const TUNING = {
   kick: {
     range: 1.48,
     cooldownSeconds: 0.28,
-    inputBufferSeconds: 0.12,
+    inputBufferSeconds: 0.16,
     /** Ball speed from a standing kick. */
     baseSpeed: 8.2,
     /** Added ball speed per unit of robot speed toward the kick direction. */
@@ -87,15 +92,22 @@ export const TUNING = {
     mashDecay: 3.2,
     /** Above this level a kick is "rushed": weaker and less accurate. A deliberate press or double tap stays below. */
     mashThreshold: 2.6,
-    rushedPower: 0.68,
+    rushedPower: 0.5,
     /** Cooldown after a rushed kick: a masher cannot chain pokes. */
-    rushedCooldown: 0.7,
+    rushedCooldown: 0.95,
     /** Max aim error of a rushed kick (radians). */
-    rushedError: 0.26,
+    rushedError: 0.4,
     /** Kicking against your own running direction keeps this share of the base speed. */
     backwardPower: 0.72,
     /** How far ahead (seconds of teammate movement, capped) a pass is led. */
     passLeadMax: 0.6,
+    /** A pass whose straight lane an opponent blocks is banked off a side wall when that lane is clear. */
+    bankLaneWidth: 1.15,
+    /** Extra pace on a banked pass over the straight-pass formula for its route length. */
+    bankExtra: 0.8,
+    /** Shooting first time off a teammate's pass (within this many seconds) adds power. */
+    oneTouchWindow: 1.4,
+    oneTouchBonus: 1.14,
   },
   assist: {
     /** Max aim correction (radians) for off / light / strong. */

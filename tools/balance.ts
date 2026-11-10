@@ -9,6 +9,7 @@ import { ARENAS, type ArenaId } from '../src/content/arenas';
 import { CHASSIS } from '../src/content/chassis';
 import { TUNING } from '../src/content/tuning';
 import { BotDirector, CLUB_STYLE, DIFFICULTY, TENDENCY, difficultyAt, type DifficultyId } from '../src/game/ai/bot';
+import { mateLevel } from '../src/game/setup';
 import { Match } from '../src/game/sim/match';
 import { emptyCommand, type Command, type World } from '../src/game/sim/types';
 
@@ -66,7 +67,7 @@ export function runBalance(n: number, policy: Policy, level: number, arena: Aren
     const c = CHASSIS.all_rounder;
     const m = new Match({ arena: ARENAS[arena], chassis: [c, c, c, c], human: 0, assist: policy === 'chase0' ? 0 : 1, regulationSeconds: 180 });
     const specs = [
-      { robot: 1, difficulty: difficultyAt(Math.max(1, level)), style: TENDENCY.supportive.style },
+      { robot: 1, difficulty: difficultyAt(mateLevel(level)), style: TENDENCY.supportive.style },
       { robot: 2, difficulty: difficultyAt(level), style: CLUB_STYLE.balanced },
       { robot: 3, difficulty: difficultyAt(level), style: CLUB_STYLE.balanced },
     ];
@@ -75,6 +76,7 @@ export function runBalance(n: number, policy: Policy, level: number, arena: Aren
     const cmds = [emptyCommand(), emptyCommand(), emptyCommand(), emptyCommand()];
     let prev = m.phase;
     let ticks = 0;
+    let mercy = 0;
     while (!m.finished && ticks++ < 60 * 60 * 12) {
       if (m.phase === 'play') {
         bots.update(cmds);
@@ -83,6 +85,13 @@ export function runBalance(n: number, policy: Policy, level: number, arena: Aren
         else if (policy === 'chase' || policy === 'chase0') chase(m.world, cmds[0]);
       }
       m.step(cmds);
+      // Same mercy rule as a real match (src/game/modes/matchMode.ts).
+      const lead = m.score[1] - m.score[0];
+      const ease = lead >= 4 ? 1 : lead >= 3 ? 0.6 : 0;
+      if (ease !== mercy) {
+        mercy = ease;
+        bots.setTeamEase(1, ease);
+      }
       if (prev !== 'countdown' && m.phase === 'countdown') bots.reset();
       prev = m.phase;
     }

@@ -536,18 +536,23 @@ export class MatchView {
         case 'kick': {
           const r = w.robots[e.robot];
           const p = Math.max(0, Math.min(1, e.power));
-          this.flash(w.ball.x, w.ball.z, 1.3 + p * 1.6, e.swing ? '#ffe36a' : '#ffffff', 0.28);
-          this.burst(w.ball.x, 0.35, w.ball.z, 5 + Math.round(p * 8), 2 + p * 3, e.swing ? '#ffe36a' : '#ffffff', r.lastKickDirX * 0.8, r.lastKickDirZ * 0.8);
-          if (e.swing && !reduced) this.shake = Math.max(this.shake, 0.12);
+          const hot = e.swing || e.oneTouch;
+          const col = e.oneTouch ? '#ff9f43' : e.swing ? '#ffe36a' : e.bank ? '#6ff3ff' : '#ffffff';
+          this.flash(w.ball.x, w.ball.z, 1.3 + p * 1.6 + (e.oneTouch ? 0.8 : 0), col, 0.28);
+          this.burst(w.ball.x, 0.35, w.ball.z, 5 + Math.round(p * 8) + (e.oneTouch ? 6 : 0), 2 + p * 3, col, r.lastKickDirX * 0.8, r.lastKickDirZ * 0.8);
+          if (hot && !reduced) this.shake = Math.max(this.shake, e.oneTouch ? 0.14 : 0.12);
           break;
         }
         case 'touch':
           if (e.speed > 3.5) this.burst(w.ball.x, 0.3, w.ball.z, 3, 1.6, '#ffffff', 0, 0, 0.08);
           break;
         case 'wall':
-          if (e.speed > 3) {
-            this.burst(e.x + e.nx * 0.2, 0.3, e.z + e.nz * 0.2, 4, 1 + e.speed * 0.15, '#f3f5ef', e.nx * 0.5, e.nz * 0.5, 0.09);
-            this.flash(e.x + e.nx * 0.3, e.z + e.nz * 0.3, 0.9 + e.speed * 0.05, '#ffffff', 0.2);
+          if (e.speed > TUNING.ball.wallBoostMin) {
+            // Lively wall: the boost shows as a cyan energy pulse, stronger for harder hits.
+            this.burst(e.x + e.nx * 0.2, 0.3, e.z + e.nz * 0.2, 6, 1.4 + e.speed * 0.16, '#6ff3ff', e.nx * 0.9, e.nz * 0.9, 0.1);
+            this.flash(e.x + e.nx * 0.3, e.z + e.nz * 0.3, 1.1 + e.speed * 0.07, '#5fe8ff', 0.26);
+          } else if (e.speed > 1.5) {
+            this.burst(e.x + e.nx * 0.2, 0.3, e.z + e.nz * 0.2, 3, 1 + e.speed * 0.15, '#f3f5ef', e.nx * 0.5, e.nz * 0.5, 0.08);
           }
           break;
         case 'post':

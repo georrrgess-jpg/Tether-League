@@ -141,3 +141,68 @@ describe('swings start forward', () => {
     expect(r.vx).toBeGreaterThan(0);
   });
 });
+
+describe('wall pass and one-touch finish', () => {
+  it('banks the pass off a side wall when an opponent blocks the straight lane, and it reaches the teammate', () => {
+    const me = createRobot(0, 0, 0, CHASSIS.all_rounder, true);
+    const mate = createRobot(1, 0, 1, CHASSIS.all_rounder);
+    const opp = createRobot(2, 1, 0, CHASSIS.all_rounder);
+    const w = createWorld(ARENAS.harbor_park, [me, mate, opp]);
+    // Wing play: both near the touchline, an opponent standing in the straight lane.
+    placeRobot(me, -6, 5, 0);
+    placeRobot(mate, 6, 5, Math.PI);
+    placeRobot(opp, 0, 5, Math.PI);
+    placeBall(w, -5.2, 5);
+    const c = emptyCommand();
+    c.pass = true;
+    stepWorld(w, [c, emptyCommand(), emptyCommand()]);
+    const kick = w.events.find((e) => e.type === 'kick') as Extract<SimEvent, { type: 'kick' }>;
+    expect(kick?.bank).toBe(true);
+    // The ball goes wide of the blocker and arrives close to the teammate.
+    let closest = Infinity;
+    let wall = false;
+    for (let i = 0; i < 240; i++) {
+      stepWorld(w, [emptyCommand(), emptyCommand(), emptyCommand()]);
+      if (w.events.some((e) => e.type === 'wall')) wall = true;
+      closest = Math.min(closest, Math.hypot(w.ball.x - mate.x, w.ball.z - mate.z));
+      if (closest < 1.2) break;
+    }
+    expect(wall).toBe(true);
+    expect(closest).toBeLessThan(1.2);
+  });
+
+  it('passes straight when the lane is open', () => {
+    const { w } = duo();
+    const c = emptyCommand();
+    c.pass = true;
+    stepWorld(w, [c, emptyCommand()]);
+    const kick = w.events.find((e) => e.type === 'kick') as Extract<SimEvent, { type: 'kick' }>;
+    expect(kick.bank).toBe(false);
+  });
+
+  it('a first-time shot off a teammate pass is a one-touch finish with extra pace', () => {
+    const shot = (fromPass: boolean) => {
+      const me = createRobot(0, 0, 0, CHASSIS.all_rounder, true);
+      const mate = createRobot(1, 0, 1, CHASSIS.all_rounder);
+      const w = createWorld(ARENAS.harbor_park, [me, mate]);
+      placeRobot(me, 6, 0, 0);
+      placeRobot(mate, -6, 4, 0);
+      placeBall(w, 6.9, 0);
+      if (fromPass) {
+        w.ball.passBy = mate.id;
+        w.ball.passTick = w.tick;
+      }
+      const c = emptyCommand();
+      c.kick = true;
+      c.ax = w.hx;
+      c.az = 0;
+      stepWorld(w, [c, emptyCommand()]);
+      return w.events.find((e) => e.type === 'kick') as Extract<SimEvent, { type: 'kick' }>;
+    };
+    const plain = shot(false);
+    const first = shot(true);
+    expect(plain.oneTouch).toBe(false);
+    expect(first.oneTouch).toBe(true);
+    expect(first.speed).toBeGreaterThan(plain.speed * 1.08);
+  });
+});

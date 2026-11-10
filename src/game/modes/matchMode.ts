@@ -81,6 +81,7 @@ export class MatchMode implements PlayMode {
   private hintKey = '';
   private lastCall = -999;
   private rushedTold = 0;
+  private mercy = 0;
   private lastRushed = -999;
 
   constructor(readonly setup: MatchSetup, private settings: () => Settings) {
@@ -183,6 +184,13 @@ export class MatchMode implements PlayMode {
     }
     if (m.phase === 'play') this.bots.update(cmds);
     m.step(cmds);
+    // Mercy rule: opponents three or more goals ahead ease off, so a bad match stays playable.
+    const lead = m.score[1] - m.score[0];
+    const ease = lead >= 4 ? 1 : lead >= 3 ? 0.6 : 0;
+    if (ease !== this.mercy) {
+      this.mercy = ease;
+      this.bots.setTeamEase(1, ease);
+    }
     if (m.phase === 'countdown' && this.prevPhase !== 'countdown') {
       this.bots.reset();
       this.teleported = true;
@@ -196,6 +204,8 @@ export class MatchMode implements PlayMode {
         this.lastRushed = this.world.tick;
         this.toast('Rushed shot! One press per kick is stronger', 'bad');
       }
+      if (e.type === 'kick' && e.robot === 0 && e.bank) this.toast('Wall pass!', 'good');
+      if (e.type === 'kick' && e.robot === 0 && e.oneTouch) this.toast('One-touch strike!', 'good');
     }
     for (const e of m.events) {
       switch (e.type) {

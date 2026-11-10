@@ -46,8 +46,8 @@ export interface DivisionDef {
 
 export const DIVISIONS: DivisionDef[] = [
   { id: 'rookie_league', name: 'Rookie League', trophy: 'Rookie Cup', clubs: ['ember_works', 'tide_runners', 'skyline_bots', 'iron_comets', 'sunset_gears'], level: 0, homeArena: 'harbor_park', awayArena: 'harbor_park' },
-  { id: 'harbor_division', name: 'Harbor Division', trophy: 'Harbor Shield', clubs: ['ember_works', 'tide_runners', 'coral_cranes', 'breakwater_united', 'sunset_gears'], level: 0.55, homeArena: 'harbor_park', awayArena: 'foundry_court' },
-  { id: 'metro_division', name: 'Metro Division', trophy: 'Metro Plate', clubs: ['skyline_bots', 'iron_comets', 'neon_circuit', 'metro_volts', 'breakwater_united'], level: 1, homeArena: 'skyline_stadium', awayArena: 'foundry_court' },
-  { id: 'premier_division', name: 'Premier Division', trophy: 'Premier Crown', clubs: ['coral_cranes', 'neon_circuit', 'copper_kings', 'polar_pistons', 'iron_comets'], level: 1.45, homeArena: 'championship_dome', awayArena: 'skyline_stadium' },
-  { id: 'championship_league', name: 'Championship League', trophy: 'Tether League Trophy', clubs: ['apex_orbit', 'polar_pistons', 'copper_kings', 'metro_volts', 'ember_works'], level: 1.9, homeArena: 'championship_dome', awayArena: 'championship_dome' },
+  { id: 'harbor_division', name: 'Harbor Division', trophy: 'Harbor Shield', clubs: ['ember_works', 'tide_runners', 'coral_cranes', 'breakwater_united', 'sunset_gears'], level: 0.25, homeArena: 'harbor_park', awayArena: 'foundry_court' },
+  { id: 'metro_division', name: 'Metro Division', trophy: 'Metro Plate', clubs: ['skyline_bots', 'iron_comets', 'neon_circuit', 'metro_volts', 'breakwater_united'], level: 0.45, homeArena: 'skyline_stadium', awayArena: 'foundry_court' },
+  { id: 'premier_division', name: 'Premier Division', trophy: 'Premier Crown', clubs: ['coral_cranes', 'neon_circuit', 'copper_kings', 'polar_pistons', 'iron_comets'], level: 0.65, homeArena: 'championship_dome', awayArena: 'skyline_stadium' },
+  { id: 'championship_league', name: 'Championship League', trophy: 'Tether League Trophy', clubs: ['apex_orbit', 'polar_pistons', 'copper_kings', 'metro_volts', 'ember_works'], level: 0.85, homeArena: 'championship_dome', awayArena: 'championship_dome' },
 ];

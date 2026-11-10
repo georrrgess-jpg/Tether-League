@@ -51,7 +51,7 @@ describe('ball motion over simulated time', () => {
     expect(w.ball.x - -10).toBeLessThanOrEqual(B.maxSpeed * DT + 1e-9);
   });
 
-  it('a wall bounce loses speed by the wall restitution and reflects the normal component only', () => {
+  it('a wall bounce is lively: restitution plus a small boost on the normal component only', () => {
     const w = ballWorld();
     placeBall(w, 0, w.hz - RB - 0.2, 3, 9);
     const ev = step(w, [], 6);
@@ -59,9 +59,21 @@ describe('ball motion over simulated time', () => {
     expect(walls).toHaveLength(1);
     expect(w.ball.vz).toBeLessThan(0);
     expect(w.ball.vx).toBeGreaterThan(0);
-    // |vz| after ≈ restitution * |vz| before (minus a few ticks of drag).
-    expect(Math.abs(w.ball.vz)).toBeLessThan(9 * B.wallRestitution);
-    expect(Math.abs(w.ball.vz)).toBeGreaterThan(9 * B.wallRestitution * 0.9);
+    // |vz| after ≈ restitution * |vz| + boost (minus a few ticks of drag).
+    const out = 9 * B.wallRestitution + B.wallBoost;
+    expect(Math.abs(w.ball.vz)).toBeLessThan(out);
+    expect(Math.abs(w.ball.vz)).toBeGreaterThan(out * 0.9);
+  });
+
+  it('a slow ball rolling into a wall gets no boost, and a boosted rebound never exceeds max speed', () => {
+    const slow = ballWorld();
+    placeBall(slow, 0, slow.hz - RB - 0.05, 0, 1.5);
+    step(slow, [], 6);
+    expect(Math.abs(slow.ball.vz)).toBeLessThan(1.5 * B.wallRestitution);
+    const fast = ballWorld();
+    placeBall(fast, 0, fast.hz - RB - 0.2, 4, B.maxSpeed - 1);
+    step(fast, [], 4);
+    expect(Math.hypot(fast.ball.vx, fast.ball.vz)).toBeLessThanOrEqual(B.maxSpeed + 1e-6);
   });
 
   it('predictBall (coarser step) tracks the real stepped path, including a wall bounce', () => {
@@ -407,7 +419,8 @@ describe('deliberate kick', () => {
       const ev = step(w, cmd({ kick: true, ax: 10, az: 0 }));
       if (eventsOf(ev, 'kick').length) kickTicks.push(i);
     }
-    expect(kickTicks.length).toBeGreaterThan(3);
+    // Holding kick every tick is mashing: after the first kicks they are rushed, with the longer rushed cooldown.
+    expect(kickTicks.length).toBeGreaterThanOrEqual(2);
     for (let i = 1; i < kickTicks.length; i++) {
       expect((kickTicks[i] - kickTicks[i - 1]) * DT).toBeGreaterThanOrEqual(K.cooldownSeconds - 1e-9);
     }

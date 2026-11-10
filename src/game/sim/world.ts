@@ -69,7 +69,7 @@ export function createWorld(arena: ArenaDef, robots: Robot[]): World {
     hx: arena.length / 2,
     hz: arena.width / 2,
     robots,
-    ball: { x: 0, z: 0, vx: 0, vz: 0, lastTouchRobot: -1, lastTouchTick: -999, lastTouchDeliberate: false },
+    ball: { x: 0, z: 0, vx: 0, vz: 0, lastTouchRobot: -1, lastTouchTick: -999, lastTouchDeliberate: false, passBy: -1, passTick: -999 },
     tick: 0,
     events: [],
     goalsOpen: true,
@@ -110,6 +110,8 @@ export function placeBall(w: World, x: number, z: number, vx = 0, vz = 0): void 
   b.lastTouchRobot = -1;
   b.lastTouchTick = -999;
   b.lastTouchDeliberate = false;
+  b.passBy = -1;
+  b.passTick = -999;
   w.goalLatch = false;
 }
 
@@ -343,6 +345,49 @@ export function passTarget(w: World, r: Robot): Robot | null {
   return best;
 }
 
+/** True when no opponent stands within `width` of the segment (x0,z0)-(x1,z1), ignoring its ends. */
+function laneClear(w: World, team: 0 | 1, x0: number, z0: number, x1: number, z1: number, width: number): boolean {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const l2 = dx * dx + dz * dz;
+  if (l2 < 1e-6) return true;
+  for (const o of w.robots) {
+    if (o.team === team) continue;
+    const t = ((o.x - x0) * dx + (o.z - z0) * dz) / l2;
+    if (t < 0.08 || t > 0.95) continue;
+    const px = x0 + dx * t;
+    const pz = z0 + dz * t;
+    if (Math.hypot(o.x - px, o.z - pz) < width) return false;
+  }
+  return true;
+}
+
+/**
+ * Wall pass: when the straight lane to (px, pz) is blocked, find a clear bank off a side wall.
+ * Returns the wall contact point and the total path length, or null to pass straight.
+ */
+export function bankPass(w: World, team: 0 | 1, bx: number, bz: number, px: number, pz: number): { x: number; z: number; len: number } | null {
+  const width = TUNING.kick.bankLaneWidth;
+  if (laneClear(w, team, bx, bz, px, pz, width)) return null;
+  const lim = w.hx + w.hz - w.arena.corner - RB * SQRT2;
+  let best: { x: number; z: number; len: number } | null = null;
+  for (const s of [-1, 1]) {
+    const wz = s * (w.hz - RB);
+    const mz = 2 * wz - pz; // mirror the target across the wall line
+    const t = (wz - bz) / (mz - bz);
+    if (!(t > 0.15 && t < 0.85)) continue;
+    const cx = bx + (px - bx) * t;
+    if (Math.abs(cx) + Math.abs(wz) > lim - 0.6) continue; // would hit a corner cut
+    if (!laneClear(w, team, bx, bz, cx, wz, width) || !laneClear(w, team, cx, wz, px, pz, width)) continue;
+    const len = Math.hypot(cx - bx, wz - bz) + Math.hypot(px - cx, pz - wz);
+    // Only routes a full-pace pass can still deliver (pace = passBase + passPerUnit * len + bankExtra).
+    const K = TUNING.kick;
+    if (K.passBase + K.passPerUnit * len + K.bankExtra > K.speedCap) continue;
+    if (!best || len < best.len) best = { x: cx, z: wz, len };
+  }
+  return best;
+}
+
 function tryKick(w: World, r: Robot): void {
   const K = TUNING.kick;
   const b = w.ball;
@@ -365,6 +410,7 @@ function tryKick(w: World, r: Robot): void {
   let assisted: 'none' | 'goal' | 'pass' = 'none';
   let target = -1;
   let speedLimit = Infinity;
+  let banked = false;
   const mate = r.kickPass ? passTarget(w, r) : null;
   if (mate) {
     // Pass button: aim at where the teammate will be, weighted so it can be collected.
@@ -376,6 +422,15 @@ function tryKick(w: World, r: Robot): void {
     assisted = 'pass';
     target = mate.id;
     speedLimit = K.passBase + K.passPerUnit * pl;
+    const bank = bankPass(w, r.team, b.x, b.z, px, pz);
+    if (bank) {
+      const cl = Math.hypot(bank.x - b.x, bank.z - b.z) || 1;
+      ax = (bank.x - b.x) / cl;
+      az = (bank.z - b.z) / cl;
+      // The longer route needs more pace than a standing kick, so a bank is struck firmly.
+      speedLimit = K.passBase + K.passPerUnit * bank.len + K.bankExtra;
+      banked = true;
+    }
   } else if (r.assist > 0) {
     const maxA = TUNING.assist.maxAngle[r.assist];
     const aim = Math.atan2(az, ax);
@@ -458,13 +513,25 @@ function tryKick(w: World, r: Robot): void {
   const rs = Math.hypot(r.vx, r.vz);
   if (rs > 3 && along < -0.3 * rs) speed *= K.backwardPower;
   if (rushed) speed *= K.rushedPower;
-  speed = Math.min(speed, speedLimit) * r.kickPower;
+  // First-time finish off a teammate's pass: a little extra pace (not for passes, rushed kicks or clearances back).
+  const passer = b.passBy >= 0 ? w.robots[b.passBy] : undefined;
+  const oneTouch =
+    !mate && !rushed && assisted !== 'pass' && !!passer && passer.team === r.team && passer.id !== r.id &&
+    w.tick - b.passTick <= K.oneTouchWindow * TUNING.sim.hz && ax * attackDir(r.team) > 0.2;
+  if (oneTouch) speed = Math.min(K.speedCap * K.oneTouchBonus, speed * K.oneTouchBonus);
+  speed = (banked ? speedLimit : Math.min(speed, speedLimit)) * r.kickPower;
   b.vx = ax * speed;
   b.vz = az * speed;
   b.lastTouchRobot = r.id;
   b.lastTouchTick = w.tick;
   b.lastTouchDeliberate = true;
   const wasPass = !!mate;
+  if (wasPass || assisted === 'pass') {
+    b.passBy = r.id;
+    b.passTick = w.tick;
+  } else {
+    b.passBy = -1;
+  }
   r.kickCd = rushed ? K.rushedCooldown : K.cooldownSeconds;
   r.kickBuffer = 0;
   r.kickPass = false;
@@ -483,6 +550,8 @@ function tryKick(w: World, r: Robot): void {
     target,
     pass: wasPass,
     rushed,
+    bank: banked,
+    oneTouch,
   });
 }
 
@@ -558,20 +627,37 @@ function robotWalls(w: World, r: Robot): void {
  * Ball boundary: side walls, corner cuts, end walls with goal mouths, posts and the goal box.
  * `ev` is null for predictions so they stay side-effect free.
  */
+/** Outgoing normal speed for a wall impact with incoming normal speed vn (> 0): lively walls. */
+function wallOut(vn: number): number {
+  const B = TUNING.ball;
+  return vn * B.wallRestitution + (vn > B.wallBoostMin ? B.wallBoost : 0);
+}
+
+/** Keeps a boosted rebound under the ball's top speed. */
+function capBall(b: { vx: number; vz: number }): void {
+  const s = Math.hypot(b.vx, b.vz);
+  const m = TUNING.ball.maxSpeed;
+  if (s > m) {
+    b.vx *= m / s;
+    b.vz *= m / s;
+  }
+}
+
 export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: number }, ev: World['events'] | null): void {
-  const e = TUNING.ball.wallRestitution;
   const lz = w.hz - RB;
   if (b.z > lz) {
     b.z = lz;
     if (b.vz > 0) {
       if (ev && b.vz > 1) ev.push({ type: 'wall', speed: b.vz, x: b.x, z: w.hz, nx: 0, nz: -1 });
-      b.vz = -b.vz * e;
+      b.vz = -wallOut(b.vz);
+      capBall(b);
     }
   } else if (b.z < -lz) {
     b.z = -lz;
     if (b.vz < 0) {
       if (ev && b.vz < -1) ev.push({ type: 'wall', speed: -b.vz, x: b.x, z: -w.hz, nx: 0, nz: 1 });
-      b.vz = -b.vz * e;
+      b.vz = wallOut(-b.vz);
+      capBall(b);
     }
   }
   const lim = w.hx + w.hz - w.arena.corner - RB * SQRT2;
@@ -585,8 +671,10 @@ export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: n
     const vn = (b.vx * sx + b.vz * sz) / SQRT2;
     if (vn > 0) {
       if (ev && vn > 1) ev.push({ type: 'wall', speed: vn, x: b.x, z: b.z, nx: -sx / SQRT2, nz: -sz / SQRT2 });
-      b.vx -= ((1 + e) * vn * sx) / SQRT2;
-      b.vz -= ((1 + e) * vn * sz) / SQRT2;
+      const k = vn + wallOut(vn);
+      b.vx -= (k * sx) / SQRT2;
+      b.vz -= (k * sz) / SQRT2;
+      capBall(b);
     }
   }
 
@@ -600,7 +688,8 @@ export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: n
       const vn = b.vx * side;
       if (vn > 0) {
         if (ev && vn > 1) ev.push({ type: 'wall', speed: vn, x: side * w.hx, z: b.z, nx: -side, nz: 0 });
-        b.vx = -b.vx * e;
+        b.vx = -side * wallOut(vn);
+        capBall(b);
       }
     } else {
       // Posts are the end points of the wall on either side of the mouth.
@@ -618,8 +707,8 @@ export function ballWalls(w: World, b: { x: number; z: number; vx: number; vz: n
           const vn = b.vx * nx + b.vz * nz;
           if (vn < 0) {
             if (ev && vn < -1) ev.push({ type: 'post', speed: -vn, x: px, z: pz });
-            b.vx -= (1 + e * 0.9) * vn * nx;
-            b.vz -= (1 + e * 0.9) * vn * nz;
+            b.vx -= (1 + TUNING.ball.postRestitution) * vn * nx;
+            b.vz -= (1 + TUNING.ball.postRestitution) * vn * nz;
           }
         }
       }
@@ -739,6 +828,7 @@ function collideRobotBall(w: World, r: Robot, pinned: boolean): void {
       b.lastTouchRobot = r.id;
       b.lastTouchTick = w.tick;
       b.lastTouchDeliberate = false;
+      if (b.passBy >= 0 && w.robots[b.passBy] && w.robots[b.passBy].team !== r.team) b.passBy = -1;
     }
     r.lastTouchTick = w.tick;
   }
