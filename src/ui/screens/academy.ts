@@ -169,7 +169,7 @@ export function academyScreen(app: App, params: URLSearchParams): ScreenView {
     tabsSlot.replaceChildren(tabBar<AcademyTab>([
       { id: 'lessons', label: 'Lessons', icon: 'list', badge: lessonsLeft ? String(lessonsLeft) : null },
       { id: 'trials', label: 'Trials', icon: 'target' },
-      { id: 'plays', label: 'Playbook', icon: 'assist' },
+      { id: 'plays', label: 'Playbook', short: 'Plays', icon: 'assist' },
     ], tab, (t) => {
       tab = t;
       render();

@@ -857,6 +857,15 @@ select,
   #app .club-chip {
     min-height: 44px;
   }
+  /* swatches stretch to their grid column and are 44px tall (an aspect ratio would widen them instead) */
+  #app .swatch {
+    aspect-ratio: auto;
+  }
+  /* as many 46px+ swatches per row as fit (six on most phones, wrapping on narrow columns) */
+  #app .swatches {
+    grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+    gap: 6px;
+  }
   #app .back-btn {
     min-width: 44px;
     min-height: 44px;

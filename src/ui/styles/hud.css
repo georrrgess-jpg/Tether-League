@@ -611,9 +611,9 @@
   --touch-scale: 1;
   --tm: 14px; /* margin from the safe edge */
   --tg: 12px; /* gap between buttons */
-  --tk: min(calc(clamp(76px, 24vmin, 118px) * var(--touch-scale)), 27vw, 30vh); /* KICK */
+  --tk: min(calc(clamp(76px, 25vmin, 120px) * var(--touch-scale)), 27vw, 30vh); /* KICK */
   --ts: calc(var(--tk) * 0.88); /* SWING */
-  --tp: max(48px, calc(var(--tk) * 0.7)); /* PASS */
+  --tp: max(52px, calc(var(--tk) * 0.74)); /* PASS */
   --tt: min(calc(clamp(108px, 30vmin, 150px) * var(--touch-scale)), 34vw, 40vh); /* stick */
   /* centre-to-centre distances from KICK, and the derived top of the button cluster */
   --d-ks: calc(var(--tk) / 2 + var(--ts) / 2 + var(--tg));
@@ -724,7 +724,7 @@
 .tbtn small {
   font-family: var(--font-body);
   font-style: normal;
-  font-size: max(11px, calc(var(--tk) * 0.12));
+  font-size: max(12px, calc(var(--tk) * 0.12));
   font-weight: 800;
   opacity: 0.92;
 }
@@ -742,7 +742,7 @@
   bottom: calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-ks) * 0.259 - var(--ts) / 2);
   width: var(--ts);
   height: var(--ts);
-  font-size: calc(var(--ts) * 0.19);
+  font-size: max(14px, calc(var(--ts) * 0.19));
 }
 .tbtn-pass {
   --c: 47, 181, 122;
@@ -752,10 +752,10 @@
   bottom: calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-kp) * 0.985 - var(--tp) / 2);
   width: var(--tp);
   height: var(--tp);
-  font-size: calc(var(--tp) * 0.22);
+  font-size: max(14px, calc(var(--tp) * 0.22));
 }
 .tbtn-pass small {
-  font-size: max(11px, calc(var(--tp) * 0.15));
+  font-size: max(12px, calc(var(--tp) * 0.15));
 }
 .touch-ui.swap .tbtn-kick {
   right: auto;
@@ -804,10 +804,10 @@
 }
 /* left alone for a few seconds, the controls step back so the pitch reads clearly */
 .touch-ui.is-idle .tbtn {
-  opacity: 0.55;
+  opacity: 0.68;
 }
 .touch-ui.is-idle .stick-base:not(.is-down) {
-  opacity: 0.5;
+  opacity: 0.6;
 }
 /* touch play: hint, coach card and toasts stay near the top, never under the thumbs */
 .play-layer.has-touch .hint {
@@ -1068,12 +1068,18 @@
   backdrop-filter: blur(4px);
 }
 
+/* landscape phones have width to spare: bigger buttons (the height cap still keeps them under the score bar) */
+@media (orientation: landscape) and (max-height: 560px) {
+  .play-layer {
+    --tk: min(calc(clamp(84px, 27vmin, 124px) * var(--touch-scale)), 30vh);
+  }
+}
 /* Settings > Controls: a sketch of the touch controls at four-fifths size, following the size slider. */
 .touch-preview {
   --safe-b: 0px;
   --safe-l: 0px;
   --safe-r: 0px;
-  --tk: calc(min(calc(clamp(76px, 24vmin, 118px) * var(--touch-scale)), 27vw, 30vh) * 0.8);
+  --tk: calc(min(calc(clamp(76px, 25vmin, 120px) * var(--touch-scale)), 27vw, 30vh) * 0.8);
   --tt: calc(min(calc(clamp(108px, 30vmin, 150px) * var(--touch-scale)), 34vw, 40vh) * 0.8);
   --tm: 10px;
   position: relative;
@@ -1145,7 +1151,10 @@
 @media (max-width: 600px) {
   .pause-actions .btn {
     flex: 1 1 calc(50% - 5px);
+    min-width: 0;
     min-height: 48px;
+    padding: 0.5em 0.6em;
+    font-size: 0.95rem;
   }
   .pause-actions .btn-primary {
     flex-basis: 100%;

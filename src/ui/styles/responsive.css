@@ -1064,6 +1064,21 @@
   .ac-tabbar .tab .icon {
     display: none;
   }
+  .ac-tabbar .tab {
+    padding: 0 4px;
+    gap: 4px;
+    font-size: 0.82rem;
+    letter-spacing: 0;
+  }
+  .ac-tabbar .tab .tl-full {
+    display: none;
+  }
+  .ac-tabbar .tab .tl-short {
+    display: inline;
+  }
+  .ac-tabbar .tab:not(:has(.tl-short)) .tl-full {
+    display: inline;
+  }
 }
 /* playoff bracket: semi-finals over the final when there is no room side by side */
 @media (max-width: 700px), (max-height: 560px) and (orientation: landscape) {
@@ -1084,6 +1099,27 @@
   .hub-tabs .tab {
     padding: 0 9px;
   }
+}
+/* tables: the club column takes the remaining width and long names end in an ellipsis */
+.table td.club {
+  width: 100%;
+  max-width: 0;
+}
+@media (max-width: 380px), (max-height: 560px) and (orientation: landscape) {
+  .table th {
+    letter-spacing: 0;
+    padding: 0 2px 4px;
+  }
+  .table td {
+    padding: 5px 2px;
+  }
+  .ac-side {
+    padding: 10px;
+  }
+}
+/* colour swatches keep to their grid column (aspect-ratio would otherwise widen them to fit 44px tall) */
+.swatch {
+  min-width: 0;
 }
 
 /* Portrait phones: "Play next match" stays within thumb reach. While the fixture card is on screen the
@@ -1125,6 +1161,10 @@
     position: sticky;
     bottom: 10px;
     z-index: 2;
+  }
+  /* clip without becoming a scroll box, so the sticky button follows the scrolling content */
+  .home .fixture-card {
+    overflow: clip;
   }
   .vs-team,
   .vs-name {
