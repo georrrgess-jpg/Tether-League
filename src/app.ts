@@ -314,7 +314,8 @@ export class App {
 
   /**
    * Shared HUD furniture added around a mode's own HUD: a small controls legend (mouse and keyboard
-   * only), the arena name for matches, and a "YOU" tag over the player's robot. Display only.
+   * only) and a "YOU" tag over the player's robot. Display only. The venue names itself on a sign in the
+   * arena, so the HUD does not repeat it.
    */
   private decorateHud(session: PlaySession, mode: PlayMode): void {
     const k = this.settings.keys;
@@ -327,9 +328,8 @@ export class App {
       h('div', null, icon('keyboard'), h('span', null, h('b', null, 'Pass'), h('small', null, `${keys(k.pass)} · hold: long ball`))),
       h('div', null, icon('keyboard'), h('span', null, h('b', null, 'Meg'), h('small', null, `${keys(k.meg)} · nutmeg / knock-on`))),
     );
-    const arena = match ? h('div', { class: 'hud-arena', 'aria-hidden': 'true' }, h('i'), mode.world.arena.name, h('i')) : null;
     this.youTag = mode.human >= 0 ? h('div', { class: 'hud-you', 'aria-hidden': 'true' }, h('b', null, `#${shirt(this.save.club.numbers[0])}`), h('span', null, 'You')) : null;
-    session.layer.append(h('div', { class: 'hud-extra' }, legend, arena, this.youTag));
+    session.layer.append(h('div', { class: 'hud-extra' }, legend, this.youTag));
   }
 
   private trackYou(): void {

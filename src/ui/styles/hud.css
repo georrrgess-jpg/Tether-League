@@ -233,33 +233,6 @@
     animation: none !important;
   }
 }
-.hud-arena {
-  position: absolute;
-  left: 50%;
-  bottom: calc(12px + var(--safe-b));
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 20px;
-  border-radius: 999px;
-  background: rgba(23, 39, 62, 0.88);
-  color: #fff;
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 800;
-  text-transform: uppercase;
-  font-size: 1.05rem;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  box-shadow: 0 6px 16px rgba(8, 14, 28, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-}
-.hud-arena i {
-  width: 22px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--violet);
-}
 .hud-you {
   position: absolute;
   left: 0;
@@ -300,13 +273,11 @@
   }
 }
 @media (pointer: coarse), (max-width: 900px), (max-height: 560px) {
-  .hud-legend,
-  .hud-arena {
+  .hud-legend {
     display: none;
   }
 }
-.play-layer:has(.touch-ui) .hud-legend,
-.play-layer:has(.touch-ui) .hud-arena {
+.play-layer:has(.touch-ui) .hud-legend {
   display: none;
 }
 
@@ -879,8 +850,7 @@
     bottom: calc(18px + var(--safe-b));
   }
 }
-.play-layer.has-touch .hud-legend,
-.play-layer.has-touch .hud-arena {
+.play-layer.has-touch .hud-legend {
   display: none;
 }
 
