@@ -87,10 +87,23 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
   badges, head accessories, match balls), club colours, titles, name and numbers: 50 shop items plus
   earned-only rewards from the Club Road and achievements.
 - **Progression**: a 40-level Club Road with a reward at every level, three rotating club objectives,
-  31 tiered achievements, chassis mastery, and season prize money. See the Progress screen.
+  tiered achievements, chassis mastery and season prize money. See the Progress screen.
+- **Chassis mastery** (Garage > Mastery): 20 levels per chassis with ranks Bronze to Master, a
+  reward at every level, a signature bonus for playing to the chassis' strengths, and a rank belt
+  on your robot.
+- **Audio**: an original menu song and an adaptive match song, layered sound effects and crowd,
+  all synthesized in code (no audio files).
 - **Saves** in the browser with a backup snapshot, export/import and validation.
 - **Settings**: audio, quality tiers, reduced motion, high contrast, text size, aim assist, aim mode,
-  rebinding, touch layout.
+  rebinding, touch control size, left-handed layout, vibration, fullscreen where supported.
+
+## FAQ
+
+**Why does the classic ball have a cyan hexagon?** Two opposite hexagons on the Classic Panels ball
+are painted in the league cyan on purpose. A plain black-and-white ball looks the same from every
+angle, so its spin and roll direction are hard to read at the match camera's distance; the two
+coloured panels make the rotation visible, and they double as the league's mark. Other balls in the
+Club > Ball tab (Beach, Hive, Chrome, Galaxy and more) change the look entirely.
 
 ## Project commands
 
@@ -100,7 +113,7 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (254 tests) |
+| `npm test` | Rule validation suite (265 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |

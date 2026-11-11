@@ -50,7 +50,7 @@ Production bundle: about 813 kB JS (227 kB gzipped), 46 kB CSS, no image assets.
 Commands used: `npm run check`, `npm run build`, `npm run sim`, `npm run feasibility`, plus
 Playwright scripts against the dev server and the production preview.
 
-**Automated (254 tests, about 6 s)**: tether acquisition, no retargeting, release preserving
+**Automated (265 tests, about 8 s)**: tether acquisition, no retargeting, release preserving
 velocity, touch stick with any touch id (iOS ids can be negative), speed cap, auto-release, cooldown, rope stability, pause detach without boost; ball drag
 against the analytic law, prediction against the stepped path, goals scoring once, misses not scoring,
 containment stress on every arena; kickoff resets, overtime, goal and clock on the same tick, own
@@ -89,6 +89,33 @@ thresholds are estimates. No real phone, Chromebook or gamepad was available, so
 device performance, touch comfort and gamepad mapping are untested. Frame rate was not measured on
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
+
+### Mastery in the Garage, audio overhaul, mobile pass (2026-11-11)
+
+- Mastery (`src/content/progression.ts`, `src/progression/mastery.ts`, `src/ui/screens/mastery.ts`):
+  20 levels (1-10 unchanged; 11-20 step 600 + 25 per level), ranks Bronze 1 / Silver 5 / Gold 10 /
+  Platinum 15 / Master 20, rewards at every level (credits, picks, themed shop items with credit
+  fallback, a mastery club colour at 15, a Legend title at 20). Signature bonus mastery XP per
+  chassis from match stats (capped at 120 a match), recorded on the mastery step. Garage gets a
+  Stats | Mastery tab (rank, XP, next reward, signature, 20-node track); chassis buttons show rank
+  and level; Progress links into it. Player robots wear their chassis' rank as a belt
+  (`RobotLook.mastery`). Economy: shop fully owned at about match 56.
+- Audio (`src/audio/*`): rebuilt as engine / dsp / music / sfx modules, still fully synthesized.
+  Menu "Clubhouse Sunshine" (F major, 100 BPM, swung funk-pop) and match "Tether Drive" (A minor,
+  126 BPM synth-pop, intensity layers and activity nudge, goal / concede / overtime cues and
+  win / lose / draw outros). Layered SFX with variation; new lob, land, perfect, play, levelUp,
+  cue, wallBoost and a held long-ball charge voice (`audio.charge`). Measured offline: music about
+  -15 to -13 LUFS, peaks below -1 dBFS, seamless loops, no onset clicks; unlock 17-33 ms; module
+  43 KB minified. Hover / deny / purchase / level-up UI sounds wired. Nobody has listened on real
+  speakers yet.
+- Mobile (`src/game/input/input.ts` touch layout, `hud.css`, `responsive.css`, `src/ui/device.ts`):
+  touch controls sized from the short screen side with 12 px gaps, stick rest chevrons and a gold
+  direction arc, PASS button charge ring with the perfect notch, pressed glow, optional vibration
+  setting, wake lock during play, fullscreen where allowed; 44 px tap targets everywhere (audit of
+  12 configs: 2,471 small targets -> 0, overlaps 29 -> 0, horizontal overflow 32 -> 0).
+  Low-memory phones start on the low graphics tier. Hints name the stick's real side.
+- The classic ball's two cyan hexagons are deliberate: league colour and a spin cue (see README FAQ).
+- Not verified on real devices; no human playtest.
 
 ### Plays, cosmetics and concept-art redesign (2026-11-10)
 
@@ -312,7 +339,7 @@ and confusing, so those were removed and the controls simplified. Measured on th
 - Replays (no replay button is shown), online or local versus, daily challenges.
 - Mid-match resume: refreshing during a match restarts that fixture (explained in the pause menu).
 - Club home decorations beyond the trophy shelf and club-coloured banner.
-- Music is one menu track and one match track; there is no audio beyond synthesis.
+- Music is one menu song and one adaptive match song (with cues and outros), all synthesized in code.
 - Bots kick often under pressure (about 1.5 kicks per second in Pro matches), which can look frantic.
 - Robot models are procedural primitives; there are no authored meshes or textures.
 

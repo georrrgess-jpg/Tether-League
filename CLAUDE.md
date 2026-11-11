@@ -7,7 +7,7 @@ before changing rules or scope.
 ## Commands
 
 - `npm run dev`: dev server. `npm run build`: type-check and production build. `npm run preview`.
-- `npm run check`: type-check and the 254-test rule suite. Run it before committing.
+- `npm run check`: type-check and the 265-test rule suite. Run it before committing.
 - `npm run sim -- <matches> <arena> <difficultyA> <difficultyB>`: headless bot matches for tuning.
 - `npm run feasibility`: confirms the tether trial layouts are achievable.
 - `npm run swingcheck`: smart-swing aim accuracy, time gain over running, bot swing use, trial scores.
