@@ -24,7 +24,7 @@ export default defineConfig({
     outDir: 'offline',
     target: 'es2022',
     modulePreload: false,
-    chunkSizeWarningLimit: 1200,
+    chunkSizeWarningLimit: 1500,
     rollupOptions: { output: { format: 'iife', inlineDynamicImports: true } },
   },
 });

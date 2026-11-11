@@ -1,3 +1,4 @@
+import { audio } from '../../audio/audio';
 import type { App, ScreenView } from '../../app';
 import { CHASSIS, CHASSIS_ORDER, chassisBars, type ChassisId } from '../../content/chassis';
 import { playerLooks } from '../../game/setup';
@@ -118,6 +119,7 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
       : h('button', { class: `btn btn-primary btn-big${save.credits < c.credits ? ' is-disabled' : ''}`, type: 'button', 'aria-disabled': String(save.credits < c.credits), 'data-autofocus': true, onclick: async () => {
           if (busy) return;
           if (save.credits < c.credits) {
+            audio.play('uiDeny');
             app.toast(`You need ${c.credits - save.credits} more credits for the ${c.name}.`, 'bad');
             return;
           }
@@ -128,9 +130,13 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
           const res = purchase(save, `chassis:${selected}`);
           if (res === 'ok') {
             app.persist();
+            audio.play('unlock');
             app.toast(`${c.name} unlocked!`, 'good');
             app.navigate(`garage?c=${selected}${who === 'mate' ? '&who=mate' : ''}`, true);
-          } else app.toast(res === 'insufficient' ? 'Not enough credits.' : 'Already owned.', 'bad');
+          } else {
+            audio.play('uiDeny');
+            app.toast(res === 'insufficient' ? 'Not enough credits.' : 'Already owned.', 'bad');
+          }
         } }, icon('coin'), `Buy · ${c.credits}`);
     const robot = (w: 'me' | 'mate') => {
       const n = shirt(save.club.numbers[w === 'me' ? 0 : 1]);
