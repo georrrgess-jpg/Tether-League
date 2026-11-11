@@ -265,7 +265,8 @@ export class PlaySession {
               h('h3', null, 'Plays'),
               row('Long ball', `Hold ${keyLabel(k.pass[0])}, release to send it`),
               row('Give-and-go', `${keyLabel(k.pass[0])} again after passing`),
-              h('p', { class: 'muted' }, 'Gamepad: left stick, right stick aim, trigger swing, A kick, B pass (hold for a long ball). Swings go the way you are moving (standing still: toward the cursor). Walls are lively, a blocked pass banks off the side wall, and a first-time shot off a pass is a one-touch strike. The Academy playbook explains every play.'),
+              row('Nutmeg', `${keyLabel(k.meg[0])} at a defender who dives in`),
+              h('p', { class: 'muted' }, 'Gamepad: left stick, right stick aim, trigger swing, A kick, B pass (hold for a long ball), X meg. Swings go the way you are moving (standing still: toward the cursor). Walls are lively, a blocked pass banks off the side wall, and a first-time shot off a pass is a one-touch strike. The Academy playbook explains every play.'),
             ),
       );
       (body.querySelector('.btn-primary') as HTMLElement | null)?.focus();

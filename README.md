@@ -50,10 +50,11 @@ module scripts on pages opened straight from disk.
 | Swing: tap = launch toward your aim automatically | right mouse | Space / Left Shift | tap SWING | triggers / bumpers |
 | Swing: tap again = let go now | tap again | tap again | tap again | tap again |
 | Swing: hold = let go yourself (rope glows green when lined up) | hold right mouse | hold Space | hold SWING | hold trigger |
-| Kick (one press; mashing scuffs the shot) | left mouse | J / Enter | tap KICK | A / X |
+| Kick (one press; mashing scuffs the shot) | left mouse | J / Enter | tap KICK | A |
 | Pass to teammate (without the ball: call for it) | tap K / F | tap K / F | tap PASS | tap B / Y |
 | Long ball over defenders (release on the gold notch) | hold K / F | hold K / F | hold PASS | hold B / Y |
 | Give-and-go (after passing, while running) | K / F again | K / F again | PASS again | B / Y again |
+| Meg: nutmeg a defender who dives in (ball ring turns pink); otherwise a knock-on | L / G or middle mouse | L / G | tap MEG | X |
 | Override the chosen anchor | Q / E | Q / E | – | – |
 | Pause | Esc / P | Esc / P | pause button | Start |
 
@@ -75,6 +76,10 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
   teammate), give-and-goes (pass, run, call it straight back), wall passes and one-touch strikes.
   Bots use them too; completed plays pay a small reward and count toward objectives and achievements.
   A Playbook and a Plays lesson in the Academy teach them.
+- **Nutmeg**: run at a defender who dives in and press MEG as the ball ring turns pink: the ball goes
+  through their legs and you run straight through after it. The chance depends on your line, your
+  timing and how committed the defender is, plus a little luck; a miss gives the ball away.
+- **Close control**: the ball stays at your feet through turns while you run with it.
 - **Smart swing**: tap to swing round the highlighted anchor and launch toward your aim (tap again to
   let go early); hold to swing manually and let go when the rope glows green. Swings are planned from
   real rope physics (anchor, direction and release point), and the bots use the same planner.
@@ -83,6 +88,8 @@ Keys can be rebound in Settings. F3 toggles a debug overlay during play.
   defeat the next opponent eases off (comeback boost), and opponents three goals up ease off too.
 - **Quick Match**, **Academy** (five playable lessons), **six Skill Trials** with medals and personal bests,
   and a free **test drive** for every chassis.
+- **Balanced chassis**: All-Rounder, Scout, Bulwark and Glider are measured sidegrades (every
+  pairing within 50-53% over 400 bot matches), each with its own silhouette and a shot-power stat.
 - **Four chassis** (sidegrades), **four arenas**, cosmetics (faces, jerseys, trails, celebrations,
   badges, head accessories, match balls), club colours, titles, name and numbers: 50 shop items plus
   earned-only rewards from the Club Road and achievements.
@@ -113,7 +120,7 @@ Club > Ball tab (Beach, Hive, Chrome, Galaxy and more) change the look entirely.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm run build:offline` | Standalone build in `offline/` that runs from disk |
-| `npm test` | Rule validation suite (265 tests) |
+| `npm test` | Rule validation suite (277 tests) |
 | `npm run check` | Type-check plus tests |
 | `npm run sim -- 10 harbor_park club pro` | Headless bot-vs-bot matches for tuning |
 | `npm run feasibility` | Brute-force check that trial layouts are achievable |

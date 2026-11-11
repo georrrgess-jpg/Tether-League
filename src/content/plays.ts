@@ -66,7 +66,7 @@ export const PLAYS: Record<PlayId, PlayDef> = {
     how: {
       keyboard: 'Kick the moment a teammate pass reaches you, aimed at goal.',
       touch: 'Tap KICK the moment a teammate pass reaches you.',
-      pad: 'Press A / X the moment a teammate pass reaches you.',
+      pad: 'Press A the moment a teammate pass reaches you.',
     },
     skill: 'Strike within a second or so of the pass: no extra touches.',
     record: 'oneTouchGoals',
