@@ -51,6 +51,8 @@ export interface RobotPose {
 const ANCHOR_Y = 2.6;
 /** Length of the nutmeg reaction (s). */
 const MEG_TIME = 0.7;
+/** Leg back-swing (rad) beyond which the stride is compressed. */
+const BACK_SWING = 0.7;
 
 const WHITE = '#f6f8f6';
 const NAVY = '#1f2d45';
@@ -191,19 +193,20 @@ interface ChassisDims {
   armOut: number;
   armBack: number;
   legSplay: number;
-  /** Running: forward lean and bounce relative to the All-Rounder. */
+  /** Running: forward lean, bounce and leg stride relative to the All-Rounder. */
   runLean: number;
   hop: number;
+  stride: number;
   /** Peak leg swing of a kick and the deepest forward nod (rad) that keeps the chassis clear of itself. */
   kick: number;
   nod: number;
 }
 
 const DIMS: Record<ChassisId, ChassisDims> = {
-  all_rounder: { head: 1, headY: 1.02, arm: 1, shoulder: 0.315, shoulderY: 0.7, legSpread: 0.125, drop: 0, lean: 0, armOut: 0.12, armBack: 0, legSplay: 0, runLean: 1, hop: 1, kick: 1.4, nod: 0.38 },
-  scout: { head: 0.94, headY: 0.992, arm: 0.95, shoulder: 0.29, shoulderY: 0.688, legSpread: 0.115, drop: 0.08, lean: 0.07, armOut: 0.17, armBack: 0.14, legSplay: 0, runLean: 1.2, hop: 1.15, kick: 1.45, nod: 0.38 },
-  bulwark: { head: 1.04, headY: 1.015, arm: 1.12, shoulder: 0.34, shoulderY: 0.69, legSpread: 0.15, drop: -0.05, lean: -0.02, armOut: 0.06, armBack: -0.1, legSplay: 0.05, runLean: 0.8, hop: 0.75, kick: 1.2, nod: 0.24 },
-  glider: { head: 0.98, headY: 1.02, arm: 0.97, shoulder: 0.305, shoulderY: 0.705, legSpread: 0.12, drop: 0, lean: 0.035, armOut: 0.2, armBack: 0.15, legSplay: 0, runLean: 1.15, hop: 0.9, kick: 1.4, nod: 0.38 },
+  all_rounder: { head: 1, headY: 1.02, arm: 1, shoulder: 0.315, shoulderY: 0.7, legSpread: 0.125, drop: 0, lean: 0, armOut: 0.12, armBack: 0, legSplay: 0, runLean: 1, hop: 1, stride: 1, kick: 1.4, nod: 0.38 },
+  scout: { head: 0.94, headY: 0.992, arm: 0.95, shoulder: 0.29, shoulderY: 0.688, legSpread: 0.115, drop: 0.08, lean: 0.07, armOut: 0.17, armBack: 0.14, legSplay: 0, runLean: 1.2, hop: 1.15, stride: 1.05, kick: 1.45, nod: 0.38 },
+  bulwark: { head: 1.04, headY: 1.015, arm: 1.12, shoulder: 0.34, shoulderY: 0.69, legSpread: 0.15, drop: -0.05, lean: -0.02, armOut: 0.06, armBack: -0.1, legSplay: 0.05, runLean: 0.8, hop: 0.75, stride: 0.86, kick: 1.2, nod: 0.24 },
+  glider: { head: 0.98, headY: 1.02, arm: 0.97, shoulder: 0.305, shoulderY: 0.705, legSpread: 0.12, drop: 0, lean: 0.035, armOut: 0.2, armBack: 0.15, legSplay: 0, runLean: 1.15, hop: 0.9, stride: 1, kick: 1.4, nod: 0.38 },
 };
 
 /** Jersey torso: lathe profile [radius, height] from hem to neck, cross-section squareness (2 = round), depth. */
@@ -627,26 +630,26 @@ function buildHead(id: ChassisId, H: Parts): void {
   }
 
   if (id === 'scout') {
-    // Visor peak: a short cap brim over the face screen, and a sensor antenna on the left ear pod.
+    // Visor peak: a brim that caps the top lip of the face-screen rim and juts forward, and a sensor antenna
+    // on the left ear pod. The brim's base follows the lip (an arc of radius 0.3 / 0.263 at y = 0.185).
     const peak: [number, number][] = [];
-    const span = 0.98;
-    const rim = (a: number, out: number): [number, number] => {
-      const x = Math.sin(a) * 0.245;
-      const z = Math.cos(a) * 0.215;
+    const span = 1.06;
+    const lip = (a: number, out: number): [number, number] => {
+      const x = Math.sin(a) * 0.3;
+      const z = Math.cos(a) * 0.263 + 0.012;
       const k = 1 + out / Math.hypot(x, z);
       return [x * k, z * k];
     };
     for (let i = 0; i <= 12; i++) {
       const a = -span + (2 * span * i) / 12;
-      peak.push(rim(a, 0.108 * Math.pow(Math.cos((a / span) * (Math.PI / 2)), 0.8)));
+      peak.push(lip(a, 0.01 + 0.085 * Math.pow(Math.cos((a / span) * (Math.PI / 2)), 0.9)));
     }
-    for (let i = 12; i >= 0; i--) peak.push(rim(-span + (2 * span * i) / 12, -0.02));
-    // (the brim droops toward its corners so it wraps the brow instead of sitting on it like a plate)
-    const brim = extrude(peak, 0.014, 0.006);
-    const bp = brim.attributes.position;
-    for (let i = 0; i < bp.count; i++) bp.setZ(i, bp.getZ(i) + 0.55 * bp.getX(i) * bp.getX(i));
-    brim.computeVertexNormals();
-    H.add('accent', brim, { p: [0, 0.224, 0], r: [Math.PI / 2 + 0.13, 0, 0] });
+    for (let i = 12; i >= 0; i--) {
+      const a = -span + (2 * span * i) / 12;
+      peak.push([Math.sin(a) * 0.215, Math.cos(a) * 0.185]);
+    }
+    const tilt = 0.07;
+    H.add('accent', extrude(peak, 0.014, 0.006), { p: [0, 0.2 + 0.27 * Math.tan(tilt), 0], r: [Math.PI / 2 + tilt, 0, 0] });
     H.add('navy', CYL, { p: [-0.385, 0.165, -0.04], r: [0, 0, 0.25], s: [0.015, 0.2, 0.015] });
     H.add('glow', SPH_LO, { p: [-0.41, 0.272, -0.04], s: 0.034 });
   } else if (id === 'bulwark') {
@@ -1372,8 +1375,10 @@ export class RobotView {
     let armRx = d0.armBack + swing * 0.75 * stride;
     let armLz = -d0.armOut;
     let armRz = d0.armOut;
-    let legLx = swing * 0.95 * stride;
-    let legRx = -swing * 0.95 * stride;
+    // The back-swing is held short of the thruster nozzles (a full stride used to put the heel through them).
+    const legSwing = swing * 0.95 * stride * d0.stride;
+    let legLx = legSwing > BACK_SWING ? BACK_SWING + (legSwing - BACK_SWING) * 0.2 : legSwing;
+    let legRx = -legSwing > BACK_SWING ? BACK_SWING + (-legSwing - BACK_SWING) * 0.2 : -legSwing;
     let legLz = -d0.legSplay;
     let legRz = d0.legSplay;
     let headX = 0;

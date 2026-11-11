@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { RobotLook } from '../../content/cosmetics';
+import { floorTexture } from './arenaTextures';
 import { buildHarborScenery, makePalm } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
-import { ballMaps, beamTexture, blobTexture, skyTexture, tileTexture, type Expression } from './textures';
+import { ballMaps, beamTexture, blobTexture, skyTexture, type Expression } from './textures';
 
 export type StageShot = 'duo' | 'solo' | 'hidden';
 
@@ -34,6 +35,7 @@ export class MenuStage {
   private spotMat: THREE.MeshBasicMaterial | null = null;
   private bannerGrp = new THREE.Group();
   private lowEnv: THREE.Texture | null = null;
+  private water: THREE.Texture;
   /** Optional club match ball resting on the platform (Club screen ball tab); null = none shown. */
   private ball: THREE.Mesh | null = null;
   private ballId = '';
@@ -75,8 +77,8 @@ export class MenuStage {
     const std = (color: string, rough = 0.7, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => track(new THREE.MeshStandardMaterial({ color, roughness: rough, ...extra }));
 
     // terrace floor
-    const tiles = track(tileTexture('#efe7d8', '#e6dccb', '#d2c6b2'));
-    tiles.repeat.set(14, 14);
+    const tiles = track(floorTexture('terrace'));
+    tiles.repeat.set(13, 13);
     const floor = new THREE.Mesh(track(new THREE.CircleGeometry(26, 48)), std('#ffffff', 0.85, { map: tiles }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = shadows;
@@ -179,7 +181,7 @@ export class MenuStage {
       this.scene.add(pot);
     }
     const scenery = new THREE.Group();
-    buildHarborScenery(scenery, -16, track, true);
+    this.water = buildHarborScenery(scenery, -16, track, true);
     scenery.position.y = -3.5;
     this.scene.add(scenery);
 
@@ -353,6 +355,7 @@ export class MenuStage {
       this.sweep.rotation.z = this.time * 0.6;
       this.bannerGrp.rotation.x = Math.sin(this.time * 0.9) * 0.05;
       this.bannerGrp.rotation.z = Math.sin(this.time * 0.6 + 1) * 0.02;
+      this.water.offset.set((this.time * 0.012) % 1, (this.time * 0.007) % 1);
     }
     this.sweepMat.opacity = this.reduced ? 0 : 0.55 + Math.sin(this.time * 1.3) * 0.2;
     if (this.ball) {
