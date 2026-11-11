@@ -325,6 +325,7 @@ export class App {
       h('div', null, icon('mouse'), h('span', null, h('b', null, 'Swing'), h('small', null, `Right click · ${keys(k.tether)}`))),
       h('div', null, icon('mouse'), h('span', null, h('b', null, 'Kick'), h('small', null, `Left click · ${keys(k.kick)}`))),
       h('div', null, icon('keyboard'), h('span', null, h('b', null, 'Pass'), h('small', null, `${keys(k.pass)} · hold: long ball`))),
+      h('div', null, icon('keyboard'), h('span', null, h('b', null, 'Meg'), h('small', null, `${keys(k.meg)} · nutmeg / knock-on`))),
     );
     const arena = match ? h('div', { class: 'hud-arena', 'aria-hidden': 'true' }, h('i'), mode.world.arena.name, h('i')) : null;
     this.youTag = mode.human >= 0 ? h('div', { class: 'hud-you', 'aria-hidden': 'true' }, h('b', null, `#${shirt(this.save.club.numbers[0])}`), h('span', null, 'You')) : null;

@@ -12,8 +12,9 @@ import { BotDirector, CLUB_STYLE, DIFFICULTY, TENDENCY, difficultyAt, type Diffi
 import { mateLevel } from '../src/game/setup';
 import { Match } from '../src/game/sim/match';
 import { emptyCommand, type Command, type World } from '../src/game/sim/types';
+import { megWindow } from '../src/game/sim/world';
 
-export type Policy = 'spam' | 'mash' | 'chase' | 'chase0' | 'passive' | DifficultyId;
+export type Policy = 'spam' | 'mash' | 'chase' | 'chase0' | 'passive' | 'clubmeg' | DifficultyId;
 
 /** Spam shooter: straight at the ball, kick every chance, aiming at the middle of the opponent goal. */
 function spam(w: World, c: Command, hz = 60): void {
@@ -71,7 +72,8 @@ export function runBalance(n: number, policy: Policy, level: number, arena: Aren
       { robot: 2, difficulty: difficultyAt(level), style: CLUB_STYLE.balanced },
       { robot: 3, difficulty: difficultyAt(level), style: CLUB_STYLE.balanced },
     ];
-    if (!['spam', 'mash', 'chase', 'chase0', 'passive'].includes(policy)) specs.push({ robot: 0, difficulty: DIFFICULTY[policy as DifficultyId], style: CLUB_STYLE.balanced });
+    // clubmeg: a Club bot that also nutmegs at every decent opening (how strong is meg spam?).
+    if (!['spam', 'mash', 'chase', 'chase0', 'passive'].includes(policy)) specs.push({ robot: 0, difficulty: DIFFICULTY[policy === 'clubmeg' ? 'club' : (policy as DifficultyId)], style: CLUB_STYLE.balanced });
     const bots = new BotDirector(m.world, specs, seed0 + i);
     const cmds = [emptyCommand(), emptyCommand(), emptyCommand(), emptyCommand()];
     let prev = m.phase;
@@ -83,6 +85,15 @@ export function runBalance(n: number, policy: Policy, level: number, arena: Aren
         if (policy === 'spam') spam(m.world, cmds[0]);
         else if (policy === 'mash') spam(m.world, cmds[0], 8);
         else if (policy === 'chase' || policy === 'chase0') chase(m.world, cmds[0]);
+        else if (policy === 'clubmeg') {
+          const me = m.world.robots[0];
+          const mw = me.megCd <= 0 ? megWindow(m.world, me) : null;
+          if (mw && mw.chance >= 0.6) {
+            cmds[0].meg = true;
+            cmds[0].kick = false;
+            cmds[0].pass = false;
+          }
+        }
       }
       m.step(cmds);
       // Same mercy rule as a real match (src/game/modes/matchMode.ts).
