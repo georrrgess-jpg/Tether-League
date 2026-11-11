@@ -302,7 +302,7 @@ export function pitchTexture(arena: ArenaDef, p: PitchPaint, res: number, lines:
   } else {
     // criss-cross cut: two sets of diagonal passes that overlap into diamonds
     const d = 2.2 * S;
-    g.globalAlpha = 0.5;
+    g.globalAlpha = 0.62;
     for (const dir of [1, -1]) {
       g.save();
       g.translate(W / 2, H / 2);
@@ -430,8 +430,8 @@ export function floorTexture(kind: FloorKind): THREE.Texture {
       // foundry floor: worn steel plates with tread, rivets and oil stains
       for (let j = 0; j < 2; j++)
         for (let i = 0; i < 2; i++) {
-          const v = 58 + Math.floor(rnd() * 8);
-          g.fillStyle = `rgb(${v + 6},${v + 1},${v - 3})`;
+          const v = 70 + Math.floor(rnd() * 8);
+          g.fillStyle = `rgb(${v + 3},${v + 1},${v})`;
           g.fillRect(i * 256, j * 256, 256, 256);
         }
       g.lineWidth = 2;

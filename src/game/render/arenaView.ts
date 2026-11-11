@@ -21,6 +21,7 @@ export type Quality = 'low' | 'medium' | 'high';
 
 interface Theme {
   sky: [number, string][];
+  /** Haze colour, then where it starts and ends, measured from the pitch centre away from the camera. */
   fog: [string, number, number] | null;
   pitch: PitchPaint;
   floor: FloorKind;
@@ -47,6 +48,8 @@ interface Theme {
   lamp: string;
   beamOpacity: number;
   ledAccent: string;
+  /** Tint of the LED boards (their idle colour). */
+  led: [number, number, number];
 }
 
 const THEMES: Record<ArenaId, Theme> = {
@@ -56,32 +59,32 @@ const THEMES: Record<ArenaId, Theme> = {
     fog: null,
     pitch: { a: '#4dac7d', b: '#42a071', line: '#f6fbf4', mow: 'stripes', emblem: 'wave' },
     floor: 'planks',
-    apron: '#7f9aa4',
+    apron: '#9a7b55',
     wall: '#efeadd', wallTop: '#fdfbf3', trim: '#35c3d4', deck: '#f1ecdf',
     stand: '#f0ece2', seat: '#2f9fc4', rail: '#c9cfd6',
     sun: '#fff1d2', sunIntensity: 3.2, sunPos: [-16, 26, 14],
     hemiSky: '#dff1ff', hemiGround: '#8f9c86', hemiIntensity: 0.95,
     crowd: ['#12bcd2', '#f48a2c', '#f3f5ef', '#f6c542', '#7a8aa0', '#51c998'],
-    exposure: 0.86, env: 0.2, lamp: '#fff6e0', beamOpacity: 0, ledAccent: '#7ff3ff',
+    exposure: 0.86, env: 0.2, lamp: '#fff6e0', beamOpacity: 0, ledAccent: '#7ff3ff', led: [0.92, 0.92, 0.92],
   },
   // Tight industrial court: steel plate floor, brick kilns, amber trim, pitch mown lengthwise.
   foundry_court: {
     sky: [[0, '#120d0b'], [0.6, '#2b1a12'], [1, '#5a2d14']],
-    fog: ['#1a120e', 70, 150],
+    fog: ['#1a120e', 26, 106],
     pitch: { a: '#3f9577', b: '#36886b', line: '#f3eee0', mow: 'bands', emblem: 'cog' },
     floor: 'plate',
     apron: '#2a2725',
     wall: '#77706a', wallTop: '#a59e93', trim: '#ffab3d', deck: '#59524c',
-    stand: '#4d4641', seat: '#c4682c', rail: '#8a8178',
+    stand: '#4d4641', seat: '#a3522b', rail: '#8a8178',
     sun: '#ffd7a6', sunIntensity: 2.3, sunPos: [-8, 28, 14],
     hemiSky: '#ffcf9c', hemiGround: '#40302a', hemiIntensity: 1.0,
     crowd: ['#f48a2c', '#e9a23a', '#8c8177', '#d8d2c6', '#12bcd2', '#b2553a'],
-    exposure: 0.95, env: 0.16, lamp: '#ffd9a0', beamOpacity: 0.07, ledAccent: '#ffb347',
+    exposure: 0.95, env: 0.16, lamp: '#ffd9a0', beamOpacity: 0.07, ledAccent: '#ffb347', led: [1, 0.86, 0.7],
   },
   // Rooftop at dusk: slate pavers, neon edges, a low warm sun and the city below; chequered cut.
   skyline_stadium: {
     sky: [[0, '#2b2466'], [0.45, '#8a4a8f'], [0.75, '#f08a5a'], [1, '#ffd79a']],
-    fog: ['#4a3a78', 95, 330],
+    fog: ['#4a3a78', 50, 290],
     pitch: { a: '#45a484', b: '#3b9778', line: '#fff6ea', mow: 'checker', emblem: 'towers' },
     floor: 'pavers',
     apron: '#3c3f5c',
@@ -90,12 +93,12 @@ const THEMES: Record<ArenaId, Theme> = {
     sun: '#ffc08a', sunIntensity: 2.6, sunPos: [-22, 20, -6],
     hemiSky: '#cdb9ff', hemiGround: '#6f6a8c', hemiIntensity: 1.25,
     crowd: ['#8a5cf0', '#f48a2c', '#f3f5ef', '#12bcd2', '#ec5f8e', '#f6c542'],
-    exposure: 0.9, env: 0.2, lamp: '#fff1dc', beamOpacity: 0.05, ledAccent: '#ffb27a',
+    exposure: 0.9, env: 0.2, lamp: '#fff1dc', beamOpacity: 0.05, ledAccent: '#ffb27a', led: [1, 0.84, 0.98],
   },
   // Indoor final venue: polished navy concourse, gold trim, wrap-round tiers, criss-cross cut.
   championship_dome: {
     sky: [[0, '#070c1f'], [0.6, '#101c44'], [1, '#1f3a7a']],
-    fog: ['#0b1330', 70, 150],
+    fog: ['#0b1330', 26, 106],
     pitch: { a: '#3fa378', b: '#35956b', line: '#ffffff', mow: 'diamond', emblem: 'star' },
     floor: 'polish',
     apron: '#0f1936',
@@ -104,7 +107,7 @@ const THEMES: Record<ArenaId, Theme> = {
     sun: '#eef4ff', sunIntensity: 2.7, sunPos: [-6, 34, 10],
     hemiSky: '#b9ccff', hemiGround: '#2a3a66', hemiIntensity: 1.1,
     crowd: ['#12bcd2', '#f48a2c', '#f3f5ef', '#f6c542', '#5f7fd6', '#e96a64', '#51c998'],
-    exposure: 0.84, env: 0.18, lamp: '#eaf3ff', beamOpacity: 0.085, ledAccent: '#f6c542',
+    exposure: 0.84, env: 0.18, lamp: '#eaf3ff', beamOpacity: 0.085, ledAccent: '#f6c542', led: [0.86, 0.93, 1],
   },
 };
 
@@ -130,6 +133,8 @@ const _c = new THREE.Color();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
+const HALO_AIM = new THREE.Color('#fff3c2');
+const HALO_HELD = new THREE.Color('#7ff3ff');
 
 /** Merges transformed copies of geometries into one (keeps position / normal / uv). */
 class Merger {
@@ -311,10 +316,10 @@ export class ArenaView {
     else if (arena.id === 'skyline_stadium') this.platform = [hx + 8.6, -(hz + 10.5), hz + 8.5];
 
     this.background = this.track(skyTexture(th.sky));
-    this.fog = th.fog ? new THREE.Fog(th.fog[0], th.fog[1], th.fog[2]) : null;
+    this.fog = th.fog ? new THREE.Fog(th.fog[0], th.fog[1] + 44, th.fog[2] + 44) : null;
 
     // On medium / high the PMREM environment adds soft fill, so the hemisphere light steps back.
-    const hemi = new THREE.HemisphereLight(th.hemiSky, th.hemiGround, th.hemiIntensity * (quality === 'low' ? 0.8 : 0.6));
+    const hemi = new THREE.HemisphereLight(th.hemiSky, th.hemiGround, th.hemiIntensity * (quality === 'low' ? 1.0 : 0.6));
     this.group.add(hemi);
     this.sun = new THREE.DirectionalLight(th.sun, th.sunIntensity);
     this.sun.position.set(...th.sunPos);
@@ -507,7 +512,7 @@ export class ArenaView {
 
     // --- LED advertising boards on the inner face of the far wall, the end walls and the near wall's outside
     this.ledTex = this.track(ledBoardTexture(this.teamColors, arena.name, th.ledAccent));
-    this.ledMat = this.track(new THREE.MeshBasicMaterial({ map: this.ledTex, toneMapped: false, color: new THREE.Color(0.92, 0.92, 0.92) }));
+    this.ledMat = this.track(new THREE.MeshBasicMaterial({ map: this.ledTex, toneMapped: false, color: new THREE.Color(...th.led) }));
     const led = new LedStrip(0.44);
     const y0 = 0.1;
     const e = 0.006;
@@ -710,7 +715,7 @@ export class ArenaView {
      * from the pitch. Registers the seats for the crowd.
      */
     const row = (x: number, z: number, len: number, h: number, ax: 0 | 1, ox: number, oz: number, sec: number, sp = 0.75, deep = 1.3) => {
-      this.bx('m', th.stand, ax ? deep : len, h, ax ? len : deep, x, h / 2, z, 0, 0, 0, 0.3);
+      this.bx('M', th.stand, ax ? deep : len, h, ax ? len : deep, x, h / 2, z, 0, 0, 0, 0.3);
       const sl = len - 0.1;
       this.bx('s', th.seat, ax ? 0.42 : sl, 0.12, ax ? sl : 0.42, x + ox * 0.3, h + 0.06, z + oz * 0.3);
       this.bx('s', backC, ax ? 0.07 : sl, 0.3, ax ? sl : 0.07, x + ox * 0.58, h + 0.27, z + oz * 0.58, 0, 0, 0, 0);
@@ -745,11 +750,11 @@ export class ArenaView {
       }
       if (!dome) {
         // club board leaning back behind the top row, with a pale stripe along its upper edge
-        this.bx('d', tc, 0.08, 1.25, len, x0 + sx * 2.35, 1.75, 0, 0, 0, -sx * 0.55, 0);
-        this.bx('d', '#f4f1e6', 0.09, 0.16, len, x0 + sx * 2.64, 2.22, 0, 0, 0, -sx * 0.55, 0);
+        this.bx('d', tc, 0.08, 1.3, len, x0 + sx * 2.5, 1.7, 0, 0, 0, -sx * 1.15, 0);
+        this.bx('d', '#f4f1e6', 0.09, 0.16, len, x0 + sx * 3.0, 1.93, 0, 0, 0, -sx * 1.15, 0);
         for (const s of [-1, 1]) {
-          this.cyl('g', STEEL, 0.05, 3.3, x0 + sx * 2.9, 1.65, s * (len / 2 + 0.2));
-          this.bigFlags.push(x0 + sx * 2.9, 1.1, s * (len / 2 + 0.2), sx < 0 ? 0 : 1);
+          this.cyl('g', STEEL, 0.05, 3.3, x0 + sx * 2.6, 1.65, s * (len / 2 + 0.3));
+          this.bigFlags.push(x0 + sx * 2.6, 1.1, s * (len / 2 + 0.3), sx < 0 ? 0 : 1);
         }
       }
     }
@@ -814,7 +819,7 @@ export class ArenaView {
    */
   private buildCrowd(th: Theme, seats: number[], hx: number): void {
     const rnd = this.rnd;
-    const fill = this.quality === 'low' ? 0.3 : this.quality === 'medium' ? 0.6 : 0.82;
+    const fill = this.quality === 'low' ? 0.42 : this.quality === 'medium' ? 0.62 : 0.82;
     const picked: number[] = [];
     for (let i = 0; i < seats.length; i += 4) if (rnd() < fill) picked.push(i);
     if (picked.length) {
@@ -947,7 +952,7 @@ export class ArenaView {
       for (const y of [0.52, 0.8]) this.bx('s', rope, 0.035, 0.035, hz + 3.6 - PN, s * (PX - 0.45), y, (PN + hz + 3.6) / 2);
     }
     // pier-head light in the far-left corner
-    lighthouse(put, -(hx + 3.6), 0, -(hz + 3.7), 0.6, 'M');
+    lighthouse(put, -(hx + 3.9), 0, -(hz + 1.9), 0.52, 'M');
     // beach club in the far-right corner: parasols and loungers
     const shades: [number, number, string][] = [[hx + 1.2, -(hz + 3.4), '#ef5d50'], [hx + 4.0, -(hz + 6.0), '#2f9fc4'], [hx + 6.2, -(hz + 3.0), '#f6c542']];
     for (const [x, z, col] of shades) {
@@ -960,8 +965,8 @@ export class ArenaView {
     // palms: planters by the camera-side corners, two more on the far side
     for (const sx of [-1, 1]) {
       this.bx('M', IVORY, 2.2, 0.5, 2.2, sx * (hx + 3.2), 0.25, hz + 2.6, 0, 0, 0, 0.25);
-      palm(put, sx * (hx + 3.2), 0.5, hz + 2.6, 3.4);
-      palm(put, sx * (hx + 6.9), 0, -(hz + 7.8), 3.9);
+      palm(put, sx * (hx + 3.2), 0.5, hz + 2.6, 3.4, 'D');
+      palm(put, sx * (hx + 6.9), 0, -(hz + 7.8), 3.9, 'D');
     }
     // jetty on the east side and boats moored round the pier
     const jz = -(hz + 1.2);
@@ -978,8 +983,11 @@ export class ArenaView {
       [-11, PS + 4.5, 0.1, '#fdf9ee', '#2f9fc4'],
       [9, PS + 6.5, -0.2, '#ef5d50', '#fdf9ee'],
       [1, PS + 13, 0.3, '#f6c542', ''],
+      [-3, PN - 12, 0.4, '#ef5d50', '#fdf9ee'],
+      [13, PN - 17, -0.3, '#fdf9ee', '#2f9fc4'],
+      [-14, PN - 22, 0.15, '#f6c542', '#fdf9ee'],
     ];
-    for (const [x, z, ry, hull, sail] of low ? boats.slice(0, 7) : boats) boat(put, x, -0.78, z, ry, hull, sail);
+    for (const [x, z, ry, hull, sail] of boats) boat(put, x, -0.78, z, ry, hull, sail);
     // landing stage on the camera side (seen on tall screens)
     this.bx('m', '#b99a6c', 3.2, 0.14, 9, 0, -0.02, PS + 5);
     for (const z of [PS + 1.5, PS + 5, PS + 9.2]) for (const s of [-1, 1]) this.cyl('m', '#7b6244', 0.12, 1.6, s * 1.75, -0.2, z);
@@ -993,43 +1001,12 @@ export class ArenaView {
 
   /** A string of small triangular pennants in the team colours and white (one draw call). */
   private bunting(x1: number, x2: number, z: number, y: number): void {
-    const n = Math.floor((x2 - x1) / 0.55);
-    const pos: number[] = [];
-    const colr: number[] = [];
-    const cols = [new THREE.Color(this.teamColors[0]), new THREE.Color('#ffffff'), new THREE.Color(this.teamColors[1]), new THREE.Color('#f6c542')];
-    for (let i = 0; i < n; i++) {
-      const xa = x1 + i * 0.55;
-      const xb = xa + 0.4;
-      const sag = (t: number) => y - Math.sin(Math.PI * ((t - x1) / (x2 - x1))) * 0.3;
-      const xm = (xa + xb) / 2;
-      pos.push(xa, sag(xa), z, xm, sag(xm) - 0.32, z, xb, sag(xb), z);
-      const c = cols[i % cols.length];
-      for (let k = 0; k < 3; k++) colr.push(c.r, c.g, c.b);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
-    g.computeVertexNormals();
-    this.mesh(g, this.track(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+    this.mesh(buntingGeometry(x1, x2, y, z, 0.3, [this.teamColors[0], '#ffffff', this.teamColors[1], '#f6c542']), this.track(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
   }
 
   /** A few gulls circling a point beside the venue (never over the pitch). */
   private gulls(x: number, y: number, z: number, dir: number): void {
-    const pos: number[] = [];
-    for (let i = 0; i < 4; i++) {
-      const a = i * 1.7;
-      const r = 2 + (i % 3) * 0.7;
-      const cx = Math.cos(a) * r;
-      const cz = Math.sin(a) * r;
-      const h = (i % 2) * 0.5;
-      // heading is the tangent of the circle; wings sweep back and up
-      const tx = -Math.sin(a) * dir;
-      const tz = Math.cos(a) * dir;
-      for (const s of [-1, 1]) pos.push(cx + tx * 0.16, h, cz + tz * 0.16, cx - tx * 0.12, h, cz - tz * 0.12, cx - tx * 0.1 + tz * s * 0.55, h + 0.16, cz - tz * 0.1 - tx * s * 0.55);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    const m = this.mesh(g, this.gullMat ?? (this.gullMat = this.track(new THREE.MeshBasicMaterial({ color: '#f7fafc', side: THREE.DoubleSide }))))!;
+    const m = this.mesh(gullFlock(dir), this.gullMat ?? (this.gullMat = this.track(new THREE.MeshBasicMaterial({ color: '#f7fafc', side: THREE.DoubleSide }))))!;
     m.position.set(x, y, z);
     m.userData.spin = dir * 0.28;
     this.spinners.push(m);
@@ -1095,13 +1072,19 @@ export class ArenaView {
       }
       sources.push([kx, kz + 2]);
       // drums, crates and girders stacked by the kiln
-      for (const [dx, dz, c2] of [[2.9, 3.2, '#2f7f86'], [3.8, 2.6, '#a8482c'], [3.2, 2.2, amber]] as [number, number, string][]) {
+      for (const [dx, dz, c2] of [[2.9, 3.2, '#2f7f86'], [3.8, 2.6, '#a8482c'], [3.2, 2.2, '#6f7f8f']] as [number, number, string][]) {
         this.cyl('s', c2, 0.42, 1.05, kx - sx * dx, 0.52, kz + dz);
         this.cyl('s', dark, 0.44, 0.08, kx - sx * dx, 0.8, kz + dz);
       }
       this.bx('m', '#8a6a45', 1.0, 1.0, 1.0, kx - sx * 3.6, 0.5, kz - 0.6, 0.2);
       this.bx('m', '#96754e', 0.9, 0.9, 0.9, kx - sx * 3.5, 1.45, kz - 0.5, -0.3);
       for (let i = 0; i < 3; i++) this.bx('g', '#6f7f8f', 3.2, 0.2, 0.22, kx - sx * 0.2, 0.1 + (i === 2 ? 0.2 : 0), kz + 4.6 + (i === 2 ? 0.15 : i * 0.3), 0.12);
+    }
+    // painted safety lines marking the walkways round the court
+    const yl = '#d9a13b';
+    for (const s of [-1, 1]) {
+      this.bx('m', yl, 0.12, 0.02, hz * 2 + 9, s * (hx + 8.3), -0.01, -1.5);
+      this.bx('m', yl, hx * 2 + 16.6, 0.02, 0.12, 0, -0.01, s > 0 ? hz + 3 : -hz - 6);
     }
     // hanging lamps with light cones onto the court
     const beams = new Merger();
@@ -1128,6 +1111,13 @@ export class ArenaView {
     this.bx('fire', '#ff9a3a', 2.2, 0.08, 1.1, -hx * 0.4, 1.2, tz);
     for (const s of [-0.9, 0.9]) this.put('g', CYL, dark, 0.28, 1.7, 0.28, -hx * 0.4 + s, 0.3, tz, 0, Math.PI / 2);
     this.pool('#8a3a0c', -hx * 0.4, tz, 6, 4);
+    // stock yard beyond the track: steel coils, pallets and crates
+    for (const sx of [-1, 1]) {
+      for (let i = 0; i < 3; i++) this.put('g', CYL, '#7a838c', 0.7, 1.0, 0.7, sx * (4.5 + i * 1.7), 0.7, hz + 11, 0, Math.PI / 2);
+      this.bx('m', '#8a6a45', 2.4, 0.16, 1.7, sx * 11.6, 0.08, hz + 11);
+      this.bx('m', '#96754e', 1.0, 1.0, 1.0, sx * 11.2, 0.66, hz + 10.8, 0.1);
+      this.bx('m', '#8a6a45', 0.9, 0.8, 0.9, sx * 12.3, 0.56, hz + 11.2, -0.2);
+    }
 
     // drifting embers rising from the kilns and furnaces
     if (!low) {
@@ -1348,7 +1338,17 @@ export class ArenaView {
     }
     this.mesh(screens.build(), this.track(new THREE.MeshBasicMaterial({ map: st, toneMapped: false })));
     // gold inlay along the camera-side edge of the apron
-    this.bx('s', gold, hx * 2 + 9, 0.02, 0.12, 0, 0.0, hz + 2.3);
+    this.bx('m', '#b8922f', hx * 2 + 9, 0.02, 0.09, 0, 0.0, hz + 2.3);
+    // concourse beyond the south terrace (seen on tall screens): the final's title set into the floor
+    const title = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: this.track(labelTexture('The Final', '#f6c542', '#101a38')), transparent: true })));
+    title.scale.set(13, 2.4, 1);
+    title.rotation.x = -Math.PI / 2;
+    title.position.set(0, 0.0, hz + 10.5);
+    this.group.add(title);
+    for (const s of [-1, 1]) {
+      this.bx('m', '#b8922f', hx * 2 + 6, 0.02, 0.09, 0, 0.0, hz + 10.5 + s * 2.1);
+      this.pool('#263f8a', s * (hx - 1), hz + 10.5, 12, 8);
+    }
 
     // camera flashes twinkling in the stands
     if (this.quality !== 'low') {
@@ -1417,6 +1417,12 @@ export class ArenaView {
   }
 
   update(dt: number, time: number, camera: THREE.Camera, reduced: boolean): void {
+    // Haze starts behind the pitch however far back the camera sits (tall screens pull it a long way out).
+    if (this.fog && this.th.fog) {
+      const d = camera.position.length();
+      this.fog.near = d + this.th.fog[1];
+      this.fog.far = d + this.th.fog[2];
+    }
     // Highlighted anchor: its ring is replaced by a bright, slightly larger one inside a halo.
     let hi = -1;
     for (let i = 0; i < this.anchors.length; i++) if (this.anchors[i].glow > 0) hi = i;
@@ -1437,7 +1443,7 @@ export class ArenaView {
       const pulse = 1.25 + (reduced ? 0 : Math.sin(time * 7) * 0.08);
       this.hiRing.scale.setScalar(this.hiRing.scale.x + (pulse - this.hiRing.scale.x) * Math.min(1, dt * 14));
       // 1 = the anchor you would grab, 2 = attached
-      hm.color.set(this.anchors[hi].glow >= 2 ? '#7ff3ff' : '#fff3c2');
+      hm.color.copy(this.anchors[hi].glow >= 2 ? HALO_HELD : HALO_AIM);
     }
     hm.opacity += ((hi >= 0 ? 0.95 : 0) - hm.opacity) * Math.min(1, dt * 16);
     this.halo.visible = hm.opacity > 0.02;
@@ -1465,12 +1471,13 @@ export class ArenaView {
     }
     // LED boards scroll; after a goal they pulse in the scoring side's colour.
     if (this.ledTex && this.ledMat) {
+      const led = this.th.led;
       if (!reduced) this.ledTex.offset.x = (this.ledTex.offset.x + dt * 0.035) % 1;
       if (flash > 0) {
         const pulse = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(time * 14);
         this.ledFlashColor.set(this.teamColors[flashSide === 1 ? 0 : 1]);
-        this.ledMat.color.setRGB(0.92, 0.92, 0.92).lerp(this.ledFlashColor, flash * pulse * 0.85);
-      } else this.ledMat.color.setRGB(0.92, 0.92, 0.92);
+        this.ledMat.color.setRGB(led[0], led[1], led[2]).lerp(this.ledFlashColor, flash * pulse * 0.85);
+      } else this.ledMat.color.setRGB(led[0], led[1], led[2]);
     }
     if (this.beamMat) this.beamMat.opacity = this.th.beamOpacity * (1 + flash * 0.8);
     if (this.embers && !reduced) this.updateEmbers(dt);
@@ -1618,6 +1625,46 @@ const FROND = (() => {
   return g;
 })();
 
+/** A sagging string of triangular pennants between x1 and x2, coloured in turn from `colors`. */
+export function buntingGeometry(x1: number, x2: number, y: number, z: number, sag: number, colors: string[]): THREE.BufferGeometry {
+  const n = Math.floor((x2 - x1) / 0.55);
+  const pos: number[] = [];
+  const colr: number[] = [];
+  const dip = (t: number) => y - Math.sin(Math.PI * ((t - x1) / (x2 - x1))) * sag;
+  for (let i = 0; i < n; i++) {
+    const xa = x1 + i * 0.55;
+    const xb = xa + 0.4;
+    const xm = (xa + xb) / 2;
+    pos.push(xa, dip(xa), z, xm, dip(xm) - 0.32, z, xb, dip(xb), z);
+    _c.set(colors[i % colors.length]);
+    for (let k = 0; k < 3; k++) colr.push(_c.r, _c.g, _c.b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Four gulls on a circle round the origin, heading round it in direction `dir` (1 or -1). */
+export function gullFlock(dir: number): THREE.BufferGeometry {
+  const pos: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = i * 1.7;
+    const r = 2 + (i % 3) * 0.7;
+    const cx = Math.cos(a) * r;
+    const cz = Math.sin(a) * r;
+    const h = (i % 2) * 0.5;
+    // heading is the tangent of the circle; wings sweep back and up
+    const tx = -Math.sin(a) * dir;
+    const tz = Math.cos(a) * dir;
+    for (const s of [-1, 1]) pos.push(cx + tx * 0.16, h, cz + tz * 0.16, cx - tx * 0.12, h, cz - tz * 0.12, cx - tx * 0.1 + tz * s * 0.55, h + 0.16, cz - tz * 0.1 - tx * s * 0.55);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return g;
+}
+
 /** Open cone whose segments alternate between two colours (parasols). */
 function stripedCone(a: string, b: string): THREE.BufferGeometry {
   const g = new THREE.ConeGeometry(1, 1, 10, 1, true).toNonIndexed();
@@ -1639,12 +1686,12 @@ function stripedCone(a: string, b: string): THREE.BufferGeometry {
 function parasol(put: Put, x: number, y: number, z: number, col: string): void {
   put('s', BOX, '#fdf9ee', 0.08, 2.1, 0.08, x, y + 1.05, z);
   const g = stripedCone(col, '#fdf9ee');
-  put('d', g, '', 1.5, 0.5, 1.5, x, y + 2.2, z);
+  put('D', g, '', 1.5, 0.5, 1.5, x, y + 2.2, z);
   g.dispose();
 }
 
 /** Curved palm with a crown of fronds and coconuts. */
-function palm(put: Put, x: number, y: number, z: number, h: number): void {
+function palm(put: Put, x: number, y: number, z: number, h: number, leaf = 'd'): void {
   const seg = 6;
   const lean = 0.09;
   for (let i = 0; i < seg; i++) {
@@ -1659,7 +1706,7 @@ function palm(put: Put, x: number, y: number, z: number, h: number): void {
   }
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + (i % 2) * 0.2;
-    put('d', FROND, i % 2 ? '#4fae63' : '#43a058', 1, 1, 1, tx, y + h + 0.05, z, -a, 0, i % 2 ? 0.35 : 0.1);
+    put(leaf, FROND, i % 2 ? '#4fae63' : '#43a058', 1, 1, 1, tx, y + h + 0.05, z, -a, 0, i % 2 ? 0.35 : 0.1);
   }
 }
 
@@ -1717,7 +1764,7 @@ export function buildHarborScenery(group: THREE.Group, zEdge: number, track: Tra
   const wt = track(waterTexture());
   const deep = new THREE.Color('#2a8fd2');
   const shallow = new THREE.Color('#62cfdc');
-  const sheet = (w: number, d: number, cz: number, seg: number, y: number) => {
+  const sheet = (w: number, d: number, cz: number, seg: number, y: number, graded: boolean) => {
     const g = new THREE.PlaneGeometry(w, d, Math.round(w / seg), Math.round(d / seg));
     g.rotateX(-Math.PI / 2).translate(0, y, cz);
     const p = g.attributes.position;
@@ -1728,7 +1775,7 @@ export function buildHarborScenery(group: THREE.Group, zEdge: number, track: Tra
       g.attributes.uv.setXY(i, x / 9, z / 9);
       // distance from the pier (or from the shoreline when there is none)
       const dist = shore ? Math.hypot(Math.max(0, Math.abs(x) - shore[0]), Math.max(0, shore[1] - z, z - shore[2])) : Math.max(0, zEdge - z) * 0.5;
-      const t = Math.min(1, dist / 16);
+      const t = graded ? Math.min(1, dist / 16) : 1;
       _c.copy(shallow).lerp(deep, t * (2 - t));
       col[i * 3] = _c.r;
       col[i * 3 + 1] = _c.g;
@@ -1738,8 +1785,8 @@ export function buildHarborScenery(group: THREE.Group, zEdge: number, track: Tra
     return g;
   };
   // a fine sheet near the shore for the gradient, a coarse one out to the horizon
-  const near = sheet(shore ? shore[0] * 2 + 44 : 120, shore ? shore[2] - shore[1] + 44 : 60, shore ? (shore[1] + shore[2]) / 2 : zEdge - 26, 3, -0.86);
-  const wide = sheet(520, 420, zEdge - 60, 26, -0.9);
+  const near = sheet(shore ? shore[0] * 2 + 44 : 120, shore ? shore[2] - shore[1] + 44 : 60, shore ? (shore[1] + shore[2]) / 2 : zEdge - 26, 3, -0.86, true);
+  const wide = sheet(520, 420, zEdge - 60, 52, -0.9, false);
   const sea = new THREE.Mesh(track(mergeGeometries([near, wide], false)!), track(new THREE.MeshStandardMaterial({ map: wt, vertexColors: true, roughness: 0.22, metalness: 0.1 })));
   near.dispose();
   wide.dispose();

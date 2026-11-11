@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { RobotLook } from '../../content/cosmetics';
 import { floorTexture } from './arenaTextures';
-import { buildHarborScenery, makePalm } from './arenaView';
+import { buildHarborScenery, buntingGeometry, gullFlock, makePalm } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
 import { ballMaps, beamTexture, blobTexture, skyTexture, type Expression } from './textures';
@@ -36,6 +36,7 @@ export class MenuStage {
   private bannerGrp = new THREE.Group();
   private lowEnv: THREE.Texture | null = null;
   private water: THREE.Texture;
+  private gulls: THREE.Mesh;
   /** Optional club match ball resting on the platform (Club screen ball tab); null = none shown. */
   private ball: THREE.Mesh | null = null;
   private ballId = '';
@@ -184,6 +185,13 @@ export class MenuStage {
     this.water = buildHarborScenery(scenery, -16, track, true);
     scenery.position.y = -3.5;
     this.scene.add(scenery);
+    // seaside dressing: bunting strung between the columns and gulls wheeling over the bay
+    const flagM = track(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    for (const x of [-12, 0, 12]) this.scene.add(new THREE.Mesh(track(buntingGeometry(x - 5.6, x + 5.6, 8.4, -10.1, 0.9, ['#f6c542', '#ffffff', '#35c3d4', '#ef5d50'])), flagM));
+    this.gulls = new THREE.Mesh(track(gullFlock(1)), track(new THREE.MeshBasicMaterial({ color: '#f7fafc', side: THREE.DoubleSide })));
+    this.gulls.position.set(-7, 6.2, -34);
+    this.gulls.scale.setScalar(2.4);
+    this.scene.add(this.gulls);
 
     const blob = blobTexture();
     for (let i = 0; i < 2; i++) {
@@ -356,6 +364,7 @@ export class MenuStage {
       this.bannerGrp.rotation.x = Math.sin(this.time * 0.9) * 0.05;
       this.bannerGrp.rotation.z = Math.sin(this.time * 0.6 + 1) * 0.02;
       this.water.offset.set((this.time * 0.012) % 1, (this.time * 0.007) % 1);
+      this.gulls.rotation.y = this.time * 0.2;
     }
     this.sweepMat.opacity = this.reduced ? 0 : 0.55 + Math.sin(this.time * 1.3) * 0.2;
     if (this.ball) {
