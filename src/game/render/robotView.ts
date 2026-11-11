@@ -613,6 +613,9 @@ function buildHead(id: ChassisId, H: Parts): void {
     }
   } else {
     H.add('accent', ...skin(crownStripe(flat(-0.235), flat(0.235), 0, 1, 40, 3)), true);
+    // brow lamp where the stripe meets the face screen
+    const a = 0.7;
+    H.add('glow', SPH_XS, { p: [0, SKULL[1] * Math.cos(a) * 1.01, SKULL[2] * Math.sin(a) * 1.01], r: [Math.atan2(Math.sin(a) / SKULL[2], Math.cos(a) / SKULL[1]), 0, 0], s: [0.05, 0.012, 0.021] }, true);
   }
 
   // Ear pods
@@ -716,7 +719,6 @@ function buildArm(id: ChassisId, A: Parts, sx: number): void {
     A.add('shell', HEMI, { p: [0, 0.008, 0], s: [0.118, 0.1, 0.118] });
     A.add('accent', torus(0.115, 0.012, 28), { p: [0, 0.008, 0], r: flat }, true);
     limb(0.058, 0.07, 0.092);
-    A.add('accent', torus(0.058, 0.012, 24), { p: [0, -0.105, 0], r: flat }, true); // sleeve band
   }
 }
 
