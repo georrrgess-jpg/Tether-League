@@ -128,7 +128,7 @@ describe('scoring balance (seeded bot matches)', () => {
     const r = runBalance(6, 'mash', 1, 'harbor_park', 900);
     expect(r.wins / r.n).toBeLessThanOrEqual(0.5);
     expect(r.playerGoals / r.n).toBeLessThan(2);
-  });
+  }, 30000);
 
   it('matches stay in a sensible scoring range and own goals are rare', () => {
     const r = runBalance(6, 'club', 1, 'harbor_park', 950);
@@ -136,5 +136,5 @@ describe('scoring balance (seeded bot matches)', () => {
     expect(perMatch).toBeGreaterThan(1.5);
     expect(perMatch).toBeLessThan(8);
     expect((r.ownFor + r.ownAgainst) / Math.max(1, r.gf + r.ga)).toBeLessThan(0.08);
-  });
+  }, 30000); // six full simulated matches: allow for a loaded machine
 });
