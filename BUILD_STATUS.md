@@ -76,8 +76,8 @@ results, reload on the results page (no second payout), a full season through th
 (champion, trophy, promotion, next season), garage purchase and equip, customisation preview / free
 pick / purchase / save / cancel, a trial run to its result screen, key rebinding, export, import,
 recovery from a corrupted snapshot, and the production build. No console errors in these flows.
-Render stats in a match: about 210 draw calls at low / medium, 340 at high; no geometry or texture
-growth across repeated matches.
+Render stats in a match (2026-11-11): about 156-162 draw calls at low / medium, 231-237 at high;
+105k-230k triangles; no geometry or texture growth across repeated matches.
 
 **Emulated viewports**: 1366x768, 1920x1080, 844x390 (touch, landscape), 390x844 (portrait menus).
 Screenshots are in `docs/screenshots/`.
@@ -125,6 +125,15 @@ heard.
   arrowhead graphic, ear fins and swept wings), plan width within -5% / +8%, per-chassis torso,
   fitted rank belt, legs built to length, clipping fixes, wrong-footed reaction (`pose.megAge`),
   about 19.5k triangles per robot (was 21.4k).
+- Arenas (`arenaView.ts`, new `arenaTextures.ts`): each venue has its own identity from a `THEMES`
+  table: Harbor Park boardwalk over water with boats, lighthouse and parasols; Foundry Court brick
+  works with furnace glow and machinery; Skyline Stadium rooftop with city towers, helipad and neon
+  trim; Championship Dome under a lit roof. Per-venue floor, mowing pattern, wall trim, stand
+  architecture, props, light and haze. Static scenery is baked into a few vertex-coloured meshes,
+  crowd and anchor rings are instanced, ambient motion allocates nothing. Draw calls in a match
+  fell from about 320 to 231-237 (high) and from about 200 to 156-162 (medium / low). Fixed a
+  sun shadow-map texture leak; removed the unused `fieldTexture`, `netTexture` and `tileTexture`.
+  Menu stage keeps the same environment with the new sky and lighting.
 - Not verified on real devices; no human playtest. Chassis balance is measured with bots only.
 
 ### Mastery in the Garage, audio overhaul, mobile pass (2026-11-11)

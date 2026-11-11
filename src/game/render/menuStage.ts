@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { RobotLook } from '../../content/cosmetics';
 import { floorTexture } from './arenaTextures';
-import { buildHarborScenery, buntingGeometry, gullFlock, makePalm } from './arenaView';
+import { buildHarborScenery, gullFlock, makePalm } from './arenaView';
 import type { Gfx } from './gfx';
 import { RobotView, type RobotMood, type RobotPose } from './robotView';
 import { ballMaps, beamTexture, blobTexture, skyTexture, type Expression } from './textures';
@@ -73,7 +73,8 @@ export class MenuStage {
       sun.shadow.bias = -0.0008;
       sun.shadow.normalBias = 0.02;
     }
-    this.scene.add(sun);
+    // tracked so its shadow map is released when the stage is rebuilt
+    this.scene.add(track(sun));
 
     const std = (color: string, rough = 0.7, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => track(new THREE.MeshStandardMaterial({ color, roughness: rough, ...extra }));
 
@@ -185,9 +186,7 @@ export class MenuStage {
     this.water = buildHarborScenery(scenery, -16, track, true);
     scenery.position.y = -3.5;
     this.scene.add(scenery);
-    // seaside dressing: bunting strung between the columns and gulls wheeling over the bay
-    const flagM = track(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-    for (const x of [-12, 0, 12]) this.scene.add(new THREE.Mesh(track(buntingGeometry(x - 5.6, x + 5.6, 8.4, -10.1, 0.9, ['#f6c542', '#ffffff', '#35c3d4', '#ef5d50'])), flagM));
+    // gulls wheeling over the bay
     this.gulls = new THREE.Mesh(track(gullFlock(1)), track(new THREE.MeshBasicMaterial({ color: '#f7fafc', side: THREE.DoubleSide })));
     this.gulls.position.set(-7, 6.2, -34);
     this.gulls.scale.setScalar(2.4);

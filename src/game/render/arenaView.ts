@@ -15,8 +15,17 @@ import {
   type FloorKind,
   type PitchPaint,
 } from './arenaTextures';
-import { beamTexture, blobTexture, cloudTexture, labelTexture, lampPanelTexture, ledBoardTexture, netMeshTexture, ringTexture, shade, skyTexture, windowsTexture } from './textures';
+import { beamTexture, blobTexture, cloudTexture, labelTexture, lampPanelTexture, ledBoardTexture, luminance, netMeshTexture, ringTexture, shade, skyTexture, windowsTexture } from './textures';
 
+/**
+ * The four venues. Each is built procedurally round the same court (pitch, walls with corner cuts, goals
+ * and tether anchors come straight from the arena data) and then dressed in its own identity: floor, mowing
+ * pattern, wall trim, stand architecture, props, light and haze.
+ *
+ * Static scenery is baked into a few vertex-coloured meshes (see `Bake`), the crowd and anchor rings are
+ * instanced, and everything ambient that moves is driven from `update` without allocating. The camera looks
+ * down from the south, so tall props only ever stand north of the pitch or beside it.
+ */
 export type Quality = 'low' | 'medium' | 'high';
 
 interface Theme {
@@ -29,7 +38,7 @@ interface Theme {
   apron: string;
   wall: string;
   wallTop: string;
-  /** Energised strip along the inner edge of the wall rail. */
+  /** Energised strip along the inner edge of the wall rail (never yellow: that is the anchors' colour). */
   trim: string;
   deck: string;
   stand: string;
@@ -67,14 +76,14 @@ const THEMES: Record<ArenaId, Theme> = {
     crowd: ['#12bcd2', '#f48a2c', '#f3f5ef', '#f6c542', '#7a8aa0', '#51c998'],
     exposure: 0.86, env: 0.2, lamp: '#fff6e0', beamOpacity: 0, ledAccent: '#7ff3ff', led: [0.92, 0.92, 0.92],
   },
-  // Tight industrial court: steel plate floor, brick kilns, amber trim, pitch mown lengthwise.
+  // Tight industrial court: steel plate floor, brick kilns, molten-orange trim, pitch mown lengthwise.
   foundry_court: {
     sky: [[0, '#120d0b'], [0.6, '#2b1a12'], [1, '#5a2d14']],
     fog: ['#1a120e', 26, 106],
     pitch: { a: '#3f9577', b: '#36886b', line: '#f3eee0', mow: 'bands', emblem: 'cog' },
     floor: 'plate',
     apron: '#2a2725',
-    wall: '#77706a', wallTop: '#a59e93', trim: '#ffab3d', deck: '#59524c',
+    wall: '#77706a', wallTop: '#a59e93', trim: '#ff6b2c', deck: '#59524c',
     stand: '#4d4641', seat: '#a3522b', rail: '#8a8178',
     sun: '#ffd7a6', sunIntensity: 2.3, sunPos: [-8, 28, 14],
     hemiSky: '#ffcf9c', hemiGround: '#40302a', hemiIntensity: 1.0,
@@ -95,14 +104,14 @@ const THEMES: Record<ArenaId, Theme> = {
     crowd: ['#8a5cf0', '#f48a2c', '#f3f5ef', '#12bcd2', '#ec5f8e', '#f6c542'],
     exposure: 0.9, env: 0.2, lamp: '#fff1dc', beamOpacity: 0.05, ledAccent: '#ffb27a', led: [1, 0.84, 0.98],
   },
-  // Indoor final venue: polished navy concourse, gold trim, wrap-round tiers, criss-cross cut.
+  // Indoor final venue: polished navy concourse, ice-blue trim with gold details, wrap-round tiers, criss-cross cut.
   championship_dome: {
     sky: [[0, '#070c1f'], [0.6, '#101c44'], [1, '#1f3a7a']],
     fog: ['#0b1330', 26, 106],
     pitch: { a: '#3fa378', b: '#35956b', line: '#ffffff', mow: 'diamond', emblem: 'star' },
     floor: 'polish',
     apron: '#0f1936',
-    wall: '#e8edf7', wallTop: '#ffffff', trim: '#ffd75e', deck: '#dbe3f4',
+    wall: '#e8edf7', wallTop: '#ffffff', trim: '#7db8ff', deck: '#dbe3f4',
     stand: '#22315f', seat: '#2f6fe4', rail: '#8ea4d8',
     sun: '#eef4ff', sunIntensity: 2.7, sunPos: [-6, 34, 10],
     hemiSky: '#b9ccff', hemiGround: '#2a3a66', hemiIntensity: 1.1,
@@ -130,6 +139,7 @@ const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
 const _m = new THREE.Matrix4();
 const _c = new THREE.Color();
+const _hsl = { h: 0, s: 0, l: 0 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -268,7 +278,6 @@ export class ArenaView {
   private custom = new Map<string, { mat: THREE.Material; cast: boolean; order: number }>();
   /** Half width and north / south edges of the deck the venue stands on (pier, rooftop); null = open floor. */
   private platform: [number, number, number] | null = null;
-  private crowd: THREE.InstancedMesh | null = null;
   private crowdU = { time: { value: 0 }, excite: { value: 0 } };
   private crowdFlags: THREE.InstancedMesh | null = null;
   private flagPos: Float32Array = new Float32Array(0);
@@ -301,6 +310,8 @@ export class ArenaView {
   private spinners: THREE.Object3D[] = [];
   private sweepers: THREE.Object3D[] = [];
   private lastFlagTime = -1;
+  /** Unit direction shadows fall in on the floor (away from the key light). */
+  private shadeDir: [number, number] = [0, 0];
 
   constructor(private arena: ArenaDef, private quality: Quality, private teamColors: [string, string]) {
     const th = THEMES[arena.id];
@@ -351,6 +362,11 @@ export class ArenaView {
       order: 1,
     });
 
+    // soft contact shadows under props on the tiers that have no shadow map
+    this.custom.set('shade', { mat: this.track(new THREE.MeshBasicMaterial({ map: blobTexture(), color: '#000000', transparent: true, opacity: 0.3, depthWrite: false })), cast: false, order: 1 });
+    const sl = Math.hypot(th.sunPos[0], th.sunPos[2]) || 1;
+    this.shadeDir = [-th.sunPos[0] / sl, -th.sunPos[2] / sl];
+
     this.buildGround(th, hx, hz);
     this.buildWalls(th, hx, hz);
     this.buildGoals(hx);
@@ -382,6 +398,12 @@ export class ArenaView {
   /** Upright cylinder (or one tilted by rx / rz) centred on (x, y, z). */
   private cyl(k: string, col: string, r: number, h: number, x: number, y: number, z: number, rx = 0, rz = 0): void {
     this.put(k, CYL, col, r, h, r, x, y, z, 0, rx, rz, h > 0.6 && !rx && !rz && k !== 'e' ? 0.14 : 0);
+  }
+
+  /** Blob shadow of radius `r` (stretched along x by `wide`) on the floor; skipped where real shadows are drawn. */
+  private blob(x: number, z: number, r: number, wide = 1): void {
+    if (this.shadows) return;
+    this.put('shade', PLANE, '#000000', r * 2 * wide, r * 2, 1, x + this.shadeDir[0] * r * 0.3, 0.026, z + this.shadeDir[1] * r * 0.3, 0, -Math.PI / 2);
   }
 
   /** Soft additive light pool on the floor. */
@@ -540,7 +562,12 @@ export class ArenaView {
     for (const side of [0, 1] as const) {
       const sx = side === 0 ? -1 : 1;
       const color = this.teamColors[side];
-      const gm = this.std(color, 0.22, { metalness: 0.35, emissive: new THREE.Color(color), emissiveIntensity: 0.35 });
+      // The frame glows in its club's colour; a dark kit glows brighter in the same hue so its goal still
+      // reads against a dark venue.
+      const glow = new THREE.Color(color);
+      const lum = luminance(color);
+      if (lum < 0.22) glow.multiplyScalar(Math.min(8, 0.22 / Math.max(lum, 0.01)));
+      const gm = this.std(color, 0.22, { metalness: 0.35, emissive: glow, emissiveIntensity: 0.35 });
       this.goalMats.push(gm);
       const gx = sx * hx;
       // Rounded tubular frame: posts and crossbar with ball joints, a slimmer back frame.
@@ -654,8 +681,8 @@ export class ArenaView {
         const px = a.x + ox * 0.15;
         const pz = a.z + oz * 0.15;
         this.cyl('G', post, 0.2, 2.3, px, 1.15, pz);
+        this.blob(px, pz, 0.55);
         this.cyl('g', NAVY, 0.29, 0.14, px, 0.07, pz);
-        this.cyl('s', ANCHOR_YELLOW, 0.225, 0.2, px, 1.3, pz);
         this.bx('S', ANCHOR_YELLOW, 0.78, 0.5, 0.78, px, 2.5, pz, 0, 0, 0, 0.1);
         this.bx('g', NAVY, 0.84, 0.07, 0.84, px, 2.27, pz);
         this.bx('G', NAVY, 0.36, 0.2, 0.36, px - ox * 0.38, 2.44, pz - oz * 0.38);
@@ -710,6 +737,7 @@ export class ArenaView {
     /** x, y, z, section: 0 / 1 = that club's end, 2 = neutral, 3 / 4 = leaning toward club 0 / 1. */
     const seats: number[] = [];
     const backC = shade(th.seat, -0.28);
+    const seatB = shade(th.seat, 0.14);
     /**
      * One terrace step: riser, bench and backrest. `ax` 0 runs along x and 1 along z; (ox, oz) points away
      * from the pitch. Registers the seats for the crowd.
@@ -717,7 +745,8 @@ export class ArenaView {
     const row = (x: number, z: number, len: number, h: number, ax: 0 | 1, ox: number, oz: number, sec: number, sp = 0.75, deep = 1.3) => {
       this.bx('M', th.stand, ax ? deep : len, h, ax ? len : deep, x, h / 2, z, 0, 0, 0, 0.3);
       const sl = len - 0.1;
-      this.bx('s', th.seat, ax ? 0.42 : sl, 0.12, ax ? sl : 0.42, x + ox * 0.3, h + 0.06, z + oz * 0.3);
+      // alternate rows are a shade lighter so the steps read from above
+      this.bx('s', Math.round(h / 0.55) % 2 ? seatB : th.seat, ax ? 0.42 : sl, 0.12, ax ? sl : 0.42, x + ox * 0.3, h + 0.06, z + oz * 0.3);
       this.bx('s', backC, ax ? 0.07 : sl, 0.3, ax ? sl : 0.07, x + ox * 0.58, h + 0.27, z + oz * 0.58, 0, 0, 0, 0);
       const n = Math.floor(len / sp);
       const s0 = -((n - 1) * sp) / 2;
@@ -742,7 +771,10 @@ export class ArenaView {
     for (const sx of [-1, 1]) {
       const x0 = sx * (hx + gd + 2.4);
       const len = hz * 2 - 5;
-      const tc = this.teamColors[sx < 0 ? 0 : 1];
+      // A club in the anchors' yellow gets a deeper board, so the anchors at its end keep their contrast.
+      let tc = this.teamColors[sx < 0 ? 0 : 1];
+      _c.set(tc).getHSL(_hsl);
+      if (_hsl.h > 0.09 && _hsl.h < 0.2 && _hsl.l > 0.4) tc = shade(tc, -0.4);
       for (let t = 0; t < 2; t++) {
         const h = 0.5 + t * 0.55;
         row(x0 + sx * t * 1.3, 0, len, h, 1, sx, 0, sx < 0 ? 0 : 1, 0.8);
@@ -752,6 +784,7 @@ export class ArenaView {
         // club board leaning back behind the top row, with a pale stripe along its upper edge
         this.bx('d', tc, 0.08, 1.3, len, x0 + sx * 2.5, 1.7, 0, 0, 0, -sx * 1.15, 0);
         this.bx('d', '#f4f1e6', 0.09, 0.16, len, x0 + sx * 3.0, 1.93, 0, 0, 0, -sx * 1.15, 0);
+        this.bx('d', shade(tc, -0.3), 0.09, 0.22, len, x0 + sx * 2.02, 1.49, 0, 0, 0, -sx * 1.15, 0);
         for (const s of [-1, 1]) {
           this.cyl('g', STEEL, 0.05, 3.3, x0 + sx * 2.6, 1.65, s * (len / 2 + 0.3));
           this.bigFlags.push(x0 + sx * 2.6, 1.1, s * (len / 2 + 0.3), sx < 0 ? 0 : 1);
@@ -774,7 +807,7 @@ export class ArenaView {
       // low south terrace: closes the bowl without rising into the camera's view of the pitch
       for (let t = 0; t < 2; t++) row(0, hz + 4.9 + t * 1.3, hx * 2 + 6, 0.5 + t * 0.55, 0, 0, 1, 2);
     }
-    this.buildCrowd(th, seats, hx);
+    this.buildCrowd(th, seats);
 
     // venue sign on the camera-side wall
     const sign = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: this.track(labelTexture(this.arena.name, '#f3f5ef', '#17273e')), transparent: true })));
@@ -795,9 +828,6 @@ export class ArenaView {
       this.bx('s', '#fdf9ee', bw + 0.7, 0.2, 0.06, cx, 3.42, z0 - 1.7);
       for (const s of [-1, 1]) this.cyl('s', '#fdf9ee', 0.07, 4.3, cx + (s * bw) / 2, 2.15, z0 - 4.15);
     } else if (id === 'foundry_court') {
-      // hazard-striped kick board along the front of the stand
-      const n = Math.round(bw / 0.55);
-      for (let i = 0; i < n; i++) this.bx('m', i % 2 ? '#211e1c' : '#e9a23a', bw / n, 0.34, 0.05, cx - bw / 2 + ((i + 0.5) * bw) / n, 0.3, z0 + 0.67, 0, 0, 0, 0);
       // corrugated shed roof on I-beams with work lamps under the eave
       this.bx('m', '#7d3f2c', bw + 0.5, 0.1, 2.8, cx, 3.95, z0 - 3.0, 0, 0.24);
       for (let i = 0; i < 7; i++) this.bx('m', '#5f2e20', 0.12, 0.06, 2.8, cx - bw / 2 + (i * bw) / 6, 4.02, z0 - 3.0, 0, 0.24);
@@ -817,7 +847,7 @@ export class ArenaView {
    * Robot fans: one instanced mesh (body and head). They sway gently and jump after goals in the vertex
    * shader, so the crowd costs nothing per frame on the CPU. Medium / high add waving flags.
    */
-  private buildCrowd(th: Theme, seats: number[], hx: number): void {
+  private buildCrowd(th: Theme, seats: number[]): void {
     const rnd = this.rnd;
     const fill = this.quality === 'low' ? 0.42 : this.quality === 'medium' ? 0.62 : 0.82;
     const picked: number[] = [];
@@ -882,7 +912,6 @@ export class ArenaView {
       crowd.receiveShadow = false;
       this.group.add(crowd);
       this.instanced.push(crowd);
-      this.crowd = crowd;
       if (this.quality !== 'low') {
         // big club flags on poles behind the ends
         for (let i = 0; i < this.bigFlags.length; i += 4) flags.push(this.bigFlags[i], this.bigFlags[i + 1], this.bigFlags[i + 2], rnd() * 6.28, this.bigFlags[i + 3], 3.2);
@@ -953,10 +982,12 @@ export class ArenaView {
     }
     // pier-head light in the far-left corner
     lighthouse(put, -(hx + 3.9), 0, -(hz + 1.9), 0.52, 'M');
+    this.blob(-(hx + 3.9), -(hz + 1.9), 1.7);
     // beach club in the far-right corner: parasols and loungers
-    const shades: [number, number, string][] = [[hx + 1.2, -(hz + 3.4), '#ef5d50'], [hx + 4.0, -(hz + 6.0), '#2f9fc4'], [hx + 6.2, -(hz + 3.0), '#f6c542']];
+    const shades: [number, number, string][] = [[hx + 1.2, -(hz + 3.4), '#ef5d50'], [hx + 4.0, -(hz + 6.0), '#2f9fc4'], [hx + 6.2, -(hz + 3.0), '#f59fb0']];
     for (const [x, z, col] of shades) {
       parasol(put, x, 0, z, col);
+      this.blob(x, z, 1.5);
       for (const s of [-1, 1]) {
         put('s', BOX, '#fdf9ee', 0.55, 0.07, 1.25, x + s * 0.75, 0.3, z + 0.9, s * 0.25, -0.22);
         put('s', BOX, col, 0.45, 0.08, 0.5, x + s * 0.72, 0.4, z + 0.55, s * 0.25, -0.22);
@@ -967,6 +998,8 @@ export class ArenaView {
       this.bx('M', IVORY, 2.2, 0.5, 2.2, sx * (hx + 3.2), 0.25, hz + 2.6, 0, 0, 0, 0.25);
       palm(put, sx * (hx + 3.2), 0.5, hz + 2.6, 3.4, 'D');
       palm(put, sx * (hx + 6.9), 0, -(hz + 7.8), 3.9, 'D');
+      this.blob(sx * (hx + 3.2), hz + 2.6, 2.1);
+      this.blob(sx * (hx + 6.9), -(hz + 7.8), 1.7);
     }
     // jetty on the east side and boats moored round the pier
     const jz = -(hz + 1.2);
@@ -1054,6 +1087,7 @@ export class ArenaView {
       const kx = sx * (hx + 5.8);
       const kz = -hz - 5;
       this.bx('brick', '#d8c8bc', 4.4, 3.3, 3.4, kx, 1.65, kz, 0, 0, 0, 0.4);
+      this.blob(kx, kz, 3.2, 1.25);
       this.bx('g', steel, 4.8, 0.3, 3.8, kx, 3.45, kz);
       this.bx('m', dark, 2.9, 2.1, 0.12, kx, 1.05, kz + 1.71, 0, 0, 0, 0);
       this.bx('fire', '#ff7a1f', 2.4, 1.7, 0.05, kx, 0.95, kz + 1.76);
@@ -1074,9 +1108,11 @@ export class ArenaView {
       // drums, crates and girders stacked by the kiln
       for (const [dx, dz, c2] of [[2.9, 3.2, '#2f7f86'], [3.8, 2.6, '#a8482c'], [3.2, 2.2, '#6f7f8f']] as [number, number, string][]) {
         this.cyl('s', c2, 0.42, 1.05, kx - sx * dx, 0.52, kz + dz);
+        this.blob(kx - sx * dx, kz + dz, 0.7);
         this.cyl('s', dark, 0.44, 0.08, kx - sx * dx, 0.8, kz + dz);
       }
       this.bx('m', '#8a6a45', 1.0, 1.0, 1.0, kx - sx * 3.6, 0.5, kz - 0.6, 0.2);
+      this.blob(kx - sx * 3.6, kz - 0.6, 1.1);
       this.bx('m', '#96754e', 0.9, 0.9, 0.9, kx - sx * 3.5, 1.45, kz - 0.5, -0.3);
       for (let i = 0; i < 3; i++) this.bx('g', '#6f7f8f', 3.2, 0.2, 0.22, kx - sx * 0.2, 0.1 + (i === 2 ? 0.2 : 0), kz + 4.6 + (i === 2 ? 0.15 : i * 0.3), 0.12);
     }
@@ -1111,6 +1147,13 @@ export class ArenaView {
     this.bx('fire', '#ff9a3a', 2.2, 0.08, 1.1, -hx * 0.4, 1.2, tz);
     for (const s of [-0.9, 0.9]) this.put('g', CYL, dark, 0.28, 1.7, 0.28, -hx * 0.4 + s, 0.3, tz, 0, Math.PI / 2);
     this.pool('#8a3a0c', -hx * 0.4, tz, 6, 4);
+    // crates and a drum by the camera-side corners
+    for (const sx of [-1, 1]) {
+      this.bx('M', '#8a6a45', 1.1, 1.0, 1.1, sx * (hx + 3.3), 0.5, hz + 2.5, 0.15, 0, 0, 0.25);
+      this.blob(sx * (hx + 3.8), hz + 2.9, 1.3, 1.4);
+      this.bx('M', '#96754e', 0.8, 0.7, 0.8, sx * (hx + 4.5), 0.35, hz + 2.9, -0.3, 0, 0, 0.25);
+      this.cyl('s', '#2f7f86', 0.42, 1.05, sx * (hx + 3.7), 0.52, hz + 3.9);
+    }
     // stock yard beyond the track: steel coils, pallets and crates
     for (const sx of [-1, 1]) {
       for (let i = 0; i < 3; i++) this.put('g', CYL, '#7a838c', 0.7, 1.0, 0.7, sx * (4.5 + i * 1.7), 0.7, hz + 11, 0, Math.PI / 2);
@@ -1193,10 +1236,12 @@ export class ArenaView {
     const tz = -(hz + 6.6);
     for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) this.bx('G', '#4a4672', 0.14, 1.3, 0.14, tx + dx, 0.65, tz + dz, 0, 0, 0, 0);
     this.cyl('M', '#a06a48', 1.25, 1.7, tx, 2.15, tz);
+    this.blob(tx, tz, 1.9);
     for (const y of [1.6, 2.7]) this.cyl('g', '#4a3a36', 1.28, 0.1, tx, y, tz);
     this.put('M', CONE, '#8d93ad', 1.4, 0.6, 1.4, tx, 3.3, tz);
     for (const [ax, az, ry] of [[tx + 3.6, tz + 0.6, 0], [tx + 3.9, tz + 2.6, 0.1], [tx - 0.4, tz + 3.4, 1.57]] as [number, number, number][]) {
       this.bx('M', '#c9c6d6', 1.7, 0.9, 1.15, ax, 0.45, az, ry, 0, 0, 0.25);
+      this.blob(ax, az, 1.2);
       this.put('g', CYL, '#3c3f5c', 0.4, 0.06, 0.4, ax, 0.93, az);
       this.bx('g', '#8d93ad', 0.12, 0.12, 1.6, ax, 0.1, az + 1.3, ry);
     }
@@ -1219,6 +1264,13 @@ export class ArenaView {
       }
     }
     this.bx('s', '#f3f0fa', 1.8, 0.02, 0.42, px, 0.03, pz);
+    // planters with clipped hedges by the camera-side corners
+    for (const sx of [-1, 1]) {
+      const x = sx * (hx + 3.4);
+      this.bx('M', '#cdc5df', 2.6, 0.5, 1.3, x, 0.25, hz + 2.6, 0, 0, 0, 0.25);
+      this.blob(x, hz + 2.6, 1.1, 1.8);
+      this.bx('m', '#3f9a63', 2.3, 0.5, 1.0, x, 0.72, hz + 2.6, 0, 0, 0, 0.3);
+    }
     // solar arrays on the camera side (seen on tall screens)
     for (const sx of [-1, 1])
       for (let i = 0; i < 4; i++)
@@ -1245,7 +1297,7 @@ export class ArenaView {
       lamps.add(LAMP_PLANE, new THREE.Matrix4().compose(lp, q, _s.set(1, 1, 1)));
       if (this.beamMat) this.beam(beams, lp, target, 4.2);
     }
-    this.mesh(lamps.build(), this.track(new THREE.MeshBasicMaterial({ map: this.track(lampPanelTexture()) })));
+    this.mesh(lamps.build(), this.track(new THREE.MeshBasicMaterial({ map: this.track(lampPanelTexture()), toneMapped: false })));
     this.addBeams(beams);
     // searchlights sweeping the sky from the far edge, and a mast beacon
     if (this.beamMat) {
@@ -1268,15 +1320,6 @@ export class ArenaView {
     this.beaconMat = this.track(new THREE.MeshBasicMaterial({ color: '#ff3030', toneMapped: false }));
     this.custom.set('beacon', { mat: this.beaconMat, cast: false, order: 0 });
     this.put('beacon', BLOB, '#ffffff', 0.2, 0.2, 0.2, tx - 2.6, 5.3, tz + 1.2);
-    if (this.quality === 'high') {
-      // sunset disc with a soft corona (only seen from low camera angles)
-      const sun = new THREE.Mesh(this.track(new THREE.CircleGeometry(7, 40)), this.track(new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe2a0').multiplyScalar(1.25), fog: false })));
-      sun.position.set(-14, 6, -150);
-      const corona = new THREE.Mesh(PLANE, this.track(new THREE.MeshBasicMaterial({ map: blobTexture(), color: '#ffb070', transparent: true, opacity: 0.55, depthWrite: false, fog: false })));
-      corona.scale.set(42, 42, 1);
-      corona.position.set(-14, 6, -151);
-      this.group.add(sun, corona);
-    }
   }
 
   /** Championship Dome: enclosed bowl with ribbon boards, big screens, a lighting truss, banners and flashes. */
@@ -1329,6 +1372,7 @@ export class ArenaView {
       const z = -hz - 3.0;
       const ry = -sx * 0.62;
       this.put('g', BOX, '#101a38', 5.0, 2.7, 0.3, x, 3.15, z, ry, -0.18);
+      this.blob(x, z, 1.5, 1.8);
       for (const s of [-1.8, 1.8]) this.put('g', BOX, '#2a3a6a', 0.22, 1.9, 0.22, x + Math.cos(ry) * s, 0.95, z - Math.sin(ry) * s, ry);
       screens.add(PLANE, _m.compose(_p.set(x + Math.sin(ry) * 0.17, 3.18, z + Math.cos(ry) * 0.17), _q.setFromEuler(_e.set(-0.18, ry, 0, 'YXZ')), _s.set(4.7, 2.4, 1)).clone());
       this.bx('e', gold, 5.0, 0.07, 0.34, x - Math.sin(ry) * 0.25, 4.5, z - Math.cos(ry) * 0.25, ry);
@@ -1542,6 +1586,8 @@ export class ArenaView {
   dispose(): void {
     for (const d of this.disposables) d.dispose();
     for (const i of this.instanced) i.dispose();
+    // the key light owns its shadow map (a render target the renderer will not free on its own)
+    this.sun.dispose();
   }
 }
 
@@ -1626,7 +1672,7 @@ const FROND = (() => {
 })();
 
 /** A sagging string of triangular pennants between x1 and x2, coloured in turn from `colors`. */
-export function buntingGeometry(x1: number, x2: number, y: number, z: number, sag: number, colors: string[]): THREE.BufferGeometry {
+function buntingGeometry(x1: number, x2: number, y: number, z: number, sag: number, colors: string[]): THREE.BufferGeometry {
   const n = Math.floor((x2 - x1) / 0.55);
   const pos: number[] = [];
   const colr: number[] = [];
@@ -1787,7 +1833,7 @@ export function buildHarborScenery(group: THREE.Group, zEdge: number, track: Tra
   // a fine sheet near the shore for the gradient, a coarse one out to the horizon
   const near = sheet(shore ? shore[0] * 2 + 44 : 120, shore ? shore[2] - shore[1] + 44 : 60, shore ? (shore[1] + shore[2]) / 2 : zEdge - 26, 3, -0.86, true);
   const wide = sheet(520, 420, zEdge - 60, 52, -0.9, false);
-  const sea = new THREE.Mesh(track(mergeGeometries([near, wide], false)!), track(new THREE.MeshStandardMaterial({ map: wt, vertexColors: true, roughness: 0.22, metalness: 0.1 })));
+  const sea = new THREE.Mesh(track(mergeGeometries([near, wide], false)!), track(new THREE.MeshStandardMaterial({ map: wt, vertexColors: true, roughness: 0.32, metalness: 0.05 })));
   near.dispose();
   wide.dispose();
   sea.receiveShadow = true;
