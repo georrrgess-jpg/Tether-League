@@ -148,6 +148,10 @@ export const COSMETICS: CosmeticDef[] = [
   earned('mastery', 'title_scout_master', 'title', 'Scout Masters', 'Scout mastery 10.'),
   earned('mastery', 'title_bulwark_master', 'title', 'Bulwark Masters', 'Bulwark mastery 10.'),
   earned('mastery', 'title_glider_master', 'title', 'Glider Masters', 'Glider mastery 10.'),
+  earned('mastery', 'title_allround_legend', 'title', 'All-Round Legends', 'Every position, every role, mastered.'),
+  earned('mastery', 'title_scout_legend', 'title', 'Scout Legends', 'First to every ball.'),
+  earned('mastery', 'title_bulwark_legend', 'title', 'Bulwark Legends', 'Nothing gets past.'),
+  earned('mastery', 'title_glider_legend', 'title', 'Glider Legends', 'Owners of the sky.'),
   earned('achievement', 'title_playmakers', 'title', 'The Playmakers', 'Masters of the playbook.'),
   earned('achievement', 'title_one_touch', 'title', 'One-Touch Wonders', 'First time, every time.'),
   earned('level', 'title_harbor_heroes', 'title', 'Harbor Heroes', 'The pride of the waterfront.'),
@@ -159,6 +163,11 @@ export const COSMETICS: CosmeticDef[] = [
   earned('level', 'color_sakura', 'color', 'Sakura', 'Soft blossom pink.', '#F4A6C6'),
   earned('level', 'color_ultraviolet', 'color', 'Ultraviolet', 'Deep electric violet.', '#5B2BD9'),
   earned('level', 'color_copper', 'color', 'Copper', 'Warm burnished copper.', '#C8743A'),
+  // Chassis mastery colours (Platinum rank, level 15)
+  earned('mastery', 'color_royal_cog', 'color', 'Royal Cog', 'All-Rounder mastery colour.', '#3D5AFE'),
+  earned('mastery', 'color_scout_volt', 'color', 'Scout Volt', 'Scout mastery colour.', '#B8F02A'),
+  earned('mastery', 'color_bulwark_steel', 'color', 'Bulwark Steel', 'Bulwark mastery colour.', '#5D7590'),
+  earned('mastery', 'color_glider_sky', 'color', 'Glider Sky', 'Glider mastery colour.', '#62D2FF'),
   // Opponent-only badges (never sold)
   opponent('badge_gear', 'Gear'),
   opponent('badge_skyline', 'Skyline'),
@@ -227,4 +236,6 @@ export interface RobotLook {
   celebration: string;
   /** Head accessory cosmetic id (see COSMETICS kind 'topper'); undefined or 'topper_none' = none. */
   topper?: string;
+  /** Chassis mastery rank 0..5 (Unranked..Master): shown as a coloured belt. Player robots only. */
+  mastery?: number;
 }

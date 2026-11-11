@@ -4,7 +4,10 @@ import { playerLooks } from '../../game/setup';
 import { levelFor, purchase } from '../../progression/progression';
 import { h, icon } from '../dom';
 import { shell } from '../shell';
-import { shirt } from '../widgets';
+import { shirt, tabBar } from '../widgets';
+import { MASTERY_MAX, MASTERY_RANKS, masteryRank } from '../../content/progression';
+import { masteryLevel } from '../../progression/mastery';
+import { masteryView, rankEmblem } from './mastery';
 
 export const CHASSIS_ICON: Record<ChassisId, string> = { all_rounder: 'lightning', scout: 'target', bulwark: 'shield', glider: 'lines' };
 
@@ -12,6 +15,9 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
   const save = app.save;
   let selected: ChassisId = (params.get('c') as ChassisId) in CHASSIS ? (params.get('c') as ChassisId) : save.club.chassis;
   let who: 'me' | 'mate' = params.get('who') === 'mate' ? 'mate' : 'me';
+  let view: 'stats' | 'mastery' = params.get('tab') === 'mastery' ? 'mastery' : 'stats';
+  const tabsSlot = h('div', { class: 'garage-tabs' });
+  const mLevel = (id: ChassisId) => masteryLevel(save.progress.mastery[id] ?? 0);
   const picker = h('div', { class: 'chassis-picker', role: 'radiogroup', 'aria-label': 'Chassis' });
   const detail = h('section', { class: 'panel chassis-detail', 'aria-live': 'polite' });
   const dock = h('div', { class: 'garage-dock' });
@@ -21,7 +27,7 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
   const owned = (id: ChassisId) => save.owned.includes(`chassis:${id}`);
   const preview = () => {
     const looks = playerLooks(save);
-    app.stage.setLooks([{ ...looks[who === 'me' ? 0 : 1], chassis: selected }, looks[1]]);
+    app.stage.setLooks([{ ...looks[who === 'me' ? 0 : 1], chassis: selected, mastery: masteryRank(mLevel(selected)) }, looks[1]]);
   };
 
   const render = () => {
@@ -47,16 +53,35 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
         },
           h('span', { class: 'cb-icon' }, icon(isOwned ? CHASSIS_ICON[id] : 'lock')),
           h('span', { class: 'cb-text' }, h('b', null, c.name), h('small', null, state)),
+          isOwned ? h('span', { class: 'cb-mastery', title: `Mastery ${mLevel(id)} of ${MASTERY_MAX} (${MASTERY_RANKS[masteryRank(mLevel(id))].name})` }, rankEmblem(masteryRank(mLevel(id))), h('small', null, String(mLevel(id)))) : null,
         );
       }),
     );
 
     const c = CHASSIS[selected];
     const isOwned = owned(selected);
+    const ml = mLevel(selected);
+    tabsSlot.replaceChildren(
+      tabBar<'stats' | 'mastery'>(
+        [
+          { id: 'stats', label: 'Stats', icon: 'garage' },
+          { id: 'mastery', label: 'Mastery', icon: 'star', badge: `${ml}/${MASTERY_MAX}` },
+        ],
+        view,
+        (t) => {
+          view = t;
+          render();
+        },
+        'Garage view',
+        'garage-view-tabs',
+      ),
+    );
     // Each bar shows a marker for the chassis currently equipped on the robot being edited.
     const eq = chassisBars(CHASSIS[current]);
     const same = current === selected;
-    detail.replaceChildren(
+    detail.classList.toggle('is-mastery', view === 'mastery');
+    if (view === 'mastery') detail.replaceChildren(masteryView(app, selected));
+    else detail.replaceChildren(
       h('div', { class: 'cd-main' },
         h('h2', { class: 'cd-name' }, c.name),
         h('p', { class: 'cd-tag' }, c.tagline),
@@ -153,7 +178,7 @@ export function garageScreen(app: App, params: URLSearchParams): ScreenView {
   const el = shell(app, { nav: 'garage', title: 'Garage', subtitle: 'Robot selection', cls: 'garage', dock },
     h('div', { class: 'garage-grid' },
       h('div', { class: 'garage-stage' }, slot, h('span', { class: 'drag-hint', 'aria-hidden': 'true' }, icon('rotate'), 'Drag to rotate')),
-      h('div', { class: 'garage-right' }, h('span', { class: 'label-caps' }, 'Chassis (sidegrades)'), picker, detail),
+      h('div', { class: 'garage-right' }, h('span', { class: 'label-caps' }, 'Chassis (sidegrades)'), picker, tabsSlot, detail),
     ),
   );
   queueMicrotask(preview);

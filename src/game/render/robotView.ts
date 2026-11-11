@@ -688,6 +688,9 @@ export class RobotView {
   private visor: THREE.Mesh;
   private flame: THREE.Mesh;
   private flameMat: THREE.MeshBasicMaterial;
+  /** Mastery rank belt over the navy belt (hidden when unranked). */
+  private rankBelt: THREE.Mesh;
+  private rankMat: THREE.MeshStandardMaterial;
   private jerseyMat: THREE.MeshStandardMaterial;
   private visorMat: THREE.MeshStandardMaterial;
   private mats: Record<Slot, THREE.Material>;
@@ -748,6 +751,12 @@ export class RobotView {
     this.flame.rotation.x = THRUSTER_TILT;
     this.flame.renderOrder = 3;
     this.torso.add(this.flame);
+    this.rankMat = new THREE.MeshStandardMaterial({ color: '#f4c84b', roughness: 0.22, metalness: 0.9 });
+    this.rankBelt = new THREE.Mesh(RANK_BELT_GEO, this.rankMat);
+    this.rankBelt.position.set(0, 0.028, 0);
+    this.rankBelt.rotation.x = Math.PI / 2;
+    this.rankBelt.visible = false;
+    this.torso.add(this.rankBelt);
     this.handR.position.set(0, -0.34, 0);
     this.armR.add(this.handR);
     this.handL.position.set(0, -0.34, 0);
@@ -816,6 +825,16 @@ export class RobotView {
     this.jerseyMat.needsUpdate = true;
     this.applyFace(true);
 
+    // Mastery rank belt: bronze / silver / gold / platinum metal, Master glows.
+    const rank = Math.max(0, Math.min(5, Math.round(look.mastery ?? 0)));
+    this.rankBelt.visible = rank > 0;
+    if (rank > 0) {
+      const RANK = ['#9aa3ad', '#c9824a', '#d6dde4', '#f4c84b', '#a8ecff', '#ff8ee0'];
+      this.rankMat.color.set(RANK[rank]);
+      this.rankMat.emissive.set(rank >= 4 ? RANK[rank] : '#000000');
+      this.rankMat.emissiveIntensity = rank === 5 ? 0.55 : rank === 4 ? 0.18 : 0;
+      this.rankMat.metalness = rank === 5 ? 0.5 : 0.9;
+    }
     if (this.chassisId !== look.chassis || !prevLook) this.buildChassis(look.chassis);
     const topper = look.topper ?? 'topper_none';
     if (this.topperId !== topper) this.buildTopper(topper);
@@ -1284,10 +1303,12 @@ export class RobotView {
     this.jerseyMat.dispose();
     this.visorMat.dispose();
     this.flameMat.dispose();
+    this.rankMat.dispose();
     if (this.topperGlow) (this.topperGlow.material as THREE.Material).dispose();
   }
 }
 
+const RANK_BELT_GEO = new THREE.TorusGeometry(0.194, 0.047, 10, 48);
 const VISOR_GEO = new THREE.SphereGeometry(0.312, 36, 12, Math.PI / 2 - 1.0, 2.0, 1.08, 0.86);
 const HALO_SPRITE = new THREE.PlaneGeometry(1, 1);
 

@@ -95,35 +95,91 @@ export const ROAD_PRESTIGE = [10, 20, 30, 40];
 // Chassis mastery
 // ---------------------------------------------------------------------------
 
-export const MASTERY_MAX = 10;
-/** Mastery XP from one level to the next (level n needs masteryStep(n) more). */
-export const masteryStep = (n: number): number => 150 + 50 * (n - 1);
+export const MASTERY_MAX = 20;
+/**
+ * Mastery XP from one level to the next (level n needs masteryStep(n) more). Levels 1-10 are unchanged
+ * from the first mastery release; 11-20 are the long chase.
+ */
+export const masteryStep = (n: number): number => (n <= 10 ? 150 + 50 * (n - 1) : 600 + 25 * (n - 10));
+
+/** Mastery ranks by level: shown in the Garage and as a coloured belt on the robot. */
+export type MasteryRank = 0 | 1 | 2 | 3 | 4 | 5;
+export const MASTERY_RANKS: { name: string; from: number; color: string }[] = [
+  { name: 'Unranked', from: 0, color: '#9aa3ad' },
+  { name: 'Bronze', from: 1, color: '#c9824a' },
+  { name: 'Silver', from: 5, color: '#c9d4de' },
+  { name: 'Gold', from: 10, color: '#f4c84b' },
+  { name: 'Platinum', from: 15, color: '#9be8ff' },
+  { name: 'Master', from: 20, color: '#ff7ad9' },
+];
+export function masteryRank(level: number): MasteryRank {
+  let r = 0;
+  for (let i = 0; i < MASTERY_RANKS.length; i++) if (level >= MASTERY_RANKS[i].from) r = i;
+  return r as MasteryRank;
+}
 
 export type MasteryReward = { kind: 'credits'; amount: number } | { kind: 'pick' } | { kind: 'item'; id: string; fallback: number };
 
-const MASTERY_ITEMS: Record<ChassisId, { badge: string; master: string; spec: string; masterTitle: string; themed: string; themedFallback: number }> = {
-  all_rounder: { badge: 'badge_cog', master: 'badge_cog_master', spec: 'title_allround_spec', masterTitle: 'title_allround_master', themed: 'face_visor', themedFallback: 120 },
-  scout: { badge: 'badge_wing', master: 'badge_wing_master', spec: 'title_scout_spec', masterTitle: 'title_scout_master', themed: 'trail_comet', themedFallback: 240 },
-  bulwark: { badge: 'badge_tower', master: 'badge_tower_master', spec: 'title_bulwark_spec', masterTitle: 'title_bulwark_master', themed: 'pattern_hoops', themedFallback: 120 },
-  glider: { badge: 'badge_arc', master: 'badge_arc_master', spec: 'title_glider_spec', masterTitle: 'title_glider_master', themed: 'trail_aurora', themedFallback: 360 },
+interface MasteryItems {
+  badge: string; master: string; spec: string; masterTitle: string; legend: string; color: string;
+  /** Themed shop items paid at levels 4, 12 and 17 (fallback credits when already owned). */
+  themed: [string, number][];
+}
+
+const MASTERY_ITEMS: Record<ChassisId, MasteryItems> = {
+  all_rounder: { badge: 'badge_cog', master: 'badge_cog_master', spec: 'title_allround_spec', masterTitle: 'title_allround_master', legend: 'title_allround_legend', color: 'color_royal_cog', themed: [['face_visor', 120], ['pattern_halves', 180], ['face_determined', 220]] },
+  scout: { badge: 'badge_wing', master: 'badge_wing_master', spec: 'title_scout_spec', masterTitle: 'title_scout_master', legend: 'title_scout_legend', color: 'color_scout_volt', themed: [['trail_comet', 240], ['ball_comet', 520], ['face_led', 320]] },
+  bulwark: { badge: 'badge_tower', master: 'badge_tower_master', spec: 'title_bulwark_spec', masterTitle: 'title_bulwark_master', legend: 'title_bulwark_legend', color: 'color_bulwark_steel', themed: [['pattern_hoops', 120], ['pattern_check', 220], ['topper_tophat', 480]] },
+  glider: { badge: 'badge_arc', master: 'badge_arc_master', spec: 'title_glider_spec', masterTitle: 'title_glider_master', legend: 'title_glider_legend', color: 'color_glider_sky', themed: [['trail_aurora', 360], ['trail_prism', 650], ['ball_neon', 580]] },
 };
 
 /** Cosmetic rewards only: chassis are sidegrades and mastery never changes how a chassis plays. */
 export function masteryReward(chassis: ChassisId, level: number): MasteryReward {
   const m = MASTERY_ITEMS[chassis];
+  const themed = (i: number): MasteryReward => ({ kind: 'item', id: m.themed[i][0], fallback: m.themed[i][1] });
   switch (level) {
     case 1: return { kind: 'credits', amount: 50 };
     case 2: return { kind: 'item', id: m.badge, fallback: 0 };
     case 3: return { kind: 'credits', amount: 75 };
-    case 4: return { kind: 'item', id: m.themed, fallback: m.themedFallback };
+    case 4: return themed(0);
     case 5: return { kind: 'item', id: m.spec, fallback: 0 };
     case 6: return { kind: 'credits', amount: 100 };
     case 7: return { kind: 'pick' };
     case 8: return { kind: 'credits', amount: 125 };
     case 9: return { kind: 'item', id: m.master, fallback: 0 };
-    default: return { kind: 'item', id: m.masterTitle, fallback: 0 };
+    case 10: return { kind: 'item', id: m.masterTitle, fallback: 0 };
+    case 11: return { kind: 'credits', amount: 150 };
+    case 12: return themed(1);
+    case 13: return { kind: 'credits', amount: 175 };
+    case 14: return { kind: 'pick' };
+    case 15: return { kind: 'item', id: m.color, fallback: 0 };
+    case 16: return { kind: 'credits', amount: 200 };
+    case 17: return themed(2);
+    case 18: return { kind: 'credits', amount: 250 };
+    case 19: return { kind: 'pick' };
+    default: return { kind: 'item', id: m.legend, fallback: 0 };
   }
 }
+
+/**
+ * Signature play: each chassis earns bonus mastery XP for the things it is built for, on top of the
+ * match XP. Weights are mastery XP per stat in one match; the bonus is capped per match.
+ */
+export type SignatureStat = 'goals' | 'assists' | 'saves' | 'passes' | 'interceptions' | 'swingKicks' | 'swings' | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals' | 'cleanSheet';
+export interface MasterySignature { name: string; blurb: string; weights: Partial<Record<SignatureStat, number>>; cap: number }
+export const MASTERY_SIGNATURE: Record<ChassisId, MasterySignature> = {
+  all_rounder: { name: 'Total football', blurb: 'Passes, assists, goals and saves all count.', weights: { passes: 5, assists: 15, goals: 12, saves: 10 }, cap: 120 },
+  scout: { name: 'Quick strike', blurb: 'Swing kicks, interceptions, goals and one-touch finishes.', weights: { swingKicks: 10, interceptions: 10, goals: 12, oneTouchGoals: 20 }, cap: 120 },
+  bulwark: { name: 'Hold the line', blurb: 'Saves, interceptions and clean sheets.', weights: { saves: 18, interceptions: 8, cleanSheet: 40 }, cap: 120 },
+  glider: { name: 'Air play', blurb: 'Long balls, give-and-goes, swings and swing kicks.', weights: { longBalls: 18, giveAndGos: 15, swings: 2, swingKicks: 8 }, cap: 120 },
+};
+
+export const SIGNATURE_LABEL: Record<SignatureStat, [string, string]> = {
+  goals: ['goal', 'goals'], assists: ['assist', 'assists'], saves: ['save', 'saves'], passes: ['pass', 'passes'],
+  interceptions: ['interception', 'interceptions'], swingKicks: ['swing kick', 'swing kicks'], swings: ['swing', 'swings'],
+  longBalls: ['long ball', 'long balls'], giveAndGos: ['give-and-go', 'give-and-goes'], wallPasses: ['wall pass', 'wall passes'],
+  oneTouchGoals: ['one-touch goal', 'one-touch goals'], cleanSheet: ['clean sheet', 'clean sheets'],
+};
 
 // ---------------------------------------------------------------------------
 // Club objectives

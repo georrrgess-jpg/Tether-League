@@ -6,6 +6,9 @@ import {
   ACHIEVEMENTS,
   ACHIEVEMENT_BY_ID,
   MASTERY_MAX,
+  MASTERY_SIGNATURE,
+  masteryRank,
+  masteryReward,
   OBJECTIVES,
   OBJECTIVE_BY_ID,
   OBJECTIVE_REWARD,
@@ -19,7 +22,7 @@ import type { MatchResult } from '../src/game/modes/matchMode';
 import type { GoalRecord, RobotStats } from '../src/game/sim/match';
 import { playerLooks } from '../src/game/setup';
 import { achievementValue, settleAchievements } from '../src/progression/achievements';
-import { addMastery, masteryLevel, masteryThreshold } from '../src/progression/mastery';
+import { addMastery, masteryLevel, masteryThreshold, signatureBonus } from '../src/progression/mastery';
 import { drawObjective, matchFacts } from '../src/progression/objectives';
 import { REWARDS, claimLevels, commitMatch, commitTrial, itemPrice, levelFor, levelThreshold, purchase, rerollObjective, usePick } from '../src/progression/progression';
 import { SAVE_VERSION, defaultClub, exportSave, importSave, newSave, validateSave, type SaveGame } from '../src/storage/save';
@@ -263,9 +266,36 @@ describe('chassis mastery', () => {
     const s = fresh();
     const rec = commitMatch(s, result({ matchId: 'm', kind: 'career' }), { ...CTX, chassis: 'bulwark' });
     const matchXp = rec.rewards.filter((l) => l.source === 'match').reduce((a, l) => a + l.xp, 0);
-    expect(rec.progress.mastery).toMatchObject({ chassis: 'bulwark', gained: matchXp });
-    expect(s.progress.mastery.bulwark).toBe(matchXp);
+    // 1-0: a clean sheet, which is part of the Bulwark signature (+40 mastery XP).
+    expect(rec.progress.mastery).toMatchObject({ chassis: 'bulwark', gained: matchXp + 40, signature: 40 });
+    expect(s.progress.mastery.bulwark).toBe(matchXp + 40);
     expect(s.progress.mastery.all_rounder).toBe(0);
+  });
+
+  it('signature bonus follows each chassis style and is capped per match', () => {
+    expect(signatureBonus('bulwark', { saves: 2, interceptions: 1 }, true).xp).toBe(2 * 18 + 8 + 40);
+    expect(signatureBonus('glider', { longBalls: 1, giveAndGos: 1 }, false).xp).toBe(18 + 15);
+    expect(signatureBonus('scout', { goals: 0 }, false).xp).toBe(0);
+    expect(signatureBonus('all_rounder', { passes: 40, goals: 9 }, false).xp).toBe(MASTERY_SIGNATURE.all_rounder.cap);
+    const parts = signatureBonus('scout', { swingKicks: 2, oneTouchGoals: 1 }, false).parts.map((x) => x.stat).sort();
+    expect(parts).toEqual(['oneTouchGoals', 'swingKicks']);
+  });
+
+  it('twenty levels with ranks; levels 1-10 keep their old thresholds and every level pays once', () => {
+    expect(MASTERY_MAX).toBe(20);
+    expect(masteryThreshold(10)).toBe(3750);
+    expect([0, 1, 4, 5, 9, 10, 14, 15, 19, 20].map(masteryRank)).toEqual([0, 1, 1, 2, 2, 3, 3, 4, 4, 5]);
+    const s = fresh();
+    commitMatch(s, result({ matchId: 'm-big', kind: 'career' }), { ...CTX, chassis: 'glider' });
+    s.progress.mastery.glider = masteryThreshold(20) - 1;
+    const before = clone(s.owned);
+    commitMatch(s, result({ matchId: 'm-big2', kind: 'career' }), { ...CTX, chassis: 'glider' });
+    expect(masteryLevel(s.progress.mastery.glider)).toBe(20);
+    expect(s.progress.masteryClaimed.glider).toBe(20);
+    expect(s.owned).toContain('title_glider_legend');
+    expect(s.owned).toContain('color_glider_sky');
+    expect(s.owned.length).toBeGreaterThan(before.length);
+    for (let l = 1; l <= 20; l++) expect(masteryReward('scout', l)).toBeTruthy();
   });
 });
 

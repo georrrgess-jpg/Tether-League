@@ -8,7 +8,7 @@ import { MEDAL_NAMES, TRIALS, betterScore, medalFor, type TrialId } from '../con
 import type { MatchResult } from '../game/modes/matchMode';
 import { emptyReport, type AchievementStep, type CommittedResult, type Grant, type ProgressReport, type RewardLine, type SaveGame } from '../storage/save';
 import { settleAchievements } from './achievements';
-import { addMastery } from './mastery';
+import { addMastery, signatureBonus } from './mastery';
 import { advanceForMatch, advanceForTrial, matchFacts } from './objectives';
 import { claimLevels, levelFor, unlockedArenas } from './road';
 
@@ -204,7 +204,8 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
 
   // chassis mastery (the player's own robot), objectives, then pay and settle levels / achievements
   const chassis: ChassisId = ctx.chassis && Object.hasOwn(CHASSIS, ctx.chassis) ? ctx.chassis : save.club.chassis;
-  const m = addMastery(save, chassis, masteryXp);
+  const sig = signatureBonus(chassis, p, result.score[1] === 0);
+  const m = addMastery(save, chassis, masteryXp, sig.xp);
   rewards.push(...m.lines);
   grants.push(...m.grants);
   const obj = advanceForMatch(save, result, facts, factor);

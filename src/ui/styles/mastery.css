@@ -1,0 +1,387 @@
+/* ---------- chassis mastery (Garage > Mastery, Progress links) ---------- */
+
+/* Rank emblem: a small shield in the rank colour. */
+.rank-emblem {
+  --rank: var(--silver);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.rank-emblem .re-shield {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 25px;
+  clip-path: polygon(50% 0, 100% 16%, 100% 58%, 50% 100%, 0 58%, 0 16%);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rank) 55%, #fff) 0%, var(--rank) 55%, color-mix(in srgb, var(--rank) 70%, #000) 100%);
+  color: #17273e;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+.rank-emblem.rank-0 .re-shield {
+  background: linear-gradient(160deg, #e7eaee, #b9c1cb);
+  color: #5a6577;
+}
+.rank-emblem.rank-5 .re-shield {
+  background: conic-gradient(from 210deg, #ff8ee0, #ffd36a, #7ff3ff, #b994ff, #ff8ee0);
+}
+.rank-emblem.is-lg .re-shield {
+  width: 58px;
+  height: 66px;
+  font-size: 1.7rem;
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.12);
+}
+.rank-emblem.is-lg {
+  filter: drop-shadow(0 6px 10px rgba(23, 39, 62, 0.25));
+}
+.rank-emblem.rank-5.is-lg {
+  animation: rank-glow 2.4s ease-in-out infinite;
+}
+@keyframes rank-glow {
+  50% {
+    filter: drop-shadow(0 0 14px rgba(255, 142, 224, 0.7));
+  }
+}
+
+/* Chassis buttons: mastery level next to the name. */
+.chassis-btn {
+  position: relative;
+}
+/* Corner badge so the chassis name keeps its full width. */
+.chassis-btn .cb-mastery {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px 1px 2px;
+  border-radius: 999px;
+  background: var(--navy-deep);
+  box-shadow: 0 0 0 2px var(--card);
+}
+.chassis-btn .cb-mastery .re-shield {
+  width: 16px;
+  height: 18px;
+  font-size: 0.56rem;
+}
+.chassis-btn .cb-mastery small {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Garage tabs above the detail card. */
+.garage-tabs {
+  margin: 4px 0 8px;
+}
+.garage-tabs .tabs {
+  display: flex;
+}
+.garage-tabs .tab {
+  flex: 1;
+  justify-content: center;
+  min-height: 44px;
+}
+.chassis-detail.is-mastery {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  border: 0;
+  display: block;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The mastery view card. */
+.mastery-view {
+  display: grid;
+  gap: 10px;
+  color: var(--text);
+  background: var(--card);
+}
+.mastery-view .mv-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'emb title' 'emb xp';
+  gap: 4px 14px;
+  align-items: center;
+}
+.mastery-view .rank-emblem {
+  grid-area: emb;
+}
+.mv-title {
+  grid-area: title;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.mv-title .label-caps {
+  width: 100%;
+  color: var(--muted);
+}
+.mv-rank {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 1.45rem;
+  text-transform: uppercase;
+  color: var(--text);
+  text-shadow: 0 2px 0 color-mix(in srgb, var(--rank) 45%, transparent);
+}
+.mv-level {
+  font-weight: 800;
+  color: var(--violet-ink);
+}
+.mv-xp {
+  grid-area: xp;
+  display: grid;
+  gap: 4px;
+}
+.mv-xp small {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mv-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ivory-2);
+  color: var(--text);
+  font-weight: 700;
+}
+.mv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 10px;
+}
+.mv-next,
+.mv-sig {
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.mv-next {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(180deg, var(--gold-soft), #fff6dd);
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px rgba(244, 200, 75, 0.5);
+}
+.mv-next .label-caps {
+  display: block;
+  color: var(--gold-ink);
+}
+.mv-next b {
+  font-size: 1rem;
+}
+.mv-sig {
+  background: var(--violet-tint);
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--violet-soft);
+}
+.mv-sig-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--violet-ink);
+}
+.mv-sig p {
+  margin: 3px 0 5px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.mv-sig-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mv-sig-list .chip {
+  background: #fff;
+  color: var(--violet-ink);
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+
+/* Reward track: scrolls sideways; claimed, next and locked states; rank colour on each node. */
+.mv-track {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 18px 4px 8px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.mv-node {
+  --rank: var(--silver);
+  position: relative;
+  flex: none;
+  width: 86px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 16px 6px 7px;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--line), 0 3px 0 var(--line);
+  scroll-snap-align: center;
+  text-align: center;
+}
+.mv-node::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 6px;
+  border-radius: 14px 14px 0 0;
+  background: var(--rank);
+}
+.mv-node small {
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  min-height: 2.3em;
+  overflow-wrap: anywhere;
+}
+.mv-lvl {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.78rem;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 2px #fff;
+}
+.mv-rank-tag {
+  position: absolute;
+  top: -18px;
+  left: 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--rank) 55%, #17273e);
+  display: none;
+}
+.mv-node.is-claimed {
+  background: var(--green-soft);
+  box-shadow: inset 0 0 0 2px rgba(47, 181, 122, 0.35);
+}
+.mv-node.is-claimed .mv-lvl {
+  background: var(--green);
+}
+.mv-node.is-next {
+  background: var(--violet-tint);
+  box-shadow: inset 0 0 0 3px var(--violet), 0 6px 14px rgba(113, 73, 212, 0.25);
+  transform: translateY(-3px);
+}
+.mv-node.is-next .mv-lvl {
+  background: var(--violet-strong);
+}
+.mv-node.is-locked .rw-thumb {
+  opacity: 0.55;
+}
+.mv-state {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--green-ink);
+}
+.mv-state:empty {
+  display: none;
+}
+.mt-credits {
+  color: var(--gold-d);
+}
+.mt-pick {
+  color: var(--violet-strong);
+}
+.mv-foot {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+/* Progress: open a chassis' mastery in the Garage. */
+.mm-card {
+  cursor: pointer;
+}
+.mm-card:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: 2px;
+}
+.mastery-row .mr-open {
+  align-self: center;
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+@media (max-width: 600px) {
+  .mv-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rank-emblem.is-lg .re-shield {
+    width: 46px;
+    height: 52px;
+    font-size: 1.35rem;
+  }
+  .mv-rank {
+    font-size: 1.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rank-emblem.rank-5.is-lg {
+    animation: none;
+  }
+}
+.reduced-motion .rank-emblem.rank-5.is-lg {
+  animation: none;
+}
+
+/* Compact laptops: tighter mastery card so the reward track fits under the stats. */
+@media (max-height: 820px) and (min-width: 901px) {
+  .mastery-view {
+    padding: 12px 14px;
+  }
+  .rank-emblem.is-lg .re-shield {
+    width: 48px;
+    height: 54px;
+    font-size: 1.4rem;
+  }
+  .mv-rank {
+    font-size: 1.25rem;
+  }
+  .mv-node {
+    width: 78px;
+  }
+  .mv-node .rw-thumb {
+    width: 36px;
+    height: 36px;
+  }
+  .mv-foot {
+    display: none;
+  }
+}

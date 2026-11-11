@@ -146,6 +146,8 @@ export interface MasteryStep {
   gained: number;
   levelBefore: number;
   levelAfter: number;
+  /** Part of `gained` that came from the chassis signature bonus (0 for older records). */
+  signature?: number;
 }
 
 /** What a commit moved besides the reward lines: shown on result screens, never used to pay. */
@@ -393,7 +395,7 @@ function sanitizeReport(raw: unknown): ProgressReport {
   let mastery: MasteryStep | null = null;
   if (isObj(raw.mastery) && typeof raw.mastery.chassis === 'string' && Object.hasOwn(CHASSIS, raw.mastery.chassis)) {
     const m = raw.mastery;
-    mastery = { chassis: m.chassis as ChassisId, gained: int(m.gained, 0, 99999, 0), levelBefore: int(m.levelBefore, 0, MASTERY_MAX, 0), levelAfter: int(m.levelAfter, 0, MASTERY_MAX, 0) };
+    mastery = { chassis: m.chassis as ChassisId, gained: int(m.gained, 0, 99999, 0), levelBefore: int(m.levelBefore, 0, MASTERY_MAX, 0), levelAfter: int(m.levelAfter, 0, MASTERY_MAX, 0), signature: int(m.signature, 0, 99999, 0) };
   }
   return { objectives, achievements, mastery, levelBefore: int(raw.levelBefore, 0, 100000, 0), levelAfter: int(raw.levelAfter, 0, 100000, 0) };
 }

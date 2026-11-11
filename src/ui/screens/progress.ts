@@ -144,7 +144,7 @@ function masteryMini(app: App): HTMLElement {
     h('ul', { class: 'mm-grid' }, CHASSIS_ORDER.map((id) => {
       const owned = save.owned.includes(`chassis:${id}`);
       const mp = masteryProgress(save.progress.mastery[id] ?? 0);
-      return h('li', { class: `mm-card${save.club.chassis === id ? ' is-equipped' : ''}${owned ? '' : ' is-locked'}`, title: owned ? `${CHASSIS[id].name}: mastery ${mp.level} of ${MASTERY_MAX}` : `${CHASSIS[id].name}: locked` },
+      return h('li', { class: `mm-card${save.club.chassis === id ? ' is-equipped' : ''}${owned ? '' : ' is-locked'}`, title: owned ? `${CHASSIS[id].name}: mastery ${mp.level} of ${MASTERY_MAX}. Open in the Garage` : `${CHASSIS[id].name}: locked`, role: 'button', tabindex: '0', onclick: () => app.navigate(`garage?c=${id}&tab=mastery`), onkeydown: (e: Event) => { const k = (e as KeyboardEvent).key; if (k === 'Enter' || k === ' ') { e.preventDefault(); app.navigate(`garage?c=${id}&tab=mastery`); } } },
         h('b', null, CHASSIS[id].name),
         h('span', { class: 'mm-icon' }, icon(owned ? CHASSIS_ICON[id] : 'lock')),
         h('small', null, `${mp.level} / ${MASTERY_MAX}`),
@@ -172,12 +172,13 @@ function masteryPanel(app: App): HTMLElement {
         meter(mp.frac, `${c.name} mastery`, 'teal', Math.round(mp.frac * 100)),
         h('p', { class: 'muted' }, !owned ? `Locked: free at club level ${c.unlockLevel} or in the Garage.` : mp.max ? 'Mastered. Every reward collected.' : `Next: ${describeMasteryReward(next!)} · ${mp.to - (save.progress.mastery[id] ?? 0)} XP to go`),
       ),
+      h('button', { class: 'btn btn-small mr-open', type: 'button', onclick: () => app.navigate(`garage?c=${id}&tab=mastery`), 'aria-label': `Open ${c.name} mastery in the Garage` }, 'Rewards', icon('next')),
     );
   });
   return h('section', { class: 'panel mastery-panel', 'aria-labelledby': 'mas-h' },
     cardHead('garage', 'Chassis mastery', `${totalMasteryLevels(save)} / ${CHASSIS_ORDER.length * MASTERY_MAX} levels`, 'mas-h'),
     h('ul', { class: 'mastery-list' }, rows),
-    h('p', { class: 'muted' }, 'The chassis your robot uses earns the match XP as mastery. Rewards are cosmetic: mastery never changes how a chassis plays.'),
+    h('p', { class: 'muted' }, 'The chassis your robot uses earns the match XP as mastery, plus a signature bonus for playing to its strengths. See every reward in the Garage. Rewards are cosmetic: mastery never changes how a chassis plays.'),
   );
 }
 

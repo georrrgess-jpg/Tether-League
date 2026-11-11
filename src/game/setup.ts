@@ -1,3 +1,5 @@
+import { masteryRank } from '../content/progression';
+import { masteryLevel } from '../progression/mastery';
 import { nextPlayerMatch, type NextMatch } from '../career/career';
 import type { ArenaId } from '../content/arenas';
 import type { ChassisId } from '../content/chassis';
@@ -22,9 +24,10 @@ export function playerLooks(save: SaveGame): [RobotLook, RobotLook] {
     celebration: c.celebration,
     topper: c.topper,
   };
+  const rank = (id: ChassisId) => masteryRank(masteryLevel(save.progress.mastery[id] ?? 0));
   return [
-    { ...base, chassis: c.chassis, number: c.numbers[0] },
-    { ...base, chassis: c.mateChassis, number: c.numbers[1] },
+    { ...base, chassis: c.chassis, number: c.numbers[0], mastery: rank(c.chassis) },
+    { ...base, chassis: c.mateChassis, number: c.numbers[1], mastery: rank(c.mateChassis) },
   ];
 }
 

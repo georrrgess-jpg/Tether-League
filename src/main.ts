@@ -8,6 +8,7 @@ import './ui/styles/shell.css';
 import './ui/styles/screens.css';
 import './ui/styles/responsive.css';
 import './ui/styles/hud.css';
+import './ui/styles/mastery.css';
 import { App } from './app';
 
 function boot(): void {

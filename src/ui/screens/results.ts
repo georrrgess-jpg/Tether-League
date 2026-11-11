@@ -39,7 +39,7 @@ export function progressSummary(app: App, report: ProgressReport, title = 'Progr
   if (m && m.gained > 0) {
     const mp = masteryProgress(app.save.progress.mastery[m.chassis] ?? 0);
     items.push(h('li', { class: m.levelAfter > m.levelBefore ? 'ps-done' : '' }, icon('garage'),
-      h('div', null, h('b', null, `${CHASSIS[m.chassis].name} mastery +${m.gained}`), h('span', null, m.levelAfter > m.levelBefore ? `Mastery level ${m.levelAfter} of ${MASTERY_MAX}` : `Level ${m.levelAfter} of ${MASTERY_MAX}`)),
+      h('div', null, h('b', null, `${CHASSIS[m.chassis].name} mastery +${m.gained}`), h('span', null, `${m.levelAfter > m.levelBefore ? `Mastery level ${m.levelAfter} of ${MASTERY_MAX}` : `Level ${m.levelAfter} of ${MASTERY_MAX}`}${m.signature ? ` · signature +${m.signature}` : ''}`)),
       meter(mp.frac, `${CHASSIS[m.chassis].name} mastery`, 'teal'),
     ));
   }
