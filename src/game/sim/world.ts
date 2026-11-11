@@ -603,7 +603,8 @@ function tryKick(w: World, r: Robot): void {
   }
   const along = r.vx * ax + r.vz * az;
   const fwd = Math.max(0, along);
-  let speed = Math.min(K.speedCap, K.baseSpeed + K.forwardVelocityFactor * fwd);
+  const km = r.chassis.mod.kick;
+  let speed = Math.min(K.speedCap * km, K.baseSpeed * km + K.forwardVelocityFactor * fwd);
   // You cannot blast the ball back against your own run.
   const rs = Math.hypot(r.vx, r.vz);
   if (rs > 3 && along < -0.3 * rs) speed *= K.backwardPower;
@@ -613,7 +614,7 @@ function tryKick(w: World, r: Robot): void {
   const oneTouch =
     !mate && !rushed && assisted !== 'pass' && !!passer && passer.team === r.team && passer.id !== r.id &&
     w.tick - b.passTick <= K.oneTouchWindow * TUNING.sim.hz && ax * attackDir(r.team) > 0.2;
-  if (oneTouch) speed = Math.min(K.speedCap * K.oneTouchBonus, speed * K.oneTouchBonus);
+  if (oneTouch) speed = Math.min(K.speedCap * km * K.oneTouchBonus, speed * K.oneTouchBonus);
   speed = (banked ? speedLimit : Math.min(speed, speedLimit)) * r.kickPower;
   b.vx = ax * speed;
   b.vz = az * speed;
