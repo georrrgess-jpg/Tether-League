@@ -130,7 +130,7 @@
   padding: 3px 12px 4px;
   border-radius: 0 0 10px 10px;
   background: rgba(23, 39, 62, 0.94);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -277,7 +277,7 @@
   border-radius: 9px 0 0 9px;
   background: rgba(23, 39, 62, 0.92);
   color: #fff;
-  font: 800 0.72rem/1.3 var(--font-body);
+  font: 800 0.82rem/1.3 var(--font-body);
   white-space: nowrap;
 }
 .hud-you > span {
@@ -289,7 +289,7 @@
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 800;
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   line-height: 1.3;
   text-transform: uppercase;
   white-space: nowrap;
@@ -601,104 +601,250 @@
   white-space: pre;
 }
 
-/* ---------- touch controls ---------- */
-.touch-ui {
+/* ---------- touch controls ----------
+ * Sizes follow the short side of the screen (vmin) so phones in either orientation and tablets all get
+ * thumb-sized controls, times the player's "Touch control size". KICK (primary) sits in the corner under
+ * the thumb's pivot; SWING sits on the arc to its left and PASS above it, with a fixed gap between them.
+ * The stick rests in the opposite corner. Everything is offset by the safe-area insets. */
+.play-layer,
+.touch-preview {
   --touch-scale: 1;
+  --tm: 14px; /* margin from the safe edge */
+  --tg: 12px; /* gap between buttons */
+  --tk: min(calc(clamp(76px, 24vmin, 118px) * var(--touch-scale)), 27vw, 30vh); /* KICK */
+  --ts: calc(var(--tk) * 0.88); /* SWING */
+  --tp: max(48px, calc(var(--tk) * 0.7)); /* PASS */
+  --tt: min(calc(clamp(108px, 30vmin, 150px) * var(--touch-scale)), 34vw, 40vh); /* stick */
+  /* centre-to-centre distances from KICK, and the derived top of the button cluster */
+  --d-ks: calc(var(--tk) / 2 + var(--ts) / 2 + var(--tg));
+  --d-kp: calc(var(--tk) / 2 + var(--tp) / 2 + var(--tg));
+  --t-top: calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-kp) * 0.985 + var(--tp) / 2);
+}
+.touch-ui {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 .stick-base {
+  --dir: 0deg;
   position: fixed;
-  left: calc(110px + var(--safe-l));
-  top: calc(100% - 120px - var(--safe-b));
-  width: calc(124px * var(--touch-scale));
-  height: calc(124px * var(--touch-scale));
-  margin: calc(-62px * var(--touch-scale)) 0 0 calc(-62px * var(--touch-scale));
+  left: calc(var(--tm) + 6px + var(--safe-l) + var(--tt) / 2);
+  top: calc(100% - var(--tm) - 6px - var(--safe-b) - var(--tt) / 2);
+  width: var(--tt);
+  height: var(--tt);
+  margin: calc(var(--tt) / -2) 0 0 calc(var(--tt) / -2);
   border-radius: 50%;
-  background: rgba(23, 39, 62, 0.28);
-  border: 3px solid rgba(255, 255, 255, 0.5);
+  background: radial-gradient(circle, rgba(23, 39, 62, 0.18) 0 30%, rgba(23, 39, 62, 0.34) 70%);
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 14px rgba(10, 22, 40, 0.25);
   display: grid;
   place-items: center;
-  opacity: 0.55;
-  transition: opacity 0.15s;
+  opacity: 0.78;
+  transition: opacity 0.2s ease, border-color 0.15s ease;
 }
 .touch-ui.swap .stick-base {
-  left: calc(100% - 110px - var(--safe-r));
+  left: calc(100% - var(--tm) - 6px - var(--safe-r) - var(--tt) / 2);
+}
+.stick-base > * {
+  grid-area: 1 / 1;
+}
+.stick-chev {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 0.15s ease;
+}
+/* direction arc on the rim, shown while steering outside the dead zone */
+.stick-dir {
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  border-radius: 50%;
+  background: conic-gradient(from calc(var(--dir) + 90deg - 32deg), var(--gold) 0 64deg, transparent 64deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
 .stick-base.is-down {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.9);
+}
+.stick-base.is-down .stick-chev {
+  opacity: 0.35;
+}
+.stick-base.is-steer .stick-dir {
   opacity: 1;
 }
 .stick-knob {
   width: 46%;
   height: 46%;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  background: radial-gradient(circle at 40% 35%, #ffffff, rgba(232, 236, 243, 0.95));
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 -3px 0 rgba(23, 39, 62, 0.12);
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+.stick-base.is-steer .stick-knob {
+  background: radial-gradient(circle at 40% 35%, #fff6d6, var(--gold));
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(244, 200, 75, 0.35);
 }
 .tbtn {
+  --c: 244, 138, 44;
   position: absolute;
   pointer-events: auto;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   border-radius: 50%;
   display: grid;
   place-items: center;
   align-content: center;
+  gap: 1px;
   color: #fff;
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 800;
   text-align: center;
-  border: 3px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 6px 14px rgba(10, 22, 40, 0.4);
+  text-shadow: 0 1px 2px rgba(10, 22, 40, 0.45);
+  background: radial-gradient(circle at 50% 30%, rgba(var(--c), 0.78), rgba(var(--c), 0.62) 70%);
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 6px 14px rgba(10, 22, 40, 0.38);
   line-height: 1.05;
+  opacity: 0.9;
+  transition: transform 80ms ease, opacity 0.25s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.tbtn > span,
+.tbtn > small {
+  position: relative;
 }
 .tbtn small {
   font-family: var(--font-body);
   font-style: normal;
-  font-size: 0.6rem;
+  font-size: max(11px, calc(var(--tk) * 0.12));
   font-weight: 800;
-  opacity: 0.85;
+  opacity: 0.92;
 }
 .tbtn-kick {
-  right: calc(22px + var(--safe-r));
-  bottom: calc(26px + var(--safe-b));
-  width: calc(104px * var(--touch-scale));
-  height: calc(104px * var(--touch-scale));
-  background: rgba(244, 138, 44, 0.62);
-  font-size: calc(1.15rem * var(--touch-scale));
+  --c: 244, 138, 44;
+  right: calc(var(--tm) + var(--safe-r));
+  bottom: calc(var(--tm) + var(--safe-b));
+  width: var(--tk);
+  height: var(--tk);
+  font-size: calc(var(--tk) * 0.2);
 }
 .tbtn-tether {
-  right: calc(134px * var(--touch-scale) + var(--safe-r));
-  bottom: calc(92px * var(--touch-scale) + var(--safe-b));
-  width: calc(88px * var(--touch-scale));
-  height: calc(88px * var(--touch-scale));
-  background: rgba(18, 188, 210, 0.62);
-  font-size: calc(0.9rem * var(--touch-scale));
+  --c: 18, 188, 210;
+  right: calc(var(--tm) + var(--safe-r) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--ts) / 2);
+  bottom: calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-ks) * 0.259 - var(--ts) / 2);
+  width: var(--ts);
+  height: var(--ts);
+  font-size: calc(var(--ts) * 0.19);
 }
 .tbtn-pass {
-  right: calc(30px * var(--touch-scale) + var(--safe-r));
-  bottom: calc(150px * var(--touch-scale) + var(--safe-b));
-  width: calc(74px * var(--touch-scale));
-  height: calc(74px * var(--touch-scale));
-  background: rgba(81, 201, 152, 0.62);
-  font-size: calc(0.85rem * var(--touch-scale));
+  --c: 47, 181, 122;
+  --charge: 0;
+  --ideal: 0;
+  right: calc(var(--tm) + var(--safe-r) + var(--tk) / 2 + var(--d-kp) * 0.17 - var(--tp) / 2);
+  bottom: calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-kp) * 0.985 - var(--tp) / 2);
+  width: var(--tp);
+  height: var(--tp);
+  font-size: calc(var(--tp) * 0.22);
 }
-.touch-ui.swap .tbtn-pass {
-  right: auto;
-  left: calc(30px * var(--touch-scale) + var(--safe-l));
+.tbtn-pass small {
+  font-size: max(11px, calc(var(--tp) * 0.15));
 }
 .touch-ui.swap .tbtn-kick {
   right: auto;
-  left: calc(22px + var(--safe-l));
+  left: calc(var(--tm) + var(--safe-l));
 }
 .touch-ui.swap .tbtn-tether {
   right: auto;
-  left: calc(134px * var(--touch-scale) + var(--safe-l));
+  left: calc(var(--tm) + var(--safe-l) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--ts) / 2);
 }
+.touch-ui.swap .tbtn-pass {
+  right: auto;
+  left: calc(var(--tm) + var(--safe-l) + var(--tk) / 2 + var(--d-kp) * 0.17 - var(--tp) / 2);
+}
+/* pressed: pushed in, brighter, with a glow ring in the button's colour */
 .tbtn.is-down {
+  opacity: 1;
   transform: scale(0.93);
-  filter: brightness(1.2);
+  filter: brightness(1.15);
+  border-color: #fff;
+  box-shadow: 0 0 0 5px rgba(var(--c), 0.45), 0 0 22px 4px rgba(var(--c), 0.55), 0 3px 8px rgba(10, 22, 40, 0.35);
+}
+/* long-ball charge on PASS: a ring that fills clockwise, with a gold notch at the ideal charge */
+.tb-charge {
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(#ffffff calc(var(--charge) * 360deg), rgba(10, 22, 40, 0.35) 0);
+  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.tbtn-pass.has-ideal .tb-charge {
+  background:
+    conic-gradient(from calc(var(--ideal) * 360deg - 6deg), var(--gold) 0 12deg, transparent 12deg),
+    conic-gradient(#ffffff calc(var(--charge) * 360deg), rgba(10, 22, 40, 0.35) 0);
+}
+.tbtn-pass.is-charging .tb-charge {
+  opacity: 1;
+}
+.tbtn-pass.in-window .tb-charge {
+  background:
+    conic-gradient(from calc(var(--ideal) * 360deg - 6deg), #fff 0 12deg, transparent 12deg),
+    conic-gradient(var(--gold) calc(var(--charge) * 360deg), rgba(10, 22, 40, 0.35) 0);
+}
+/* left alone for a few seconds, the controls step back so the pitch reads clearly */
+.touch-ui.is-idle .tbtn {
+  opacity: 0.55;
+}
+.touch-ui.is-idle .stick-base:not(.is-down) {
+  opacity: 0.5;
+}
+/* touch play: hint, coach card and toasts stay near the top, never under the thumbs */
+.play-layer.has-touch .hint {
+  bottom: auto;
+  top: calc(96px + var(--safe-t));
+  transform: translate(-50%, 0);
+  max-width: min(92vw - var(--safe-l) - var(--safe-r), 560px);
+}
+.play-layer.has-touch .coach {
+  bottom: auto;
+  top: calc(70px + var(--safe-t));
+  width: min(70vw, 560px);
+}
+.play-layer.has-touch .toasts {
+  top: calc(156px + var(--safe-t));
+}
+@media (max-width: 760px), (max-height: 480px) {
+  .play-layer.has-touch .hint {
+    top: calc(62px + var(--safe-t));
+  }
+  .play-layer.has-touch .coach {
+    top: calc(58px + var(--safe-t));
+  }
+  .play-layer.has-touch .toasts {
+    top: calc(120px + var(--safe-t));
+  }
+}
+/* short landscape: toasts use the free strip between the stick and the buttons */
+@media (max-height: 480px) and (orientation: landscape) {
+  .play-layer.has-touch .toasts {
+    top: auto;
+    bottom: calc(18px + var(--safe-b));
+  }
+}
+.play-layer.has-touch .hud-legend,
+.play-layer.has-touch .hud-arena {
+  display: none;
 }
 
 @media (max-width: 760px), (max-height: 480px) {
@@ -730,8 +876,9 @@
     display: none;
   }
   .hud-pause {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
   }
   .hint {
     font-size: 0.82rem;
@@ -774,12 +921,12 @@
 
 /* Portrait play is supported but small: suggest rotating without blocking anything. */
 @media (orientation: portrait) and (max-width: 700px) {
-  .play-layer::after {
+  .play-layer.tip-rotate::after {
     content: 'Tip: turn your device sideways for a bigger pitch';
     position: absolute;
     left: 50%;
     /* sits above the touch controls, clear of the hint, coach card and toasts near the top */
-    bottom: calc(222px * var(--touch-scale, 1) + var(--safe-b));
+    bottom: calc(var(--t-top) + 14px);
     transform: translateX(-50%);
     animation: tip-life 10s 1.5s ease forwards;
     opacity: 0;
@@ -787,7 +934,7 @@
     border-radius: 999px;
     background: rgba(23, 39, 62, 0.8);
     color: var(--on-dark);
-    font-size: 0.74rem;
+    font-size: 0.82rem;
     font-weight: 800;
     white-space: nowrap;
     pointer-events: none;
@@ -806,48 +953,9 @@
     opacity: 0;
   }
 }
-.reduced-motion .play-layer::after {
+.reduced-motion .play-layer.tip-rotate::after {
   animation: none;
   opacity: 1;
-}
-
-/* Narrow portrait phones (360-430 px): the action buttons stack up the right edge so none of
-   them reaches the movement stick on the left. */
-@media (orientation: portrait) and (max-width: 520px) {
-  .stick-base {
-    left: calc(92px + var(--safe-l));
-    top: calc(100% - 124px - var(--safe-b));
-  }
-  .touch-ui.swap .stick-base {
-    left: calc(100% - 92px - var(--safe-r));
-  }
-  .tbtn-kick {
-    right: calc(16px + var(--safe-r));
-    bottom: calc(24px + var(--safe-b));
-    width: calc(96px * var(--touch-scale));
-    height: calc(96px * var(--touch-scale));
-  }
-  .tbtn-tether {
-    right: calc(16px + 88px * var(--touch-scale) + var(--safe-r));
-    bottom: calc(24px + 88px * var(--touch-scale) + var(--safe-b));
-    width: calc(84px * var(--touch-scale));
-    height: calc(84px * var(--touch-scale));
-  }
-  .tbtn-pass {
-    right: calc(16px + 10px * var(--touch-scale) + var(--safe-r));
-    bottom: calc(24px + 118px * var(--touch-scale) + var(--safe-b));
-    width: calc(74px * var(--touch-scale));
-    height: calc(74px * var(--touch-scale));
-  }
-  .touch-ui.swap .tbtn-kick {
-    left: calc(16px + var(--safe-l));
-  }
-  .touch-ui.swap .tbtn-tether {
-    left: calc(16px + 88px * var(--touch-scale) + var(--safe-l));
-  }
-  .touch-ui.swap .tbtn-pass {
-    left: calc(16px + 10px * var(--touch-scale) + var(--safe-l));
-  }
 }
 
 /* ---------- goal celebration ---------- */
@@ -958,4 +1066,111 @@
 }
 .hint {
   backdrop-filter: blur(4px);
+}
+
+/* Settings > Controls: a sketch of the touch controls at four-fifths size, following the size slider. */
+.touch-preview {
+  --safe-b: 0px;
+  --safe-l: 0px;
+  --safe-r: 0px;
+  --tk: calc(min(calc(clamp(76px, 24vmin, 118px) * var(--touch-scale)), 27vw, 30vh) * 0.8);
+  --tt: calc(min(calc(clamp(108px, 30vmin, 150px) * var(--touch-scale)), 34vw, 40vh) * 0.8);
+  --tm: 10px;
+  position: relative;
+  height: calc(var(--t-top) + 6px);
+  min-height: calc(var(--tt) + 2 * var(--tm));
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #4fa9d3, #2f8fbf);
+  box-shadow: inset 0 0 0 1px rgba(23, 39, 62, 0.12);
+}
+.touch-preview i {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  color: #fff;
+  font: italic 800 max(12px, calc(var(--tk) * 0.2)) / 1 var(--font-display);
+  text-shadow: 0 1px 2px rgba(10, 22, 40, 0.45);
+}
+.tp-stick i {
+  left: var(--tm);
+  bottom: var(--tm);
+  width: var(--tt);
+  height: var(--tt);
+  background: radial-gradient(circle, #fff 0 22%, rgba(23, 39, 62, 0.25) 23%);
+}
+.tp-kick {
+  right: var(--tm);
+  bottom: var(--tm);
+  width: var(--tk);
+  height: var(--tk);
+  background: rgba(244, 138, 44, 0.85);
+}
+.tp-swing {
+  right: calc(var(--tm) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--ts) / 2);
+  bottom: calc(var(--tm) + var(--tk) / 2 + var(--d-ks) * 0.259 - var(--ts) / 2);
+  width: var(--ts);
+  height: var(--ts);
+  font-size: max(12px, calc(var(--ts) * 0.19)) !important;
+  background: rgba(18, 188, 210, 0.85);
+}
+.tp-pass {
+  right: calc(var(--tm) + var(--tk) / 2 + var(--d-kp) * 0.17 - var(--tp) / 2);
+  bottom: calc(var(--tm) + var(--tk) / 2 + var(--d-kp) * 0.985 - var(--tp) / 2);
+  width: var(--tp);
+  height: var(--tp);
+  font-size: max(12px, calc(var(--tp) * 0.22)) !important;
+  background: rgba(47, 181, 122, 0.85);
+}
+.touch-preview.swap .tp-stick i {
+  left: auto;
+  right: var(--tm);
+}
+.touch-preview.swap .tp-kick {
+  right: auto;
+  left: var(--tm);
+}
+.touch-preview.swap .tp-swing {
+  right: auto;
+  left: calc(var(--tm) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--ts) / 2);
+}
+.touch-preview.swap .tp-pass {
+  right: auto;
+  left: calc(var(--tm) + var(--tk) / 2 + var(--d-kp) * 0.17 - var(--tp) / 2);
+}
+
+/* phones: pause actions as an even two-column grid of large buttons, Resume across the top */
+@media (max-width: 600px) {
+  .pause-actions .btn {
+    flex: 1 1 calc(50% - 5px);
+    min-height: 48px;
+  }
+  .pause-actions .btn-primary {
+    flex-basis: 100%;
+    min-height: 54px;
+  }
+}
+/* very narrow phones: the score pill drops the club badges so the clock never collides with the scores,
+   and PASS keeps just its name (the pause card explains hold for a long ball) */
+@media (max-width: 360px) {
+  .scorebar .badge {
+    display: none;
+  }
+  .scorebar .clock {
+    min-width: 62px;
+    padding: 0 6px;
+  }
+  .scorebar .team {
+    padding: 0 3px;
+  }
+}
+@media (max-width: 380px), (max-height: 380px) {
+  .tbtn-pass small {
+    display: none;
+  }
+}
+.tbtn small {
+  white-space: nowrap;
 }

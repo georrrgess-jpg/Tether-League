@@ -37,6 +37,8 @@ export interface Settings {
   showHints: boolean;
   touchScale: number;
   touchSwap: boolean;
+  /** Short vibrations on touch-control presses (only where the device supports it). */
+  vibration: boolean;
   /** Two key codes (KeyboardEvent.code) per action; empty string = unbound. */
   keys: Record<Action, [string, string]>;
 }
@@ -76,6 +78,7 @@ export function defaultSettings(): Settings {
     showHints: true,
     touchScale: 1,
     touchSwap: false,
+    vibration: true,
     keys: defaultKeys(),
   };
 }
@@ -126,6 +129,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     showHints: bool(r.showHints, d.showHints),
     touchScale: num(r.touchScale, 0.7, 1.5, d.touchScale),
     touchSwap: bool(r.touchSwap, d.touchSwap),
+    vibration: bool(r.vibration, d.vibration),
     keys,
   };
 }

@@ -795,3 +795,97 @@ p {
   background: #0c1626;
   box-shadow: var(--shadow), inset 0 0 0 2px #fff;
 }
+
+/* =====================================================================
+ * Touch ergonomics (phones and tablets)
+ * ===================================================================== */
+/* no double-tap zoom delay on anything tappable */
+button,
+a,
+label,
+summary,
+select,
+.btn,
+[role='tab'],
+[role='button'],
+[role='option'] {
+  touch-action: manipulation;
+}
+/* game UI: no long-press callouts or accidental text selection; fields stay editable and selectable */
+#app {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#app input,
+#app textarea,
+#app select,
+#app [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* momentum scrolling and contained overscroll in every scrolling panel */
+.content,
+.dialog,
+.pause-panel,
+.tabs {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+@media (pointer: coarse) {
+  /* 16px or more stops iOS zooming the page when a field is focused */
+  .text-input,
+  .select,
+  .save-code,
+  #app input:not([type='range']):not([type='checkbox']):not([type='radio']),
+  #app textarea,
+  #app select {
+    font-size: max(16px, 1rem);
+  }
+  /* every tap target at least 44px on touch screens (#app outranks the compact-layout rules) */
+  #app input[type='range'],
+  #app .tab,
+  #app .key,
+  #app .link-btn,
+  #app .swatch,
+  #app .gc-obj,
+  #app .gc-main,
+  #app .view-all,
+  #app .btn,
+  #app .seg button,
+  #app .club-chip {
+    min-height: 44px;
+  }
+  #app .back-btn {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+/* Touch screens keep :hover after a tap ("sticky hover"): drop the lift effects so a tapped card does
+   not stay raised. Pressed (:active) feedback is unchanged. */
+@media (hover: none) {
+  .btn:hover:not(:active),
+  .btn:hover .icon,
+  .swatch:hover:not([disabled]):not(:active),
+  .badge-pick:hover:not(:active),
+  .home-tile:hover:not(:active),
+  .home-tile:hover .ht-go,
+  .gc-main:hover > .icon,
+  .trophy-card:hover:not(:active),
+  .mode-card:not(.is-future):hover:not(:active),
+  .arena-card:hover:not(:active),
+  .item:hover:not(:active),
+  .chassis-btn:hover:not(:active),
+  .back-btn:hover:not(:active) {
+    transform: none;
+  }
+  .nav-btn:hover:not(.is-active) {
+    background: transparent;
+    color: #e6e3ee;
+  }
+  .tab:hover:not(.is-active) {
+    background: transparent;
+  }
+}

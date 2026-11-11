@@ -2,6 +2,7 @@ import { audio } from '../audio/audio';
 import type { RobotLook } from '../content/cosmetics';
 import { DT, TUNING } from '../content/tuning';
 import { keyLabel, type Settings } from '../storage/settings';
+import { fullscreenAvailable, isFullscreen, screenWake, toggleFullscreen } from '../ui/device';
 import { h, icon } from '../ui/dom';
 import { InputManager } from './input/input';
 import type { Gfx } from './render/gfx';
@@ -58,6 +59,9 @@ export interface SessionOptions {
   music?: boolean;
 }
 
+/** The "turn sideways" tip is shown on the first match of a visit only (portrait phones, CSS-gated). */
+let rotateTipShown = false;
+
 export class PlaySession {
   readonly layer: HTMLElement;
   readonly view: MatchView;
@@ -97,7 +101,8 @@ export class PlaySession {
 
   constructor(private ctx: PlayContext, readonly mode: PlayMode, private opts: SessionOptions) {
     const s = ctx.settings();
-    this.layer = h('div', { class: 'play-layer' });
+    this.layer = h('div', { class: `play-layer${rotateTipShown ? '' : ' tip-rotate'}` });
+    rotateTipShown = true;
     const pauseBtn = h('button', { class: 'hud-pause', 'aria-label': 'Pause', onclick: () => this.pause() }, icon('pause'));
     this.layer.append(mode.hud, pauseBtn);
     ctx.host.appendChild(this.layer);
@@ -130,18 +135,21 @@ export class PlaySession {
     if (this.opts.music !== false) audio.startMusic('match');
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.loop);
+    screenWake.hold();
   }
 
   stop(): void {
     if (!this.running) return;
     this.running = false;
     cancelAnimationFrame(this.raf);
+    screenWake.release();
     this.input.detach();
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKey);
     document.removeEventListener('visibilitychange', this.onVis);
     window.removeEventListener('blur', this.onBlur);
     audio.setTetherHum(false);
+    audio.charge(null);
     audio.setCrowd(0);
     audio.setMusicIntensity(0);
     this.mode.dispose();
@@ -163,6 +171,7 @@ export class PlaySession {
     if (this.paused || this.finished || !this.running) return;
     this.paused = true;
     this.pausedAt = performance.now();
+    screenWake.release();
     // Safe release: no held input survives a pause, and detaching never adds an impulse.
     this.input.releaseAll();
     this.input.enabled = false;
@@ -175,6 +184,7 @@ export class PlaySession {
       r.tHeldPrev = false;
     }
     audio.setTetherHum(false);
+    audio.charge(null);
     this.hum = false;
     audio.suspend();
     this.showPause();
@@ -185,6 +195,7 @@ export class PlaySession {
     this.paused = false;
     this.pauseEl?.remove();
     this.pauseEl = null;
+    screenWake.hold();
     this.input.enabled = true;
     this.input.releaseAll();
     this.input.refreshBindings();
@@ -209,6 +220,14 @@ export class PlaySession {
       muteBtn.replaceChildren(icon(st.muted ? 'mute' : 'sound'), st.muted ? 'Sound off' : 'Sound on');
     } }, icon(s.muted ? 'mute' : 'sound'), s.muted ? 'Sound off' : 'Sound on');
 
+    // Fullscreen only where the browser allows it (not iPhone Safari, not frames without permission).
+    const fsLabel = () => [icon('grid'), isFullscreen() ? 'Exit full screen' : 'Full screen'];
+    const fsBtn = fullscreenAvailable()
+      ? h('button', { class: 'btn btn-ghost pause-fs', onclick: async () => {
+          await toggleFullscreen();
+          fsBtn?.replaceChildren(...fsLabel());
+        } }, ...fsLabel())
+      : null;
     const body = h('div', { class: 'pause-body' });
     const main = () => {
       body.replaceChildren(
@@ -216,18 +235,19 @@ export class PlaySession {
           h('button', { class: 'btn btn-primary', onclick: () => this.resume(), autofocus: true }, icon('play'), 'Resume'),
           this.opts.onRestart ? h('button', { class: 'btn', onclick: () => confirmView('restart') }, icon('retry'), this.opts.restartLabel ?? 'Restart') : null,
           muteBtn,
+          fsBtn,
           h('button', { class: 'btn btn-ghost', onclick: () => confirmView('leave') }, icon('home'), 'Leave'),
         ),
         touch
           ? h('div', { class: 'pause-controls' },
               h('h3', null, 'Touch controls'),
-              row('Move', 'Hold or drag the stick (bottom left)'),
+              row('Move', `Hold or drag the stick (bottom ${s.touchSwap ? 'right' : 'left'}), or press anywhere on that side`),
               row('SWING', 'Tap = auto launch, tap again = let go, hold = let go yourself'),
               row('KICK', 'Tap, or drag to aim (one tap per kick; mashing scuffs the shot)'),
               row('PASS', 'Tap (without the ball: call for it)'),
               row('Pause', 'II button'),
               h('h3', null, 'Plays'),
-              row('Long ball', 'Hold PASS, release to send it'),
+              row('Long ball', 'Hold PASS: its ring fills; let go on the gold notch'),
               row('Give-and-go', 'Tap PASS again after passing'),
               h('p', { class: 'muted' }, 'Walls are lively: bank passes and crosses off them. PASS bends round a blocked lane off the side wall, and a first-time shot off a teammate\'s pass is a one-touch strike. The Academy playbook explains every play.'),
             )
@@ -299,8 +319,19 @@ export class PlaySession {
     const hmn = this.mode.human;
     for (const e of w.events) {
       switch (e.type) {
-        case 'kick':
-          audio.play('kick', { intensity: 0.35 + Math.max(0, Math.min(1, e.power)) * 0.65, pan: w.ball.x / w.hx * 0.6 });
+        case 'kick': {
+          const power = Math.max(0, Math.min(1, e.power));
+          const pan = w.ball.x / w.hx * 0.6;
+          if (e.lob) {
+            audio.play('lob', { intensity: 0.4 + power * 0.6, pan });
+            if (e.perfect && e.robot === hmn) audio.play('perfect');
+          } else {
+            audio.play('kick', { intensity: 0.35 + power * 0.65, pan, heavy: (e.swing || e.oneTouch) && power > 0.5 });
+          }
+          break;
+        }
+        case 'land':
+          audio.play('land', { intensity: Math.min(1, e.speed / 12), pan: e.x / w.hx * 0.6 });
           break;
         case 'touch':
           if (e.speed > 1.2) audio.play('touch', { intensity: Math.min(1, e.speed / 9), pan: w.ball.x / w.hx * 0.6 });
@@ -335,7 +366,7 @@ export class PlaySession {
       if (on || this.hum) audio.setTetherHum(on, Math.hypot(r.vx, r.vz) / TUNING.tether.maxSpeed);
       this.hum = on;
       const cue = this.input.swing.cue;
-      if (cue && !this.cuePrev) audio.play('uiSelect', { intensity: 0.5 });
+      if (cue && !this.cuePrev) audio.play('cue', { intensity: 0.5 });
       this.cuePrev = cue;
     }
   }
@@ -393,6 +424,9 @@ export class PlaySession {
     mode.moods(this.moods, this.exprs);
     mode.frame(dt, this);
     const live = mode.inputLive() && !this.paused;
+    const lob = live && mode.human >= 0 ? this.lobFrame(w, mode.human) : null;
+    this.input.showCharge(lob ? lob.ideal : null);
+    audio.charge(lob ? lob.charge : null);
     this.view.render(w, {
       alpha: this.paused ? 1 : Math.min(1, this.acc / DT),
       dt: this.paused ? 0 : dt,
@@ -402,7 +436,7 @@ export class PlaySession {
       aimX: this.input.aimX,
       aimZ: this.input.aimZ,
       showAim: live && this.input.showAim,
-      lob: live && mode.human >= 0 ? this.lobFrame(w, mode.human) : null,
+      lob,
       moods: this.moods,
       expressions: this.exprs,
       human: mode.human,

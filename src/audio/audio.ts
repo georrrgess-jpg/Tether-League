@@ -1,84 +1,139 @@
 /**
  * Tether League audio.
  *
- * Every sound and every bar of music in this file is synthesized at runtime with the
- * WebAudio API (oscillators, one shared noise buffer, filters and gain envelopes).
- * It is original work: no samples, no third-party audio assets, no network access.
+ * Every sound and every bar of music is generated in code (WebAudio plus pre-rendered sample
+ * synthesis in dsp.ts): no audio files, no network, no third-party assets. The module is
+ * import-safe outside the browser: nothing touches WebAudio until unlock().
  *
- * Routing: sfx bus + music bus -> master gain -> compressor (limiter) -> destination.
- * The module is import-safe outside the browser: nothing touches WebAudio until unlock().
+ * Public API (all calls are cheap, never throw, and are silent no-ops before unlock()):
+ *
+ *   audio.unlock()                      Call from a user gesture. Creates/resumes the context; sample
+ *                                       banks then render in small chunks (music starts once ready).
+ *   audio.applySettings(s)              master / music / effects volume (0..1) and mute.
+ *   audio.play(name, { intensity, pan, heavy })
+ *                                       One-shot effect. intensity 0..1 (default 0.6), pan -1..1,
+ *                                       heavy = meatier swing-kick variant for 'kick'.
+ *   audio.charge(level | null)          Long-ball charge voice: one held voice whose pitch and
+ *                                       brightness glide with level 0..1; null releases it. Call every
+ *                                       frame while charging. A voice not refreshed for 0.3 s fades
+ *                                       out by itself, so a missed null cannot leave it stuck.
+ *                                       audio.play('lobCharge', { intensity }) is the same as charge(intensity).
+ *   audio.cheer(intensity)              Crowd swell with applause (whistles when big).
+ *   audio.setCrowd(level)               Stadium ambience bed (crowd murmur + room tone), 0 = off.
+ *   audio.setTetherHum(active, speed01) Rope tension + wind while swinging.
+ *   audio.startMusic('menu' | 'match')  Crossfades to a track (restarts the match track after an outro).
+ *   audio.stopMusic()
+ *   audio.setMusicIntensity(x)          Match music energy 0..1. Layers react per bar; also nudged by play.
+ *   audio.musicCue(cue)                 'goal' (fill + crash into the hook), 'concede' (filter dip),
+ *                                       'overtime' (jump to the build), 'win' | 'lose' | 'draw' (outro).
+ *   audio.suspend() / audio.resume()    Pause and background handling.
+ *
+ * Routing and instruments live in engine.ts, sample synthesis in dsp.ts, songs in music.ts, effect
+ * recipes and per-effect levels in sfx.ts. `audioLab` (bottom) renders offline for measurement only.
  */
+import { buildEngine, hasAll, MUSIC_TRIM, pump, sampleNote, setDelayTime, type Engine } from './engine';
+import { barsIn, chordAt, SONGS, type Inst, type Out, type OutroKind, type Song } from './music';
+import { DYNAMIC, finish, LEVEL, LOW_PRIORITY, nz, o, RETRIGGER, SFX, swell, type SfxName, type Shot } from './sfx';
 
-export type SfxName =
-  | 'uiHover' | 'uiSelect' | 'uiBack' | 'uiDeny'
-  | 'tetherAttach' | 'tetherRelease' | 'tetherFail'
-  | 'touch' | 'kick' | 'wall' | 'post' | 'bump' | 'net'
-  | 'goal' | 'concede' | 'countdown' | 'go' | 'whistle'
-  | 'reward' | 'unlock' | 'medal' | 'purchase' | 'gate' | 'fail';
+export type { SfxName } from './sfx';
 
 /** Volumes are 0..1. */
 export interface AudioSettings { master: number; music: number; effects: number; muted: boolean }
 
-/** intensity 0..1 (default 0.6), pan -1..1. */
-export interface PlayOpts { intensity?: number; pan?: number }
+/** intensity 0..1 (default 0.6), pan -1..1, heavy: swing-kick variant. */
+export interface PlayOpts { intensity?: number; pan?: number; heavy?: boolean }
 
+export type MusicCue = 'goal' | 'concede' | 'overtime' | OutroKind;
 type MusicTrack = 'menu' | 'match';
 type AudioCtor = typeof AudioContext;
 
-interface Engine { ctx: AudioContext; master: GainNode; sfx: GainNode; music: GainNode; noise: AudioBuffer }
-/** Where and when a voice plays. */
-interface Sink { e: Engine; out: AudioNode; t: number }
-interface Shot extends Sink { i: number }
-/** A long-lived sound (hum, crowd) that is faded out and torn down as one unit. */
-interface Layer { level: GainNode; sources: AudioScheduledSourceNode[]; nodes: AudioNode[] }
-interface Hum extends Layer { a: OscillatorNode; b: OscillatorNode; lp: BiquadFilterNode }
-interface Player { track: MusicTrack; out: GainNode; step: number; nextTime: number; stepDur: number; endAt: number | null }
-
-interface ToneSpec {
-  freq: number; dur: number; gain: number;
-  type?: OscillatorType; freqEnd?: number; glide?: number;
-  at?: number; attack?: number; hold?: number; linear?: boolean;
-  lp?: number; vibrato?: readonly [rate: number, depth: number];
-}
-interface NoiseSpec {
-  freq: number; dur: number; gain: number;
-  filter?: BiquadFilterType; freqEnd?: number; q?: number;
-  at?: number; attack?: number; hold?: number;
-}
-
-const MUSIC_TRIM = 0.55;      // music sits well under the effects
-const CROWD_GAIN = 0.6;
-const RETRIGGER_MS = 40;
-const TICK_MS = 50;
-const LOOKAHEAD_S = 0.15;
+const TICK_MS = 40;
+const LOOKAHEAD_S = 0.22;
+const MAX_SHOTS = 32;
 const RAMP = 0.03;
 
 const noop = (): void => {};
 const nowMs = (): number => Date.now();
-const mtof = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
+const mtof = (m: number): number => 440 * 2 ** ((m - 69) / 12);
 const clamp = (x: number, lo: number, hi: number, fallback: number): number =>
   Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : fallback;
-/** Deterministic 0..1 hash, used for musical variation that never repeats exactly. */
-const hash01 = (n: number): number => (Math.imul(n + 1, 2654435761) >>> 0) / 4294967296;
+/** Freezes a param at its current automated value (Safari's .value can lag behind automation). */
+function holdAt(p: AudioParam, t: number): void {
+  const q = p as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam };
+  if (typeof q.cancelAndHoldAtTime === 'function') q.cancelAndHoldAtTime(t);
+  else {
+    p.cancelScheduledValues(t);
+    p.setValueAtTime(p.value, t);
+  }
+}
 function safely(fn: () => void): void {
-  try { fn(); } catch { /* audio must never break the game */ }
+  try {
+    fn();
+  } catch {
+    /* audio must never break the game */
+  }
 }
 
+/** Per-instrument level, whether it bypasses the side-chain (drums), and release time. */
+const MIX: Record<Inst, readonly [gain: number, drum: boolean, rel: number]> = {
+  kick: [0.36, true, 0], mkick: [0.36, true, 0], clap: [0.62, true, 0], snare: [0.82, true, 0],
+  hat: [0.32, true, 0], ohat: [0.26, true, 0], shk: [0.32, true, 0], tom: [0.45, true, 0],
+  crash: [0.38, true, 0], rim: [0.5, true, 0], snap: [0.6, true, 0],
+  bass: [0.3, false, 0.04], fbass: [0.34, false, 0.05], keys: [0.3, false, 0.15], pluck: [0.3, false, 0.05],
+  stab: [0.27, false, 0.08], lead: [0.32, false, 0.09], flute: [0.22, false, 0.12], mallet: [0.45, false, 0.1],
+  bell: [0.26, false, 0.2],
+};
+
 // ---------------------------------------------------------------- state
+
+interface Player {
+  track: MusicTrack;
+  song: Song;
+  out: GainNode;
+  lp: BiquadFilterNode;
+  dry: GainNode; dryL: AudioNode; dryR: AudioNode;
+  duck: GainNode; L: AudioNode; R: AudioNode;
+  padL: BiquadFilterNode; padR: BiquadFilterNode;
+  d1: GainNode; d2: GainNode;
+  nodes: AudioNode[];
+  io: Out;
+  started: boolean;
+  t0: number; step: number; sd: number;
+  sec: number; bar: number; loop: number;
+  x: number; xAt: number;
+  jumpStep: number; jumpTo: readonly [string, number]; fillFrom: number;
+  outro: OutroKind | null;
+  endAt: number | null;
+  /** Lab only: play just these instruments ('pad' and 'riser' included). */
+  solo?: ReadonlySet<string>;
+}
+
+interface Voice { level: GainNode; srcs: AudioScheduledSourceNode[]; nodes: AudioNode[] }
+interface Hum extends Voice { a: OscillatorNode; b: OscillatorNode; bp: BiquadFilterNode; wbp: BiquadFilterNode; wg: GainNode }
+interface Charge extends Voice { a: OscillatorNode; b: OscillatorNode; lp: BiquadFilterNode; trem: OscillatorNode; depth: GainNode; seen: number }
 
 let engine: Engine | null = null;
 let settings: AudioSettings = { master: 0.8, music: 0.5, effects: 0.8, muted: false };
 let userSuspended = false;
 let lastUnlockMs = -1e9;
 let lastCheerMs = -1e9;
+let lastTickMs = -1e9;
+let listening = false;
 const lastPlayed = new Map<SfxName, number>();
+const shotEnds: number[] = [];
 let hum: Hum | null = null;
-let crowd: Layer | null = null;
+let charge: Charge | null = null;
+let bed: Voice | null = null;
 let crowdLevel = 0;
 let wantTrack: MusicTrack | null = null;
-let musicIntensity = 0;
+let musicTarget = 0;
+let activity = 0;
+let activityAt = 0;
 let players: Player[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
+let pumping = false;
+/** [AudioContext construction ms, graph build ms] of the first unlock (diagnostics). */
+let unlockCost: [number, number] = [0, 0];
 
 // ---------------------------------------------------------------- engine
 
@@ -86,422 +141,540 @@ function createEngine(): Engine | null {
   const g = globalThis as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor };
   const Ctor = g.AudioContext ?? g.webkitAudioContext;
   if (!Ctor) return null;
-  const ctx = new Ctor();
-  const master = ctx.createGain();
-  const sfx = ctx.createGain();
-  const music = ctx.createGain();
-  const limiter = ctx.createDynamicsCompressor();
-  limiter.threshold.value = -14;
-  limiter.knee.value = 18;
-  limiter.ratio.value = 8;
-  limiter.attack.value = 0.004;
-  limiter.release.value = 0.2;
-  master.gain.value = settings.muted ? 0 : settings.master;
-  sfx.gain.value = settings.effects;
-  music.gain.value = settings.music * MUSIC_TRIM;
-  sfx.connect(master);
-  music.connect(master);
-  master.connect(limiter);
-  limiter.connect(ctx.destination);
-  // One shared white-noise buffer feeds every noise voice (looped from a random offset).
-  const len = Math.floor(ctx.sampleRate * 3);
-  const noise = ctx.createBuffer(1, len, ctx.sampleRate);
-  const data = noise.getChannelData(0);
-  for (let n = 0; n < len; n++) data[n] = Math.random() * 2 - 1;
-  return { ctx, master, sfx, music, noise };
+  const t0 = performance.now();
+  const ctx = new Ctor({ latencyHint: 'interactive' });
+  const t1 = performance.now();
+  const e = buildEngine(ctx, false);
+  unlockCost = [+(t1 - t0).toFixed(1), +(performance.now() - t1).toFixed(1)];
+  pushSettings(e, settings);
+  // iOS: a silent buffer started inside the gesture fully unlocks output.
+  const silent = ctx.createBufferSource();
+  silent.buffer = ctx.createBuffer(1, 1, 22050);
+  silent.connect(ctx.destination);
+  silent.start(0);
+  ctx.onstatechange = () => safely(() => {
+    if (ctx.state === 'running') ensureScheduler();
+  });
+  return e;
 }
 
-function pushSettings(e: Engine): void {
+function pushSettings(e: Engine, s: AudioSettings): void {
   const t = e.ctx.currentTime;
-  e.master.gain.setTargetAtTime(settings.muted ? 0 : settings.master, t, RAMP);
-  e.sfx.gain.setTargetAtTime(settings.effects, t, RAMP);
-  e.music.gain.setTargetAtTime(settings.music * MUSIC_TRIM, t, RAMP);
+  const set = (n: GainNode, v: number): void => {
+    n.gain.setTargetAtTime(v, t, RAMP);
+  };
+  set(e.master, s.muted ? 0 : s.master);
+  set(e.sfx, s.effects);
+  set(e.sfxRev, s.effects);
+  for (const n of [e.music, e.musRev, e.musDly]) set(n, s.music * MUSIC_TRIM);
+}
+
+/** Renders queued sample banks in short slices (about 10 ms, then yield), so unlock and frames stay smooth. */
+function startPump(e: Engine): void {
+  if (pumping) return;
+  pumping = true;
+  const step = (): void => safely(() => {
+    if (engine !== e) return;
+    if (pump(e, 10)) setTimeout(step, 8);
+    else pumping = false;
+    if (crowdLevel > 0 && !bed) syncCrowd(e);
+  });
+  setTimeout(step, 30);
+}
+
+function running(e: Engine): boolean {
+  return (e.ctx as AudioContext).state === 'running';
 }
 
 /** One-shots only sound while the context runs (or within the unlock gesture's start-up grace). */
 function canSound(e: Engine): boolean {
-  return !userSuspended && (e.ctx.state === 'running' || nowMs() - lastUnlockMs < 400);
+  return !userSuspended && (running(e) || nowMs() - lastUnlockMs < 400);
 }
 
-// ---------------------------------------------------------------- voices
+function resumeCtx(e: Engine): void {
+  void Promise.resolve((e.ctx as AudioContext).resume()).then(ensureScheduler, noop);
+}
 
-/** Soft attack, optional hold, then a click-free decay to silence at `end`. */
-function shapeEnv(g: AudioParam, t: number, attack: number, hold: number, end: number, peak: number, linear: boolean): void {
-  const p = Math.max(1e-4, peak);
-  g.setValueAtTime(0, t);
-  g.linearRampToValueAtTime(p, t + attack);
-  g.setValueAtTime(p, t + attack + hold);
-  if (linear) {
-    g.linearRampToValueAtTime(0, end);
-  } else {
-    g.exponentialRampToValueAtTime(p * 0.01, end);
-    g.linearRampToValueAtTime(0, end + 0.02);
+/** Re-resume after iOS interruptions or a gesture that did not count as activation. */
+function listen(): void {
+  if (listening || typeof window === 'undefined') return;
+  listening = true;
+  const poke = (): void => safely(() => {
+    const e = engine;
+    if (e && !userSuspended && !running(e)) resumeCtx(e);
+  });
+  for (const ev of ['touchend', 'pointerup', 'click', 'keydown', 'focus', 'pageshow']) {
+    window.addEventListener(ev, poke, { capture: true, passive: true });
   }
 }
 
-function tone(k: Sink, s: ToneSpec): void {
-  const { ctx } = k.e;
-  const t = k.t + (s.at ?? 0);
-  const attack = s.attack ?? 0.006;
-  const hold = s.hold ?? 0;
-  const end = t + Math.max(s.dur, attack + hold + 0.02);
-  const osc = ctx.createOscillator();
-  const env = ctx.createGain();
-  const chain: AudioNode[] = [osc, env];
-  osc.type = s.type ?? 'sine';
-  osc.frequency.setValueAtTime(s.freq, t);
-  if (s.freqEnd !== undefined) osc.frequency.exponentialRampToValueAtTime(s.freqEnd, t + (s.glide ?? s.dur));
-  let head: AudioNode = osc;
-  if (s.lp !== undefined) {
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = s.lp;
-    lp.Q.value = 0.5;
-    osc.connect(lp);
-    head = lp;
-    chain.push(lp);
+// ---------------------------------------------------------------- one-shots
+
+function newShot(e: Engine, t: number, i: number, heavy: boolean): Shot {
+  return { e, t, i, h: heavy, out: e.ctx.createGain(), end: 0, last: null, nodes: [], rev: 0 };
+}
+
+/** Routes a built shot to the effects bus (panned, with its reverb send) and schedules cleanup. */
+function launch(e: Engine, k: Shot, pan: number): void {
+  const extra: AudioNode[] = [k.out];
+  if (Math.abs(pan) > 0.02 && typeof e.ctx.createStereoPanner === 'function') {
+    const p = e.ctx.createStereoPanner();
+    p.pan.value = pan * 0.8;
+    k.out.connect(p);
+    p.connect(e.sfx);
+    extra.push(p);
+  } else k.out.connect(e.sfx);
+  if (k.rev > 0) {
+    const s = e.ctx.createGain();
+    s.gain.value = k.rev;
+    k.out.connect(s);
+    s.connect(e.sfxRev);
+    extra.push(s);
   }
-  if (s.vibrato) {
-    const lfo = ctx.createOscillator();
-    const depth = ctx.createGain();
-    lfo.frequency.value = s.vibrato[0];
-    depth.gain.value = s.vibrato[1];
-    lfo.connect(depth);
-    depth.connect(osc.frequency);
-    lfo.start(t);
-    lfo.stop(end + 0.04);
-    chain.push(lfo, depth);
-  }
-  head.connect(env);
-  env.connect(k.out);
-  shapeEnv(env.gain, t, attack, hold, end, s.gain, s.linear === true);
-  osc.onended = () => chain.forEach((n) => n.disconnect());
-  osc.start(t);
-  osc.stop(end + 0.04);
+  finish(k, extra);
+  if (k.duck) duckMusic(e, k.t, k.duck[0], k.duck[1]);
+  shotEnds.push(k.end);
 }
 
-/** Filtered noise burst. Returns the filter so callers can add extra sweeps. */
-function noise(k: Sink, s: NoiseSpec): BiquadFilterNode {
-  const { ctx, noise: buffer } = k.e;
-  const t = k.t + (s.at ?? 0);
-  const attack = s.attack ?? 0.004;
-  const hold = s.hold ?? 0;
-  const end = t + Math.max(s.dur, attack + hold + 0.02);
-  const src = ctx.createBufferSource();
-  const filter = ctx.createBiquadFilter();
-  const env = ctx.createGain();
-  src.buffer = buffer;
-  src.loop = true;
-  filter.type = s.filter ?? 'lowpass';
-  filter.Q.value = s.q ?? 0.7;
-  filter.frequency.setValueAtTime(s.freq, t);
-  if (s.freqEnd !== undefined) filter.frequency.exponentialRampToValueAtTime(s.freqEnd, end);
-  src.connect(filter);
-  filter.connect(env);
-  env.connect(k.out);
-  shapeEnv(env.gain, t, attack, hold, end, s.gain, false);
-  src.onended = () => [src, filter, env].forEach((n) => n.disconnect());
-  src.start(t, Math.random() * (buffer.duration - 0.5));
-  src.stop(end + 0.04);
-  return filter;
+function duckMusic(e: Engine, t: number, depth: number, hold: number): void {
+  const g = e.mix.gain;
+  g.setTargetAtTime(depth, t, 0.04);
+  g.setTargetAtTime(1, t + hold, 0.5);
 }
 
-/** Output node for a one-shot: the sfx bus, or a short-lived panner in front of it. */
-function panned(e: Engine, pan: number): AudioNode {
-  if (Math.abs(pan) < 0.02 || typeof e.ctx.createStereoPanner !== 'function') return e.sfx;
-  const p = e.ctx.createStereoPanner();
-  p.pan.value = pan * 0.8;
-  p.connect(e.sfx);
-  setTimeout(() => p.disconnect(), 2500); // longer than any one-shot
-  return p;
+const ACTIVITY: Partial<Record<SfxName, number>> = { kick: 0.12, goal: 1, post: 0.3, wallBoost: 0.15, tetherAttach: 0.06, lob: 0.15, perfect: 0.2, play: 0.25 };
+
+function bumpActivity(e: Engine, amount: number): void {
+  decayActivity(e);
+  activity = Math.min(1, activity + amount);
+}
+function decayActivity(e: Engine): void {
+  const t = e.ctx.currentTime;
+  activity *= Math.exp(-Math.max(0, t - activityAt) / 5);
+  activityAt = t;
 }
 
-function releaseLayer(e: Engine, l: Layer, tau: number): void {
+/** Builds and launches a one-shot at time t. Shared by the live API and the offline lab. */
+function playAt(e: Engine, name: SfxName, t: number, i: number, pan: number, heavy: boolean): void {
+  if (name === 'lobCharge') return;
   const now = e.ctx.currentTime;
-  l.level.gain.cancelScheduledValues(now);
-  l.level.gain.setTargetAtTime(0, now, tau);
-  const first = l.sources[0];
-  if (first) first.onended = () => [...l.sources, ...l.nodes, l.level].forEach((n) => n.disconnect());
-  for (const s of l.sources) s.stop(now + tau * 7);
+  for (let n = shotEnds.length - 1; n >= 0; n--) if (shotEnds[n] < now) shotEnds.splice(n, 1);
+  if (shotEnds.length >= MAX_SHOTS || (shotEnds.length >= MAX_SHOTS * 0.7 && LOW_PRIORITY.has(name))) return;
+  const k = newShot(e, t, i, heavy);
+  k.out.gain.value = LEVEL[name] * (DYNAMIC.has(name) ? 0.3 + 0.7 * i * i : 1);
+  SFX[name](k);
+  launch(e, k, pan);
+  const act = ACTIVITY[name];
+  if (act) bumpActivity(e, act * (name === 'kick' ? i : 1));
 }
 
-// ---------------------------------------------------------------- sound effects
+// ---------------------------------------------------------------- hum, charge, crowd
 
-const SFX: Record<SfxName, (k: Shot) => void> = {
-  uiHover: (k) => tone(k, { freq: 660, freqEnd: 740, dur: 0.05, gain: 0.045 }),
-  uiSelect: (k) => {
-    tone(k, { type: 'triangle', freq: 660, dur: 0.07, gain: 0.07 });
-    tone(k, { freq: 990, at: 0.045, dur: 0.1, gain: 0.06 });
-  },
-  uiBack: (k) => {
-    tone(k, { type: 'triangle', freq: 520, dur: 0.06, gain: 0.065 });
-    tone(k, { freq: 392, at: 0.045, dur: 0.09, gain: 0.06 });
-  },
-  uiDeny: (k) => {
-    for (const at of [0, 0.075]) tone(k, { type: 'triangle', freq: 208, at, dur: 0.06, gain: 0.08, lp: 900 });
-  },
-  tetherAttach: (k) => {
-    tone(k, { freq: 300, freqEnd: 1080, dur: 0.1, gain: 0.12, attack: 0.012 });
-    noise(k, { filter: 'bandpass', freq: 900, freqEnd: 2600, q: 1.4, dur: 0.1, gain: 0.2, attack: 0.015 });
-    tone(k, { type: 'triangle', freq: 1320, freqEnd: 700, at: 0.09, dur: 0.05, gain: 0.1, attack: 0.002 });
-    noise(k, { filter: 'bandpass', freq: 2200, q: 1, at: 0.09, dur: 0.035, gain: 0.26, attack: 0.002 });
-  },
-  tetherRelease: (k) => {
-    noise(k, { filter: 'bandpass', freq: 1800, freqEnd: 480, q: 1.1, dur: 0.2, gain: 0.36, attack: 0.02 });
-    tone(k, { freq: 700, freqEnd: 250, dur: 0.17, gain: 0.06, attack: 0.015 });
-  },
-  tetherFail: (k) => {
-    tone(k, { type: 'triangle', freq: 300, dur: 0.05, gain: 0.07, lp: 800 });
-    tone(k, { type: 'triangle', freq: 262, at: 0.07, dur: 0.06, gain: 0.07, lp: 800 });
-  },
-  touch: ({ i, ...k }) => {
-    const f = 380 + 160 * i;
-    tone(k, { freq: f, freqEnd: f * 0.7, dur: 0.075, gain: 0.09 + 0.12 * i, attack: 0.004 });
-    noise(k, { freq: 1200 + 1400 * i, dur: 0.035, gain: 0.16 + 0.2 * i, attack: 0.003 });
-  },
-  kick: ({ i, ...k }) => {
-    tone(k, { freq: 150 + 50 * i, freqEnd: 55, glide: 0.11, dur: 0.18, gain: 0.26 + 0.3 * i, attack: 0.004 });
-    tone(k, { type: 'triangle', freq: 300 + 200 * i, freqEnd: 120, dur: 0.055, gain: 0.09 + 0.1 * i, attack: 0.002 });
-    noise(k, { filter: 'bandpass', freq: 1800 + 1200 * i, q: 1, dur: 0.03, gain: 0.28 + 0.3 * i, attack: 0.002 });
-  },
-  wall: ({ i, ...k }) => {
-    tone(k, { type: 'triangle', freq: 170 + 60 * i, freqEnd: 82, dur: 0.14, gain: 0.2 + 0.2 * i, lp: 600 + 500 * i });
-    tone(k, { freq: 92, freqEnd: 132, at: 0.05, dur: 0.1, gain: 0.08 + 0.08 * i, attack: 0.015 });
-    noise(k, { freq: 500 + 500 * i, dur: 0.06, gain: 0.22 + 0.2 * i });
-  },
-  post: ({ i, ...k }) => {
-    const f = 620 + 180 * i;
-    tone(k, { freq: f, dur: 0.38, gain: 0.1 + 0.08 * i, attack: 0.003 });
-    tone(k, { freq: f * 2.76, dur: 0.24, gain: 0.04 + 0.04 * i, attack: 0.003 });
-    tone(k, { freq: f * 5.4, dur: 0.09, gain: 0.008 + 0.014 * i, attack: 0.003 });
-  },
-  bump: ({ i, ...k }) => {
-    tone(k, { freq: 110 + 40 * i, freqEnd: 50, glide: 0.13, dur: 0.2, gain: 0.28 + 0.25 * i, attack: 0.005 });
-    noise(k, { freq: 300 + 300 * i, dur: 0.07, gain: 0.4 + 0.3 * i, attack: 0.005 });
-  },
-  net: ({ i, ...k }) => {
-    noise(k, { filter: 'bandpass', freq: 2000 + 700 * i, freqEnd: 850, q: 0.8, dur: 0.3, gain: 0.26 + 0.3 * i, attack: 0.04 });
-    noise(k, { freq: 900, freqEnd: 400, at: 0.06, dur: 0.22, gain: 0.14 + 0.14 * i, attack: 0.05 });
-  },
-  goal: (k) => {
-    [74, 78, 81, 86].forEach((m, n) => {
-      tone(k, { type: 'triangle', freq: mtof(m), at: n * 0.09, dur: 0.24, gain: 0.12, lp: 3200 });
-      tone(k, { type: 'triangle', freq: mtof(m), at: 0.4, dur: 0.5, gain: 0.07, hold: 0.16, lp: 3200 });
-    });
-    tone(k, { freq: mtof(50), at: 0.4, dur: 0.5, gain: 0.1, hold: 0.12, attack: 0.01 });
-  },
-  concede: (k) => {
-    tone(k, { type: 'triangle', freq: 440, dur: 0.24, gain: 0.11, attack: 0.012, hold: 0.06, lp: 1300 });
-    tone(k, { type: 'triangle', freq: 349.2, at: 0.2, dur: 0.4, gain: 0.11, attack: 0.012, hold: 0.08, lp: 1300 });
-  },
-  countdown: (k) => {
-    tone(k, { freq: 660, dur: 0.16, gain: 0.15, attack: 0.008, hold: 0.07 });
-    tone(k, { type: 'triangle', freq: 1320, dur: 0.1, gain: 0.025 });
-  },
-  go: (k) => {
-    tone(k, { freq: 990, dur: 0.44, gain: 0.15, attack: 0.008, hold: 0.2 });
-    tone(k, { freq: 1485, dur: 0.4, gain: 0.05, attack: 0.008, hold: 0.16 });
-    tone(k, { type: 'triangle', freq: 495, dur: 0.3, gain: 0.05, hold: 0.1 });
-  },
-  whistle: (k) => {
-    for (const freq of [1760, 1836]) tone(k, { freq, dur: 0.5, gain: 0.055, attack: 0.02, hold: 0.36, vibrato: [27, 45] });
-    noise(k, { filter: 'bandpass', freq: 1800, q: 2, dur: 0.48, gain: 0.12, attack: 0.02, hold: 0.3 });
-  },
-  reward: (k) => {
-    tone(k, { freq: 988, dur: 0.09, gain: 0.11, attack: 0.003 });
-    tone(k, { freq: 1319, at: 0.075, dur: 0.38, gain: 0.11, attack: 0.003 });
-    tone(k, { type: 'triangle', freq: 1319, at: 0.075, dur: 0.2, gain: 0.03 });
-  },
-  unlock: (k) => {
-    [76, 80, 83, 88].forEach((m, n) => {
-      tone(k, { freq: mtof(m), at: n * 0.075, dur: 0.32, gain: 0.09, attack: 0.004 });
-      tone(k, { freq: mtof(m + 12), at: n * 0.075 + 0.02, dur: 0.16, gain: 0.02, attack: 0.004 });
-    });
-  },
-  medal: (k) => {
-    for (const m of [62, 66, 69]) tone(k, { type: 'triangle', freq: mtof(m), dur: 0.75, gain: 0.09, attack: 0.015, hold: 0.12, lp: 1500 });
-    tone(k, { freq: mtof(50), dur: 0.7, gain: 0.1, attack: 0.015, hold: 0.1 });
-  },
-  purchase: (k) => {
-    for (const at of [0, 0.065]) {
-      noise(k, { filter: 'bandpass', freq: 2500, q: 1.2, at, dur: 0.025, gain: 0.3, attack: 0.002 });
-      tone(k, { type: 'triangle', freq: 1100, freqEnd: 600, at, dur: 0.03, gain: 0.07, attack: 0.002 });
-    }
-    tone(k, { freq: 1319, at: 0.12, dur: 0.5, gain: 0.1, attack: 0.003 });
-    tone(k, { freq: 1976, at: 0.12, dur: 0.32, gain: 0.04, attack: 0.003 });
-  },
-  gate: (k) => {
-    tone(k, { type: 'triangle', freq: 784, dur: 0.32, gain: 0.13, attack: 0.004, lp: 3000 });
-    tone(k, { freq: 1568, dur: 0.16, gain: 0.03, attack: 0.004 });
-  },
-  fail: (k) => {
-    for (const freq of [110, 104]) tone(k, { type: 'sawtooth', freq, dur: 0.32, gain: 0.1, attack: 0.02, hold: 0.14, lp: 420 });
-  },
-};
+function release(e: Engine, v: Voice, tau: number, now = e.ctx.currentTime): void {
+  holdAt(v.level.gain, now);
+  v.level.gain.setTargetAtTime(0, now, tau);
+  const first = v.srcs[0];
+  if (first) first.onended = () => [...v.srcs, ...v.nodes, v.level].forEach((n) => n.disconnect());
+  for (const s of v.srcs) s.stop(now + tau * 8);
+}
 
-// ---------------------------------------------------------------- hum + crowd
+function osc(e: Engine, wave: 'warm' | 'bright' | 'soft' | OscillatorType, f: number, to: AudioNode): OscillatorNode {
+  const n = e.ctx.createOscillator();
+  if (wave === 'warm' || wave === 'bright' || wave === 'soft') n.setPeriodicWave(e.waves[wave]);
+  else n.type = wave;
+  n.frequency.value = f;
+  n.connect(to);
+  return n;
+}
+
+function biquad(e: Engine, type: BiquadFilterType, f: number, q: number, to: AudioNode): BiquadFilterNode {
+  const b = e.ctx.createBiquadFilter();
+  b.type = type;
+  b.frequency.value = f;
+  b.Q.value = q;
+  b.connect(to);
+  return b;
+}
+
+function gainNode(e: Engine, v: number, to?: AudioNode): GainNode {
+  const g = e.ctx.createGain();
+  g.gain.value = v;
+  if (to) g.connect(to);
+  return g;
+}
 
 function buildHum(e: Engine): Hum {
-  const { ctx } = e;
-  const a = ctx.createOscillator();
-  const b = ctx.createOscillator();
-  const mix = ctx.createGain();
-  const lp = ctx.createBiquadFilter();
-  const level = ctx.createGain();
-  b.type = 'triangle';
-  mix.gain.value = 0.45;
-  lp.type = 'lowpass';
-  lp.frequency.value = 500;
-  level.gain.value = 0;
-  a.connect(lp);
-  b.connect(mix);
-  mix.connect(lp);
-  lp.connect(level);
-  level.connect(e.sfx);
-  a.start();
-  b.start();
-  return { level, sources: [a, b], nodes: [mix, lp], a, b, lp };
+  const level = gainNode(e, 0, e.sfx);
+  const bp = biquad(e, 'bandpass', 300, 2.5, level);
+  const a = osc(e, 'warm', 110, bp);
+  const mix = gainNode(e, 0.4, bp);
+  const b = osc(e, 'sine', 220, mix);
+  const wg = gainNode(e, 0, level);
+  const wbp = biquad(e, 'bandpass', 600, 0.9, wg);
+  const wind = e.ctx.createBufferSource();
+  wind.buffer = e.pink;
+  wind.loop = true;
+  wind.connect(wbp);
+  const t = e.ctx.currentTime;
+  a.start(t);
+  b.start(t);
+  wind.start(t, Math.random());
+  return { level, srcs: [a, b, wind], nodes: [bp, mix, wg, wbp], a, b, bp, wbp, wg };
 }
 
-function buildCrowd(e: Engine): Layer {
-  const { ctx } = e;
-  const src = ctx.createBufferSource();
-  const level = ctx.createGain();
-  const layer: Layer = { level, sources: [src], nodes: [] };
-  src.buffer = e.noise;
-  src.loop = true;
-  level.gain.value = 0;
-  // Two band-passed voices of the same noise, each slowly swelling at its own rate, read as a murmur.
-  for (const [freq, q, mix, rate] of [[430, 0.8, 1, 0.13], [1050, 1.1, 0.55, 0.29]] as const) {
-    const band = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    const lfo = ctx.createOscillator();
-    const depth = ctx.createGain();
-    band.type = 'bandpass';
-    band.frequency.value = freq;
-    band.Q.value = q;
-    gain.gain.value = mix;
-    lfo.frequency.value = rate;
-    depth.gain.value = mix * 0.3;
-    src.connect(band);
-    band.connect(gain);
-    gain.connect(level);
-    lfo.connect(depth);
-    depth.connect(gain.gain);
-    lfo.start();
-    layer.sources.push(lfo);
-    layer.nodes.push(band, gain, depth);
+function setHum(e: Engine, active: boolean, speed01: number, now = e.ctx.currentTime): void {
+  if (!active) {
+    if (hum) release(e, hum, 0.05, now);
+    hum = null;
+    return;
   }
-  level.connect(e.sfx);
-  src.start();
-  return layer;
+  const sp = clamp(speed01, 0, 1, 0);
+  const f = 98 * (1 + 0.5 * sp);
+  const h = (hum ??= buildHum(e));
+  h.a.frequency.setTargetAtTime(f, now, 0.08);
+  h.b.frequency.setTargetAtTime(f * 2.01, now, 0.08);
+  h.bp.frequency.setTargetAtTime(f * 2.4 + 300 * sp, now, 0.08);
+  h.wbp.frequency.setTargetAtTime(500 + 2600 * sp, now, 0.1);
+  h.wg.gain.setTargetAtTime(0.02 + 0.2 * sp * sp, now, 0.08);
+  h.level.gain.setTargetAtTime(0.12 + 0.06 * sp, now, 0.06);
+}
+
+function buildCharge(e: Engine): Charge {
+  const level = gainNode(e, 0, e.sfx);
+  const amp = gainNode(e, 0.7, level);
+  const lp = biquad(e, 'lowpass', 900, 2.2, amp);
+  const a = osc(e, 'bright', 160, lp);
+  const mix = gainNode(e, 0.35, lp);
+  const b = osc(e, 'sine', 320, mix);
+  b.detune.value = 8;
+  const depth = gainNode(e, 0);
+  depth.connect(amp.gain);
+  const trem = osc(e, 'sine', 7, depth);
+  const t = e.ctx.currentTime;
+  for (const s of [a, b, trem]) s.start(t);
+  return { level, srcs: [a, b, trem], nodes: [amp, lp, mix, depth], a, b, lp, trem, depth, seen: nowMs() };
+}
+
+function setCharge(e: Engine, level: number | null, t: number): void {
+  if (level === null || !Number.isFinite(level)) {
+    if (charge) release(e, charge, 0.03, t);
+    charge = null;
+    return;
+  }
+  const lv = clamp(level, 0, 1, 0);
+  const c = (charge ??= buildCharge(e));
+  c.seen = nowMs();
+  const f = 160 * 2 ** (lv * 2.3);
+  c.a.frequency.setTargetAtTime(f, t, 0.03);
+  c.b.frequency.setTargetAtTime(f * 2, t, 0.03);
+  c.lp.frequency.setTargetAtTime(700 + 4200 * lv, t, 0.04);
+  c.trem.frequency.setTargetAtTime(6 + 12 * lv, t, 0.05);
+  c.depth.gain.setTargetAtTime(0.3 * lv, t, 0.05);
+  c.level.gain.setTargetAtTime(0.05 + 0.09 * lv, t, 0.03);
+}
+
+function buildBed(e: Engine): Voice | null {
+  const buf = e.bufs.get('crowd');
+  if (!buf) return null;
+  const level = gainNode(e, 0, e.sfx);
+  const g1 = gainNode(e, 0.8, level);
+  const lp = biquad(e, 'lowpass', 2400, 0.6, g1);
+  const src = e.ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.connect(lp);
+  const depth = gainNode(e, 0.22);
+  depth.connect(g1.gain);
+  const lfo = osc(e, 'sine', 0.06, depth);
+  const g2 = gainNode(e, 0.3, level);
+  const lp2 = biquad(e, 'lowpass', 220, 0.6, g2);
+  const room = e.ctx.createBufferSource();
+  room.buffer = e.pink;
+  room.loop = true;
+  room.connect(lp2);
+  const t = e.ctx.currentTime;
+  src.start(t, Math.random() * buf.duration);
+  room.start(t, Math.random());
+  lfo.start(t);
+  return { level, srcs: [src, room, lfo], nodes: [g1, lp, g2, lp2, depth] };
 }
 
 function syncCrowd(e: Engine): void {
   if (crowdLevel <= 0.001) {
-    if (crowd) releaseLayer(e, crowd, 0.3);
-    crowd = null;
+    if (bed) release(e, bed, 0.4);
+    bed = null;
     return;
   }
-  crowd ??= buildCrowd(e);
-  crowd.level.gain.setTargetAtTime(crowdLevel * CROWD_GAIN, e.ctx.currentTime, 0.4);
+  bed ??= buildBed(e);
+  bed?.level.gain.setTargetAtTime(crowdLevel * 0.32, e.ctx.currentTime, 0.5);
 }
 
-// ---------------------------------------------------------------- music
-
-interface Chord { root: number; tones: readonly number[] }
-const ch = (root: number, ...tones: number[]): Chord => ({ root, tones });
-
-/** Both tracks are in D major so the menu <-> match crossfade stays consonant. */
-const MATCH_PROG: readonly Chord[] = [ // I V vi IV | I V IV V
-  ch(38, 62, 66, 69), ch(45, 61, 64, 69), ch(47, 62, 66, 71), ch(43, 62, 67, 71),
-  ch(38, 62, 66, 69), ch(45, 61, 64, 69), ch(43, 62, 67, 71), ch(45, 64, 69, 73),
-];
-const MENU_PROG: readonly Chord[] = [ // Dmaj7 Bm7 Gadd9 Aadd9 | Dmaj7 F#m7 Gadd9 Aadd9
-  ch(38, 62, 66, 69, 73), ch(47, 62, 66, 69, 71), ch(43, 59, 62, 67, 69), ch(45, 61, 64, 69, 71),
-  ch(38, 62, 66, 69, 73), ch(42, 61, 64, 66, 69), ch(43, 59, 62, 67, 69), ch(45, 61, 64, 69, 71),
-];
-const BASS_A = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 2, 0];
-const BASS_B = [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 2, 0];
-const ARP_A = [0, 1, 2, 1, 0, 1, 2, 1];
-const ARP_B = [2, 1, 0, 1, 2, 0, 1, 2];
-/** Lead melody, per bar: [step, midi, length in steps]. */
-const LEAD: ReadonlyArray<ReadonlyArray<readonly [number, number, number]>> = [
-  [[0, 78, 3], [4, 81, 2], [6, 78, 2], [10, 76, 4]],
-  [[0, 76, 3], [4, 73, 2], [6, 76, 2], [10, 69, 4]],
-  [[0, 74, 3], [4, 78, 2], [6, 74, 2], [10, 71, 4]],
-  [[0, 71, 2], [4, 74, 2], [8, 76, 2], [12, 78, 2], [14, 81, 2]],
-  [[0, 81, 4], [6, 78, 2], [8, 74, 4]],
-  [[0, 76, 4], [6, 73, 2], [8, 69, 4]],
-  [[0, 71, 3], [4, 74, 2], [6, 71, 2], [10, 67, 4]],
-  [[0, 69, 2], [4, 73, 2], [8, 76, 4], [14, 76, 2]],
-];
-const PLUCKS: ReadonlyArray<readonly number[]> = [[0, 6, 10], [0, 4, 10, 14], [2, 8, 12], [0, 6, 8, 14], [4, 10]];
-
-const drumKick = (k: Sink, gain: number): void =>
-  tone(k, { freq: 125, freqEnd: 46, glide: 0.11, dur: 0.24, gain, attack: 0.003 });
-const drumClap = (k: Sink, gain: number): void => {
-  noise(k, { filter: 'bandpass', freq: 1500, q: 0.9, dur: 0.12, gain, attack: 0.003 });
-};
-const drumHat = (k: Sink, gain: number, dur: number): void => {
-  noise(k, { filter: 'highpass', freq: 6500, dur, gain, attack: 0.002 });
-};
-
-/** ~122 BPM groove. A 32-bar arrangement (arp / +lead / breather / +lead) keeps the loop from feeling short. */
-function matchStep(k: Sink, bar: number, s: number, stepDur: number, x: number): void {
-  const chord = MATCH_PROG[bar % 8];
-  const phrase = Math.floor(bar / 8) % 4;
-  const breather = phrase === 2 && bar % 8 < 4;
-  if (s % 4 === 0 && (!breather || s === 0)) drumKick(k, 0.3);
-  if (!breather && (s === 4 || s === 12)) drumClap(k, 0.34);
-  if (bar % 8 === 7 && s >= 13) drumClap(k, 0.1 + 0.06 * (s - 13)); // little fill into the next phrase
-  else if (bar % 4 === 3 && s === 15) drumClap(k, 0.12);
-  if (s % 4 === 2) drumHat(k, 0.045, 0.07);
-  else if (x > 0.35 && s % 2 === 1) drumHat(k, 0.012 + 0.025 * x, 0.03); // intensity layer: 16th hats
-
-  const b = (bar % 2 === 0 ? BASS_A : BASS_B)[s];
-  if (b > 0) {
-    const freq = mtof(chord.root + (b === 2 ? 12 : 0));
-    tone(k, { type: 'sawtooth', freq, dur: stepDur * 1.7, gain: 0.15, attack: 0.008, hold: stepDur * 0.6, lp: 480 });
+function cheerAt(e: Engine, t: number, i: number): void {
+  const k = newShot(e, t, i, false);
+  swell(k, 'crowd', { g: 0.16 + 0.26 * i, a: 0.22, h: 0.3 + 0.6 * i, d: 1.6 + i, rate: 1.06 + 0.08 * i, f: 1700, gain: 7 });
+  swell(k, 'applause', { g: 0.06 + 0.16 * i, a: 0.12, h: 0.7 + 1.1 * i, d: 1.3, type: 'highpass', f: 400, q: 0.5 });
+  if (i > 0.7) {
+    o(k, { f: 1900, f2: 2700, gl: 0.22, g: 0.035, a: 0.05, h: 0.15, d: 0.25, at: 0.35, vib: [7, 25, 0] });
+    o(k, { f: 2300, f2: 1800, gl: 0.4, g: 0.025, a: 0.05, h: 0.1, d: 0.3, at: 0.8 });
+    nz(k, { f: 650, f2: 1100, gl: 0.4, q: 3, g: 0.1 * i, a: 0.15, h: 0.25, d: 0.6 });
   }
-  if (s % 2 === 0 && (s === 0 || hash01(bar * 16 + s) > 0.12)) {
-    const pattern = phrase >= 2 ? ARP_B : ARP_A;
-    const note = chord.tones[pattern[s / 2] % chord.tones.length] + 12;
-    tone(k, { type: 'triangle', freq: mtof(note), dur: 0.2, gain: 0.05, lp: 2600 });
-    if (x > 0.5) tone(k, { freq: mtof(note + 12), at: stepDur, dur: 0.16, gain: 0.02 * x }); // intensity layer: octave echo
+  launch(e, k, 0);
+}
+
+// ---------------------------------------------------------------- music players
+
+function makePlayer(e: Engine, track: MusicTrack, now: number): Player {
+  const ctx = e.ctx;
+  const song = SONGS[track];
+  const pan = (v: number, to: AudioNode): AudioNode => {
+    if (typeof ctx.createStereoPanner !== 'function') return gainNode(e, 1, to);
+    const p = ctx.createStereoPanner();
+    p.pan.value = v;
+    p.connect(to);
+    return p;
+  };
+  const out = gainNode(e, 0, e.music);
+  out.gain.setValueAtTime(0, now);
+  const hp = biquad(e, 'highpass', 28, 0.7, out); // DC and sub-rumble guard
+  let head: AudioNode = hp;
+  const eq: AudioNode[] = [];
+  for (const [type, f, gain, q] of song.eq) {
+    const b = biquad(e, type, f, q, head);
+    b.gain.value = gain;
+    eq.push(b);
+    head = b;
+  }
+  const lp = biquad(e, 'lowpass', 20000, 0.5, head);
+  const dry = gainNode(e, 1, lp);
+  const dryL = pan(-0.6, lp);
+  const dryR = pan(0.6, lp);
+  const duck = gainNode(e, 1, lp);
+  const L = pan(-0.75, duck);
+  const R = pan(0.75, duck);
+  const wideL = pan(-0.95, duck);
+  const wideR = pan(0.95, duck);
+  const padL = biquad(e, 'lowpass', 1800, 0.7, wideL);
+  const padR = biquad(e, 'lowpass', 1800, 0.7, wideR);
+  const d1 = gainNode(e, 0.28, e.musDly);
+  const d2 = gainNode(e, 0.55, e.musDly);
+  const rv1 = gainNode(e, 0.3, e.musRev);
+  const rv2 = gainNode(e, 0.07, e.musRev);
+  duck.connect(rv1);
+  dry.connect(rv2);
+  const p: Player = {
+    track, song, out, lp, dry, dryL, dryR, duck, L, R, padL, padR, d1, d2,
+    nodes: [out, hp, ...eq, lp, dry, dryL, dryR, duck, L, R, wideL, wideR, padL, padR, d1, d2, rv1, rv2],
+    io: null as unknown as Out,
+    started: false, t0: now, step: 0, sd: 60 / song.bpm / 4,
+    sec: 0, bar: 0, loop: 0, x: 0.3, xAt: now,
+    jumpStep: -1, jumpTo: ['A', 0], fillFrom: -1, outro: null, endAt: null,
+  };
+  p.io = output(e, p);
+  return p;
+}
+
+function output(e: Engine, p: Player): Out {
+  const ctx = e.ctx;
+  return {
+    n(inst, m, t, v, op) {
+      if (p.solo && !p.solo.has(inst)) return;
+      const [g, drum, rel] = MIX[inst];
+      const side = op?.pan ?? 0;
+      const dest = drum ? (side < 0 ? p.dryL : side > 0 ? p.dryR : p.dry) : side < 0 ? p.L : side > 0 ? p.R : p.duck;
+      const send = op?.dly === 1 ? p.d1 : op?.dly === 2 ? p.d2 : undefined;
+      sampleNote(e, inst, m, t, v * g, dest, drum ? undefined : op?.d, rel, send);
+    },
+    pad(notes, t, d, v) {
+      if (p.solo && !p.solo.has('pad')) return;
+      const peak = v * 0.03;
+      for (const m of notes) {
+        for (const side of [0, 1]) {
+          const n = ctx.createOscillator();
+          const amp = ctx.createGain();
+          amp.gain.value = 0;
+          n.setPeriodicWave(e.waves.warm);
+          n.frequency.value = mtof(m);
+          n.detune.value = side ? 6 : -6;
+          amp.gain.setValueAtTime(0, t);
+          amp.gain.linearRampToValueAtTime(peak, t + 0.35);
+          amp.gain.setValueAtTime(peak, t + Math.max(0.36, d - 0.1));
+          amp.gain.linearRampToValueAtTime(0, t + d + 0.6);
+          n.connect(amp);
+          amp.connect(side ? p.padR : p.padL);
+          n.onended = () => {
+            n.disconnect();
+            amp.disconnect();
+          };
+          n.start(t);
+          n.stop(t + d + 0.62);
+        }
+      }
+    },
+    duck(t, depth) {
+      p.duck.gain.setTargetAtTime(depth, t, 0.004);
+      p.duck.gain.setTargetAtTime(1, t + 0.03, 0.075);
+    },
+    riser(t, d, v) {
+      if (p.solo && !p.solo.has('riser')) return;
+      const src = ctx.createBufferSource();
+      const bp = ctx.createBiquadFilter();
+      const amp = ctx.createGain();
+      src.buffer = e.white;
+      src.loop = true;
+      amp.gain.value = 0;
+      bp.type = 'bandpass';
+      bp.Q.value = 1.8;
+      bp.frequency.setValueAtTime(350, t);
+      bp.frequency.exponentialRampToValueAtTime(7500, t + d);
+      amp.gain.setValueAtTime(0, t);
+      amp.gain.linearRampToValueAtTime(v * 0.05, t + d * 0.6);
+      amp.gain.linearRampToValueAtTime(v * 0.14, t + d);
+      amp.gain.linearRampToValueAtTime(0, t + d + 0.04);
+      src.connect(bp);
+      bp.connect(amp);
+      amp.connect(p.dry);
+      amp.connect(p.d2);
+      src.onended = () => [src, bp, amp].forEach((n) => n.disconnect());
+      src.start(t, Math.random());
+      src.stop(t + d + 0.06);
+    },
+    tone(t, hz, tau) {
+      p.lp.frequency.setTargetAtTime(hz, t, tau);
+    },
+  };
+}
+
+function targetIntensity(e: Engine, track: MusicTrack): number {
+  if (track !== 'match') return 0;
+  decayActivity(e);
+  return Math.min(1, 0.2 + 0.8 * musicTarget + 0.4 * activity);
+}
+
+function nextBar(p: Player): void {
+  const order = p.song.order;
+  if (p.jumpStep >= 0 && p.step >= p.jumpStep) {
+    const i = order.indexOf(p.jumpTo[0]);
+    p.sec = i < 0 ? 0 : i;
+    p.bar = p.jumpTo[1];
+    p.jumpStep = -1;
+    p.fillFrom = -1;
+    return;
+  }
+  p.bar++;
+  if (p.bar >= barsIn(p.song, order[p.sec])) {
+    p.sec++;
+    if (p.sec >= order.length) {
+      p.sec = 0;
+      p.loop++;
+    }
+    p.bar = p.song.enter?.(order[p.sec], p.x) ?? 0;
+  }
+}
+
+/** Schedules every step that starts before `horizon`. Missed steps (throttled timers) are skipped on the grid. */
+function fillPlayer(e: Engine, p: Player, now: number, horizon: number): void {
+  if (!p.started) {
+    if (!hasAll(e, p.song.needs)) return;
+    p.started = true;
+    p.t0 = now + 0.08;
+    p.out.gain.cancelScheduledValues(now);
+    p.out.gain.setValueAtTime(0, now);
+    p.out.gain.linearRampToValueAtTime(p.song.level, now + 1.2);
+    setDelayTime(e, (60 / p.song.bpm) * 0.75, now);
+  }
+  if (p.endAt !== null) return;
+  const dt = Math.max(0, now - p.xAt);
+  p.xAt = now;
+  p.x += (targetIntensity(e, p.track) - p.x) * (1 - Math.exp(-dt / 1.2));
+  const due = (): number => p.t0 + p.step * p.sd;
+  if (due() < now - 1) p.t0 = now + 0.05 - p.step * p.sd; // long stall (suspended context): re-anchor
+  while (due() < now - 0.005) advance(p);
+  while (due() < horizon && p.endAt === null) {
+    step(e, p);
+    advance(p);
+  }
+}
+
+function advance(p: Player): void {
+  p.step++;
+  if (p.step % 16 === 0) nextBar(p);
+}
+
+function step(e: Engine, p: Player): void {
+  const s = p.step % 16;
+  const song = p.song;
+  const sec = song.order[p.sec];
+  const t = p.t0 + p.step * p.sd + (s % 2 ? song.swing * p.sd : 0);
+  if (p.outro && s % 4 === 0) {
+    song.outro?.(p.io, t, p.sd, p.outro);
+    p.endAt = t + 6;
+    p.out.gain.setValueAtTime(song.level, t + 3.5);
+    p.out.gain.linearRampToValueAtTime(0, t + 5.8);
+    return;
   }
   if (s === 0) {
-    for (const m of chord.tones) {
-      tone(k, { type: 'triangle', freq: mtof(m), dur: stepDur * 16, gain: 0.02, attack: 0.3, hold: stepDur * 8, linear: true, lp: 1200 });
-    }
+    const f = 1300 + 2600 * p.x;
+    p.padL.frequency.setTargetAtTime(f, t, 0.6);
+    p.padR.frequency.setTargetAtTime(f, t, 0.6);
   }
-  if (phrase % 2 === 1) {
-    for (const [at, m, len] of LEAD[bar % 8]) {
-      if (at !== s) continue;
-      tone(k, { type: 'triangle', freq: mtof(m), dur: stepDur * len * 1.2, gain: 0.06, hold: stepDur * len * 0.5, lp: 3000, vibrato: [5.5, 4] });
+  song.play(p.io, {
+    sec, bar: p.bar, bars: barsIn(song, sec), s, t, sd: p.sd, x: p.x, loop: p.loop,
+    chord: chordAt(song, sec, p.bar, s),
+    fill: p.fillFrom >= 0 && p.step >= p.fillFrom,
+  });
+}
+
+function fadePlayer(e: Engine, p: Player, seconds: number): void {
+  if (p.endAt !== null && !p.outro) return;
+  const now = e.ctx.currentTime;
+  const fade = p.outro ? Math.max(seconds, 2.5) : seconds;
+  holdAt(p.out.gain, now);
+  p.out.gain.linearRampToValueAtTime(0, now + fade);
+  p.endAt = now + fade + 0.05;
+  p.outro = null;
+}
+
+function beginTrack(e: Engine, track: MusicTrack): void {
+  const now = e.ctx.currentTime;
+  for (const p of players) fadePlayer(e, p, 1);
+  players.push(makePlayer(e, track, now));
+  ensureScheduler();
+}
+
+function cueAt(e: Engine, list: Player[], cue: MusicCue, now: number): void {
+  const p = list.find((q) => q.track === 'match' && q.endAt === null);
+  if (!p) return;
+  if (cue === 'win' || cue === 'lose' || cue === 'draw') {
+    p.outro = cue;
+    return;
+  }
+  if (cue === 'concede') {
+    p.lp.frequency.setTargetAtTime(650, now, 0.06);
+    p.lp.frequency.setTargetAtTime(20000, now + 1.3, 0.45);
+    return;
+  }
+  let nb = Math.ceil(p.step / 16) * 16;
+  if (nb - p.step < 4) nb += 16;
+  p.jumpStep = nb;
+  const sec = p.song.order[p.sec];
+  p.jumpTo = cue === 'overtime' ? ['D', 4] : [sec === 'B' ? 'B2' : 'B', 0];
+  p.fillFrom = cue === 'goal' ? Math.max(p.step, nb - 8) : -1;
+  if (cue === 'goal') bumpActivity(e, 0.6);
+}
+
+function tickPlayers(e: Engine, list: Player[], now: number): void {
+  for (let n = list.length - 1; n >= 0; n--) {
+    const p = list[n];
+    if (p.endAt !== null && now >= p.endAt) {
+      for (const node of p.nodes) node.disconnect();
+      list.splice(n, 1);
+      continue;
     }
+    fillPlayer(e, p, now, now + LOOKAHEAD_S);
   }
 }
 
-/** ~96 BPM: slow pads, a soft bass note and sparse plucks picked by a hash of the bar number. */
-function menuStep(k: Sink, bar: number, s: number, stepDur: number): void {
-  const chord = MENU_PROG[bar % 8];
-  const barDur = stepDur * 16;
-  if (s === 0) {
-    for (const m of chord.tones) {
-      tone(k, { type: 'triangle', freq: mtof(m), dur: barDur * 1.1, gain: 0.028, attack: 0.5, hold: barDur * 0.45, linear: true, lp: 1000 });
-    }
-    tone(k, { freq: mtof(chord.root), dur: barDur * 0.8, gain: 0.11, attack: 0.03, hold: barDur * 0.3 });
-  }
-  if (s === 10 && bar % 2 === 1) tone(k, { freq: mtof(chord.root + 7), dur: 0.6, gain: 0.06, attack: 0.02 });
-  const steps = PLUCKS[Math.floor(hash01(bar * 7 + 3) * PLUCKS.length)];
-  if (steps.includes(s)) {
-    const m = chord.tones[Math.floor(hash01(bar * 16 + s) * chord.tones.length)] + 12;
-    tone(k, { type: 'triangle', freq: mtof(m), dur: 0.55, gain: 0.055, lp: 2400 });
-    tone(k, { freq: mtof(m), at: stepDur * 3, dur: 0.45, gain: 0.018 }); // faux delay tap
-  }
-  if (bar % 8 >= 4 && s % 4 === 2) drumHat(k, 0.012, 0.03);
-}
+// ---------------------------------------------------------------- scheduler
 
 function stopScheduler(): void {
   if (timer !== null) clearInterval(timer);
@@ -509,57 +682,23 @@ function stopScheduler(): void {
 }
 
 function ensureScheduler(): void {
-  if (timer === null && !userSuspended && players.length > 0) timer = setInterval(tick, TICK_MS);
+  if (timer === null && !userSuspended && (players.length > 0 || charge)) timer = setInterval(tick, TICK_MS);
 }
 
-/** Look-ahead scheduler: queues every 16th-note step that starts within the next LOOKAHEAD_S. */
 function tick(): void {
   safely(() => {
     const e = engine;
-    if (!e || e.ctx.state !== 'running') return;
-    const now = e.ctx.currentTime;
-    for (let n = players.length - 1; n >= 0; n--) {
-      const p = players[n];
-      if (p.endAt !== null && now >= p.endAt) {
-        p.out.disconnect();
-        players.splice(n, 1);
-        continue;
-      }
-      if (p.nextTime < now) p.nextTime = now + 0.02; // late timer (throttled tab): skip ahead, never burst
-      while (p.nextTime < now + LOOKAHEAD_S) {
-        const sink: Sink = { e, out: p.out, t: p.nextTime };
-        const bar = Math.floor(p.step / 16);
-        if (p.track === 'match') matchStep(sink, bar, p.step % 16, p.stepDur, musicIntensity);
-        else menuStep(sink, bar, p.step % 16, p.stepDur);
-        p.step++;
-        p.nextTime += p.stepDur;
-      }
-    }
-    if (players.length === 0) stopScheduler();
+    if (!e || !running(e)) return;
+    lastTickMs = nowMs();
+    if (charge && lastTickMs - charge.seen > 300) setCharge(e, null, e.ctx.currentTime);
+    tickPlayers(e, players, e.ctx.currentTime);
+    if (players.length === 0 && !charge) stopScheduler();
   });
 }
 
-function fadeOutPlayers(e: Engine, seconds: number): void {
-  const now = e.ctx.currentTime;
-  for (const p of players) {
-    if (p.endAt !== null) continue;
-    p.out.gain.cancelScheduledValues(now);
-    p.out.gain.setValueAtTime(p.out.gain.value, now);
-    p.out.gain.linearRampToValueAtTime(0, now + seconds);
-    p.endAt = now + seconds + 0.05;
-  }
-}
-
-function beginTrack(e: Engine, track: MusicTrack): void {
-  const now = e.ctx.currentTime;
-  fadeOutPlayers(e, 0.9);
-  const out = e.ctx.createGain();
-  out.gain.setValueAtTime(0, now);
-  out.gain.linearRampToValueAtTime(1, now + 0.9);
-  out.connect(e.music);
-  const bpm = track === 'match' ? 122 : 96;
-  players.push({ track, out, step: 0, nextTime: now + 0.08, stepDur: 60 / bpm / 4, endAt: null });
-  ensureScheduler();
+/** Extra scheduling from frame-driven calls, so music keeps time even when timers are throttled. */
+function nudge(): void {
+  if (nowMs() - lastTickMs > 16) tick();
 }
 
 // ---------------------------------------------------------------- public API
@@ -568,30 +707,30 @@ interface AudioApi {
   unlock(): void;
   applySettings(s: AudioSettings): void;
   play(name: SfxName, opts?: PlayOpts): void;
+  charge(level: number | null): void;
   setTetherHum(active: boolean, speed01?: number): void;
   setCrowd(level: number): void;
   cheer(intensity?: number): void;
   startMusic(track: 'menu' | 'match'): void;
   stopMusic(): void;
   setMusicIntensity(x: number): void;
+  musicCue(cue: MusicCue): void;
   suspend(): void;
   resume(): void;
 }
 
 export const audio: AudioApi = {
-  /** Call from a user gesture. Lazily creates the AudioContext (or resumes it). Safe to call repeatedly. */
   unlock(): void {
     safely(() => {
       lastUnlockMs = nowMs();
+      listen();
       if (!engine) {
         engine = createEngine();
         if (!engine) return;
+        startPump(engine);
         if (wantTrack) beginTrack(engine, wantTrack);
-        syncCrowd(engine);
       }
-      if (!userSuspended && engine.ctx.state !== 'running') {
-        void Promise.resolve(engine.ctx.resume()).then(ensureScheduler, noop);
-      }
+      if (!userSuspended && !running(engine)) resumeCtx(engine);
     });
   },
 
@@ -603,7 +742,7 @@ export const audio: AudioApi = {
         effects: clamp(s.effects, 0, 1, settings.effects),
         muted: s.muted === true,
       };
-      if (engine) pushSettings(engine);
+      if (engine) pushSettings(engine, settings);
     });
   },
 
@@ -611,37 +750,35 @@ export const audio: AudioApi = {
     safely(() => {
       const e = engine;
       if (!e || !canSound(e)) return;
-      const ms = nowMs();
-      if (ms - (lastPlayed.get(name) ?? -1e9) < RETRIGGER_MS) return;
-      lastPlayed.set(name, ms);
       const i = clamp(opts?.intensity ?? 0.6, 0, 1, 0.6);
-      const pan = clamp(opts?.pan ?? 0, -1, 1, 0);
-      SFX[name]({ e, out: panned(e, pan), t: e.ctx.currentTime + 0.005, i });
+      if (name === 'lobCharge') {
+        audio.charge(i);
+        return;
+      }
+      const ms = nowMs();
+      if (ms - (lastPlayed.get(name) ?? -1e9) < (RETRIGGER[name] ?? 30)) return;
+      lastPlayed.set(name, ms);
+      playAt(e, name, e.ctx.currentTime + 0.005, i, clamp(opts?.pan ?? 0, -1, 1, 0), opts?.heavy === true);
+    });
+  },
+
+  charge(level: number | null): void {
+    safely(() => {
+      const e = engine;
+      if (!e) return;
+      if (level !== null && !canSound(e)) level = null;
+      if (level === null && !charge) return;
+      setCharge(e, level, e.ctx.currentTime);
+      if (charge) ensureScheduler();
+      nudge();
     });
   },
 
   setTetherHum(active: boolean, speed01 = 0): void {
     safely(() => {
       const e = engine;
-      if (!e) return;
-      if (!active) {
-        if (hum) releaseLayer(e, hum, 0.05);
-        hum = null;
-        return;
-      }
-      const now = e.ctx.currentTime;
-      const sp = clamp(speed01, 0, 1, 0);
-      const f = 110 * (1 + 0.4 * sp);
-      const fresh = hum === null;
-      const h = (hum ??= buildHum(e));
-      if (fresh) {
-        h.a.frequency.value = f;
-        h.b.frequency.value = f * 2.005;
-      }
-      h.a.frequency.setTargetAtTime(f, now, 0.08);
-      h.b.frequency.setTargetAtTime(f * 2.005, now, 0.08);
-      h.lp.frequency.setTargetAtTime(450 + 650 * sp, now, 0.08);
-      h.level.gain.setTargetAtTime(0.065 + 0.04 * sp, now, 0.06);
+      if (!e || (active && !canSound(e))) return;
+      setHum(e, active, speed01);
     });
   },
 
@@ -658,19 +795,14 @@ export const audio: AudioApi = {
       const ms = nowMs();
       if (!e || !canSound(e) || ms - lastCheerMs < 200) return;
       lastCheerMs = ms;
-      const i = clamp(intensity, 0, 1, 0.7);
-      const sink: Sink = { e, out: e.sfx, t: e.ctx.currentTime + 0.01 };
-      const dur = 1.2 + 0.9 * i;
-      const sweep = noise(sink, { filter: 'bandpass', freq: 520, q: 0.7, dur, gain: 0.35 + 0.5 * i, attack: 0.3, hold: 0.2 + 0.3 * i });
-      sweep.frequency.exponentialRampToValueAtTime(1300 + 500 * i, sink.t + 0.45);
-      sweep.frequency.exponentialRampToValueAtTime(750, sink.t + dur);
-      noise(sink, { freq: 600, dur: dur * 0.8, gain: 0.25 + 0.3 * i, attack: 0.3 });
+      cheerAt(e, e.ctx.currentTime + 0.01, clamp(intensity, 0, 1, 0.7));
     });
   },
 
   startMusic(track: 'menu' | 'match'): void {
     safely(() => {
-      if (wantTrack === track) return;
+      const live = players.some((p) => p.track === track && p.endAt === null && !p.outro);
+      if (wantTrack === track && (live || !engine)) return;
       wantTrack = track;
       if (engine) beginTrack(engine, track);
     });
@@ -679,26 +811,114 @@ export const audio: AudioApi = {
   stopMusic(): void {
     safely(() => {
       wantTrack = null;
-      if (engine) fadeOutPlayers(engine, 0.5); // the scheduler stops itself once the fade completes
+      if (engine) for (const p of players) fadePlayer(engine, p, 0.6);
     });
   },
 
   setMusicIntensity(x: number): void {
-    musicIntensity = clamp(x, 0, 1, 0);
+    musicTarget = clamp(x, 0, 1, 0);
+    safely(nudge);
+  },
+
+  musicCue(cue: MusicCue): void {
+    safely(() => {
+      if (engine) cueAt(engine, players, cue, engine.ctx.currentTime);
+    });
   },
 
   suspend(): void {
     safely(() => {
       userSuspended = true;
       stopScheduler();
-      if (engine) void Promise.resolve(engine.ctx.suspend()).catch(noop);
+      if (!engine) return;
+      setCharge(engine, null, engine.ctx.currentTime);
+      void Promise.resolve((engine.ctx as AudioContext).suspend()).catch(noop);
     });
   },
 
   resume(): void {
     safely(() => {
       userSuspended = false;
-      if (engine) void Promise.resolve(engine.ctx.resume()).then(ensureScheduler, noop);
+      if (engine) resumeCtx(engine);
     });
+  },
+};
+
+// ---------------------------------------------------------------- offline lab (dev tooling only)
+
+/**
+ * Renders music and effects into an OfflineAudioContext for measurement. Not used by the game,
+ * so production builds tree-shake it away.
+ */
+export const audioLab = {
+  /** Snapshot of the live engine for automated checks. */
+  live(): Record<string, unknown> {
+    const e = engine;
+    return {
+      state: e ? (e.ctx as AudioContext).state : 'none',
+      unlockCtxMs: unlockCost[0],
+      unlockBuildMs: unlockCost[1],
+      time: e ? +e.ctx.currentTime.toFixed(2) : 0,
+      jobsLeft: e ? e.jobs.length : -1,
+      banks: e ? [...e.banks.keys()].length + e.bufs.size : 0,
+      players: players.map((p) => ({ track: p.track, started: p.started, step: p.step, sec: p.song.order[p.sec], bar: p.bar, x: +p.x.toFixed(2), ending: p.endAt !== null })),
+      shots: shotEnds.length,
+      charge: charge !== null,
+      hum: hum !== null,
+      crowd: bed !== null,
+      scheduler: timer !== null,
+    };
+  },
+  engine(ctx: BaseAudioContext, s: AudioSettings = { master: 1, music: 1, effects: 1, muted: false }): Engine {
+    const e = buildEngine(ctx, true);
+    for (const n of [e.master, e.sfx, e.sfxRev, e.music, e.musRev, e.musDly]) n.gain.cancelScheduledValues(0);
+    e.master.gain.value = s.muted ? 0 : s.master;
+    e.sfx.gain.value = s.effects;
+    e.sfxRev.gain.value = s.effects;
+    for (const n of [e.music, e.musRev, e.musDly]) n.gain.value = s.music * MUSIC_TRIM;
+    return e;
+  },
+  /**
+   * Returns a scheduler for a track to call at increasing times (e.g. from OfflineAudioContext.suspend),
+   * exactly like the live look-ahead scheduler; x(t) sets intensity, cues fire at their times.
+   */
+  music(e: Engine, track: MusicTrack, x: (t: number) => number, cues: ReadonlyArray<readonly [number, MusicCue]> = [], solo?: readonly string[]): (t: number) => void {
+    const list = [makePlayer(e, track, 0)];
+    if (solo) list[0].solo = new Set(solo);
+    let c = 0;
+    const tick = (t: number): void => {
+      musicTarget = x(t);
+      while (c < cues.length && cues[c][0] <= t) cueAt(e, list, cues[c++][1], t);
+      tickPlayers(e, list, t);
+      musicTarget = 0;
+    };
+    return Object.assign(tick, {
+      state: () => list.map((p) => ({ sec: p.song.order[p.sec], bar: p.bar, step: p.step, x: +p.x.toFixed(2), fill: p.fillFrom, jump: p.jumpStep, ending: p.endAt !== null })),
+    });
+  },
+  sfx(e: Engine, name: SfxName, t: number, intensity = 0.6, pan = 0, heavy = false): void {
+    shotEnds.length = 0;
+    playAt(e, name, t, intensity, pan, heavy);
+  },
+  cheer(e: Engine, t: number, i: number): void {
+    cheerAt(e, t, i);
+  },
+  crowd(e: Engine, level: number): void {
+    crowdLevel = level;
+    bed = null;
+    syncCrowd(e);
+    crowdLevel = 0;
+    bed = null;
+  },
+  /** Drives the charge voice along [time, level | null] points (times ascending). */
+  charge(e: Engine, points: ReadonlyArray<readonly [number, number | null]>): void {
+    charge = null;
+    for (const [t, lv] of points) setCharge(e, lv, t);
+    charge = null;
+  },
+  hum(e: Engine, points: ReadonlyArray<readonly [number, number | null]>): void {
+    hum = null;
+    for (const [t, sp] of points) setHum(e, sp !== null, sp ?? 0, t);
+    hum = null;
   },
 };

@@ -14,7 +14,7 @@
   }
   .ph-sub {
     margin-top: 2px;
-    font-size: 0.76rem;
+    font-size: max(12.5px, 0.76rem);
   }
   .ph-icon {
     width: 50px;
@@ -1018,5 +1018,200 @@
 @media (min-width: 2300px) and (min-height: 1300px) {
   .screen {
     zoom: 1.5;
+  }
+}
+
+/* ======================================================================
+ * Phone fit: nothing wider than the screen (measured at 320-430 px portrait, 568-932 px landscape)
+ * ====================================================================== */
+@media (max-width: 900px), (max-height: 560px) and (orientation: landscape) {
+  /* trial medal times: three equal columns, medal above the time */
+  .thresholds {
+    width: 100%;
+  }
+  .thr {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 2px;
+    text-align: center;
+  }
+  .thr span {
+    justify-items: center;
+  }
+  .thr b {
+    font-size: 0.98rem;
+  }
+  .thr small {
+    font-size: max(12.5px, 0.72rem);
+  }
+  /* academy Lessons / Trials / Playbook switch fits its column */
+  .ac-tabbar .tab {
+    padding: 0 6px;
+    gap: 6px;
+    font-size: 0.86rem;
+  }
+  /* card notes wrap under the title instead of running off the card */
+  .card-head {
+    flex-wrap: wrap;
+  }
+  .ch-note {
+    white-space: normal;
+  }
+}
+@media (max-height: 560px) and (orientation: landscape), (max-width: 380px) {
+  .ac-tabbar .tab .icon {
+    display: none;
+  }
+}
+/* playoff bracket: semi-finals over the final when there is no room side by side */
+@media (max-width: 700px), (max-height: 560px) and (orientation: landscape) {
+  .bracket {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+  }
+  .b-col,
+  .b-tie {
+    min-width: 0;
+  }
+  .b-link {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+}
+@media (max-width: 380px) {
+  .hub-tabs .tab {
+    padding: 0 9px;
+  }
+}
+
+/* Portrait phones: "Play next match" stays within thumb reach. While the fixture card is on screen the
+   button sticks to the bottom of the scrolling area (it never leaves its card). */
+@media (orientation: portrait) and (max-width: 600px) {
+  /* compact action docks: one-line title and note, then a full-width primary button under the thumb */
+  .dock-row {
+    gap: 8px;
+    padding: 10px;
+  }
+  .dock-row .dock-info {
+    flex: 1 1 100%;
+    padding: 0 4px;
+  }
+  .dock-info small,
+  .dock-info p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dock-row .btn-big {
+    flex: 1 1 100%;
+  }
+  /* club save bar: one-line note, Cancel and Save side by side */
+  .save-bar .sb-note {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .save-bar .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 0.6em;
+  }
+  .save-bar .btn-save {
+    flex-grow: 1.4;
+  }
+  .home .fc-play {
+    position: sticky;
+    bottom: 10px;
+    z-index: 2;
+  }
+  .vs-team,
+  .vs-name {
+    min-width: 0;
+  }
+  .vs-name b {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+/* short landscape: the pause card lists the controls compactly */
+@media (max-height: 560px) and (orientation: landscape) {
+  .pause-panel {
+    padding: 14px 18px;
+  }
+  .pause-head {
+    margin-bottom: 8px;
+  }
+  .pause-controls .kv {
+    padding: 6px 0;
+    font-size: 0.88rem;
+  }
+}
+
+/* ======================================================================
+ * MOBILE OVERRIDES FOR GARAGE AND PROGRESS (garage.ts, progress.ts, mastery.css are owned elsewhere).
+ * Only existing classes are targeted; `.screen` raises specificity over mastery.css, which loads later.
+ * ====================================================================== */
+/* Portrait phones: a shorter turntable so the chassis buttons sit above the fold, clear of the dock. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .screen.garage .garage-stage {
+    height: min(32vh, 280px);
+    min-height: 190px;
+  }
+}
+@media (max-width: 600px) {
+  /* mastery and achievement cards: header chips wrap instead of pushing the card past the screen */
+  .screen .mr-top,
+  .screen .ach-top {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .screen .mastery-list,
+  .screen .ach-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .screen .mastery-row,
+  .screen .ach-card {
+    min-width: 0;
+  }
+  .screen .mastery-row .mr-open {
+    min-height: 44px;
+  }
+  .screen .garage-tabs .tab {
+    flex: 1 1 0;
+  }
+}
+@media (pointer: coarse) {
+  .screen .mv-track {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+  }
+  .screen .mv-node {
+    scroll-snap-align: center;
+  }
+}
+/* Garage dock: You / Teammate and Equip / Test drive share the width without running off small screens */
+.screen .robot-picks,
+.screen .garage-actions {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.screen .robot-pick,
+.screen .garage-actions .btn {
+  min-width: 0;
+}
+.screen .rp-text b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 380px), (max-height: 560px) and (orientation: landscape) {
+  .screen .garage-actions .btn-big {
+    padding: 0 0.5em;
+    font-size: 1.05rem;
+  }
+  .screen .robot-pick .rp-check {
+    display: none;
   }
 }

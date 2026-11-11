@@ -4,7 +4,8 @@ import { clearSave, exportSave, importSave, newSave, SaveError } from '../../sto
 import { ACTIONS, ACTION_LABELS, defaultKeys, keyLabel, type Action, type Settings } from '../../storage/settings';
 import { h, icon } from '../dom';
 import { shell } from '../shell';
-import { cardHead, tabBar } from '../widgets';
+import { canVibrate, fullscreenAvailable, isFullscreen, toggleFullscreen } from '../device';
+import { cardHead, currentInput, tabBar } from '../widgets';
 import { seg } from './prematch';
 
 type Section = 'audio' | 'graphics' | 'assist' | 'controls' | 'data';
@@ -26,6 +27,7 @@ export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
     input.addEventListener('change', () => {
       (s[key] as boolean) = input.checked;
       apply();
+      if (key === 'touchSwap') preview.classList.toggle('swap', input.checked);
     });
     return h('div', { class: 'opt' }, h('label', { class: 'opt-head switch', for: id }, h('b', null, label), input, h('span', { class: 'switch-ui', 'aria-hidden': 'true' })), note ? h('p', { class: 'muted' }, note) : null);
   };
@@ -93,9 +95,17 @@ export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
     h('section', { class: 'panel settings-card', id: 'set-aim' },
       cardHead('touch', 'Aim & touch'),
       choice('Aim mode', 'aimMode', [{ value: 'auto', label: 'Auto' }, { value: 'mouse', label: 'Mouse' }, { value: 'keyboard', label: 'Keyboard' }], s.aimMode === 'keyboard' ? 'Kicks and anchors follow your movement direction; assists pick the goal or a teammate when you face them.' : s.aimMode === 'mouse' ? 'Always aim with the cursor.' : 'Uses the cursor after you move the mouse, and movement direction after you use the keyboard kick or tether keys.'),
-      slider('Touch control size', 'touchScale', 0.7, 1.5),
+      slider('Touch control size', 'touchScale', 0.7, 1.5, () => preview.style.setProperty('--touch-scale', String(s.touchScale))),
+      preview,
       toggle('Left-handed touch layout', 'touchSwap', 'Moves the stick to the right and the buttons to the left.'),
+      // Only where the device can vibrate (Android); iPhones have no web vibration.
+      canVibrate() ? toggle('Vibration', 'vibration', 'A short buzz when you press SWING, KICK or PASS, and when a long ball reaches the gold notch.') : null,
     );
+  // Sketch of the in-match touch controls (four-fifths size) that follows the size slider.
+  const preview = h('div', { class: `touch-preview${s.touchSwap ? ' swap' : ''}`, 'aria-hidden': 'true', style: `--touch-scale:${s.touchScale}` },
+    h('span', { class: 'tp-stick' }, h('i')),
+    h('span', { class: 'tp-btns' }, h('i', { class: 'tp-swing' }, 'SWING'), h('i', { class: 'tp-pass' }, 'PASS'), h('i', { class: 'tp-kick' }, 'KICK')),
+  );
 
   const data = () => {
     const file = h('input', { type: 'file', accept: 'application/json,.json', hidden: true }) as HTMLInputElement;
@@ -191,8 +201,18 @@ export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
     slider('Effects', 'effectsVolume', 0, 1, () => audio.play('kick', { intensity: 0.5 })),
     h('p', { class: 'muted' }, 'All sound and music is synthesised live by the game.'),
   );
+  // Fullscreen is offered only where the browser allows it (not on iPhone, not in frames that block it).
+  const displayOpt = () => {
+    if (!fullscreenAvailable()) return null;
+    const btn = h('button', { class: 'btn btn-small', type: 'button', onclick: async () => {
+      await toggleFullscreen();
+      render();
+    } }, icon('grid'), isFullscreen() ? 'Exit full screen' : 'Full screen');
+    return h('div', { class: 'opt' }, h('div', { class: 'opt-head' }, h('b', null, 'Display'), btn), h('p', { class: 'muted' }, 'Hides the browser bars for a bigger pitch. Swipe from the edge or press Back to leave full screen.'));
+  };
   const graphicsCard = () => h('section', { class: 'panel settings-card', id: 'set-graphics' },
     cardHead('settings', 'Graphics'),
+    displayOpt(),
     choice('Quality', 'quality', [{ value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }], `Currently rendering at ${app.gfx.quality} quality. Low removes shadows and thins the crowd; the pitch, anchors and ball stay clear.`),
     choice('Text size', 'textScale', [{ value: 1, label: 'Normal' }, { value: 1.15, label: 'Large' }, { value: 1.3, label: 'Larger' }]),
   );
@@ -214,6 +234,8 @@ export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
     toggle('Show hints', 'showHints', 'Contextual control hints during your first matches.'),
   );
 
+  // On phones and tablets the touch options come first; key bindings still matter for a paired keyboard.
+  const touchFirst = currentInput() === 'touch';
   const render = () => {
     tabsSlot.replaceChildren(tabBar<Section>([
       { id: 'audio', label: 'Audio', icon: 'sound' },
@@ -230,7 +252,7 @@ export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
     if (section === 'audio') root.replaceChildren(audioCard());
     else if (section === 'graphics') root.replaceChildren(graphicsCard(), comfortCard());
     else if (section === 'assist') root.replaceChildren(assistCard(), helpersCard());
-    else if (section === 'controls') root.replaceChildren(controls(), controlsSide());
+    else if (section === 'controls') root.replaceChildren(...(touchFirst ? [controlsSide(), controls()] : [controls(), controlsSide()]));
     else root.replaceChildren(data());
   };
   render();

@@ -138,23 +138,29 @@ export function drum(sr: number, p: DrumSpec, seed = 1): Chans {
   const n = Math.floor(p.dur * sr);
   const out = new Float32Array(n);
   const r = rng(seed);
-  const hp = new Svf().set(2500, 0.7, sr);
+  const hp = new Svf().set(Math.min(2500, sr * 0.2), 0.7, sr);
   const bp = new Svf().set(p.nf ?? 1000, p.nq ?? 0.8, sr);
   const drive = p.drive ?? 1;
-  const hold = p.hold ?? 0;
+  const norm1 = sat(drive);
+  const hold = Math.floor((p.hold ?? 0) * sr);
+  const k = (tau: number): number => Math.exp(-1 / (tau * sr));
+  const kp = k(p.ptau), ks = k(0.004), ka = k(p.tau), kc = k(p.ctau ?? 0.0015), kn = k(p.ntau ?? 0.05);
+  let ep = 1, es = 1, ea = 1, ec = 1, en = 1;
   let ph = 0;
   for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const f = p.f1 + (p.f0 - p.f1) * Math.exp(-t / p.ptau) + (p.snap ?? 0) * Math.exp(-t / 0.004);
-    ph += f / sr;
-    const amp = t < hold ? 1 : Math.exp(-(t - hold) / p.tau);
+    ph += (p.f1 + (p.f0 - p.f1) * ep + (p.snap ?? 0) * es) / sr;
+    ep *= kp;
+    es *= ks;
     const w = r() * 2 - 1;
     hp.run(w);
     bp.run(w);
-    let x = sinp(ph) * amp;
-    if (p.click) x += hp.hp * p.click * Math.exp(-t / (p.ctau ?? 0.0015));
-    if (p.nz) x += bp.bp * p.nz * Math.exp(-t / (p.ntau ?? 0.05));
-    out[i] = sat(x * drive) / sat(drive);
+    let x = sinp(ph) * ea;
+    if (i >= hold) ea *= ka;
+    if (p.click) x += hp.hp * p.click * ec;
+    if (p.nz) x += bp.bp * p.nz * en;
+    ec *= kc;
+    en *= kn;
+    out[i] = sat(x * drive) / norm1;
   }
   return norm([out]);
 }
@@ -188,33 +194,41 @@ export function clap(sr: number, p: { dur: number; bursts: number; gap: number; 
 const HAT_F = [205.3, 304.4, 369.6, 522.7, 540, 800];
 
 /** 808-style metal: six detuned squares, band-passed, plus noise. Hats, cymbals, crashes. */
-export function metal(sr: number, p: { dur: number; tau: number; scale: number; f: number; noise: number; attack?: number; stereo?: boolean }, seed = 3): Chans {
+export function metal(sr: number, p: { dur: number; tau: number; scale: number; f: number; noise: number; attack?: number }, seed = 3): Chans {
   const n = Math.floor(p.dur * sr);
-  const chans: Chans = [];
-  for (let c = 0; c < (p.stereo ? 2 : 1); c++) {
-    const r = rng(seed + c * 77);
-    const out = new Float32Array(n);
-    const bp = new Svf().set(p.f, 1.2, sr);
-    const hp = new Svf().set(p.f * 0.7, 0.7, sr);
-    const ph = HAT_F.map(() => r());
-    const inc = HAT_F.map((f) => (f * p.scale * (1 + (r() - 0.5) * 0.01 * c)) / sr);
-    for (let i = 0; i < n; i++) {
-      const t = i / sr;
-      let sq = 0;
-      for (let k = 0; k < 6; k++) {
-        ph[k] += inc[k];
-        if (ph[k] >= 1) ph[k] -= 1;
-        sq += ph[k] < 0.5 ? 1 : -1;
-      }
-      const x = sq / 6 + (r() * 2 - 1) * p.noise;
-      bp.run(x);
-      hp.run(bp.bp);
-      const a = p.attack ? Math.min(1, t / p.attack) : 1;
-      out[i] = hp.hp * a * Math.exp(-t / p.tau);
+  const r = rng(seed);
+  const out = new Float32Array(n);
+  const bp = new Svf().set(p.f, 1.2, sr);
+  const hp = new Svf().set(p.f * 0.7, 0.7, sr);
+  const ph = new Float64Array(6).map(() => r());
+  const inc = new Float64Array(HAT_F.map((f) => (f * p.scale) / sr));
+  const decay = Math.exp(-1 / (p.tau * sr));
+  const att = p.attack ? p.attack * sr : 0;
+  let env = 1;
+  for (let i = 0; i < n; i++) {
+    let sq = 0;
+    for (let k = 0; k < 6; k++) {
+      let q = ph[k] + inc[k];
+      if (q >= 1) q -= 1;
+      ph[k] = q;
+      sq += q < 0.5 ? 1 : -1;
     }
-    chans.push(out);
+    bp.run(sq / 6 + (r() * 2 - 1) * p.noise);
+    hp.run(bp.bp);
+    out[i] = hp.hp * env * (att && i < att ? i / att : 1);
+    env *= decay;
   }
-  return norm(chans, 0.8);
+  return norm([out], 0.8);
+}
+
+/** Stereo from mono for loops: the right channel is the same texture, half a loop later. */
+export function widen(ch: Chans): Chans {
+  const l = ch[0];
+  const n = l.length;
+  const r = new Float32Array(n);
+  const h = n >> 1;
+  for (let i = 0; i < n; i++) r[i] = l[(i + h) % n];
+  return [l, r];
 }
 
 /** Short filtered noise hit (shaker, snap, rim). */
@@ -253,6 +267,8 @@ export interface SynthSpec {
   /** Amp: attack (s), decay tau toward sustain level. */
   att: number; tau: number; sus: number;
   drive?: number;
+  /** Filter slope: 4-pole (24 dB/oct, default) or a brighter 2-pole. */
+  poles?: 2 | 4;
   /** Vibrato: depth (semitones), rate (Hz), onset delay (s). */
   vib?: readonly [depth: number, rate: number, delay: number];
   breath?: number;
@@ -264,29 +280,37 @@ export function synth(sr: number, f: number, p: SynthSpec, seed = 5): Chans {
   const n = Math.floor(p.dur * sr);
   const nc = p.stereo ? 2 : 1;
   const chans: Chans = [];
+  const kE = Math.exp(-1 / (p.etau * sr));
+  const kA = Math.exp(-1 / (p.tau * sr));
+  const att = Math.max(1, Math.floor(p.att * sr));
+  const vibAt = p.vib ? Math.floor(p.vib[2] * sr) : n;
+  const vibDepth = p.vib ? (p.vib[0] * Math.LN2) / 12 : 0;
+  const vibRate = p.vib ? p.vib[1] / sr : 0;
+  const ramp = 0.25 * sr;
+  const drive = p.drive ?? 1;
+  const base = p.key ? p.cut * f : p.cut;
+  const four = p.poles !== 2;
   for (let c = 0; c < nc; c++) {
     const r = rng(seed + c * 131 + Math.round(f));
     const out = new Float32Array(n);
     const v = p.saws;
-    const ph = new Float64Array(v + 1).map(() => r());
+    const ph = new Float64Array(v).map(() => r());
     const det = new Float64Array(v).map((_, k) => {
       const spread = v === 1 ? 0 : (k / (v - 1) - 0.5) * 2;
       const cents = p.detune * spread + (nc === 2 ? (c ? 2.5 : -2.5) : 0) + (r() - 0.5) * 2;
       return 2 ** (cents / 1200);
     });
+    const norm1 = 1 / Math.sqrt(v);
     const f1 = new Svf();
     const f2 = new Svf();
     let sp = r();
+    let pp = ph[0];
     let bp = 0;
-    const drive = p.drive ?? 1;
-    const base = p.key ? p.cut * f : p.cut;
+    let ee = 1;
+    let ea = 1;
     for (let i = 0; i < n; i++) {
-      const t = i / sr;
       let fm = f;
-      if (p.vib && t > p.vib[2]) {
-        const d = Math.min(1, (t - p.vib[2]) / 0.25) * p.vib[0];
-        fm = f * 2 ** ((d * sinp((t - p.vib[2]) * p.vib[1])) / 12);
-      }
+      if (i > vibAt) fm = f * (1 + vibDepth * Math.min(1, (i - vibAt) / ramp) * sinp((i - vibAt) * vibRate));
       let x = 0;
       for (let k = 0; k < v; k++) {
         const dt = (fm * det[k]) / sr;
@@ -295,12 +319,14 @@ export function synth(sr: number, f: number, p: SynthSpec, seed = 5): Chans {
         ph[k] = q;
         x += 2 * q - 1 - blep(q, dt);
       }
-      x /= Math.sqrt(v);
+      x *= norm1;
       const dt0 = fm / sr;
       if (p.pulse) {
-        let q2 = ph[0] + 0.5;
+        pp += dt0;
+        if (pp >= 1) pp -= 1;
+        let q2 = pp + 0.5;
         if (q2 >= 1) q2 -= 1;
-        x += p.pulse * (2 * ph[0] - 1 - blep(ph[0], dt0) - (2 * q2 - 1 - blep(q2, dt0)));
+        x += p.pulse * (2 * pp - 1 - blep(pp, dt0) - (2 * q2 - 1 - blep(q2, dt0)));
       }
       if (p.sine || p.sub) {
         sp += dt0;
@@ -311,13 +337,19 @@ export function synth(sr: number, f: number, p: SynthSpec, seed = 5): Chans {
         bp = bp * 0.6 + (r() * 2 - 1) * 0.4;
         x += p.breath * bp;
       }
-      if ((i & 15) === 0) {
-        const fc = base + p.env * Math.exp(-t / p.etau);
+      if ((i & 31) === 0) {
+        const fc = base + p.env * ee;
         f1.set(fc, p.q, sr);
         f2.set(fc * 1.3, 0.6, sr);
       }
-      x = f2.run(f1.run(x));
-      const amp = t < p.att ? t / p.att : p.sus + (1 - p.sus) * Math.exp(-(t - p.att) / p.tau);
+      ee *= kE;
+      x = four ? f2.run(f1.run(x)) : f1.run(x);
+      let amp: number;
+      if (i < att) amp = i / att;
+      else {
+        amp = p.sus + (1 - p.sus) * ea;
+        ea *= kA;
+      }
       out[i] = sat(x * amp * drive);
     }
     chans.push(out);
@@ -330,22 +362,29 @@ export function epiano(sr: number, f: number, dur: number, seed = 6): Chans {
   const n = Math.floor(dur * sr);
   const out = new Float32Array(n);
   const r = rng(seed + Math.round(f));
-  const dec = 1.1 * (220 / f) ** 0.35;
+  const kI = Math.exp(-1 / (0.22 * sr));
+  const kA = Math.exp(-1 / (1.1 * (220 / f) ** 0.35 * sr));
+  const kT = Math.exp(-1 / (0.03 * sr));
+  const att = 0.002 * sr;
+  const df = f / sr;
+  const tine = f * 7.02 < sr * 0.45 ? (f * 7.02) / sr : 0;
   let pc = r();
-  let pm = r();
   let pt = r();
   let ph2 = r();
+  let ei = 1;
+  let ea = 1;
+  let et = 0.5;
   for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    pc += f / sr;
-    pm += f / sr;
-    pt += (f * 7.02) / sr;
-    ph2 += (f * 1.003) / sr;
-    const idx = 0.25 + 1.25 * Math.exp(-t / 0.22);
-    const amp = Math.min(1, t / 0.002) * Math.exp(-t / dec);
-    const body = sinp(pc + (idx / TAU) * sinp(pm) * 1.1) + 0.5 * sinp(ph2);
-    const tine = sinp(pt) * 0.35 * Math.exp(-t / 0.03);
-    out[i] = sat((body * 0.7 + tine) * amp * 1.2);
+    pc += df;
+    pt += tine;
+    ph2 += df * 1.003;
+    const idx = (0.4 + 1.8 * ei) * (1.1 / TAU);
+    const body = sinp(pc + idx * sinp(pc)) + 0.5 * sinp(ph2);
+    const amp = (i < att ? i / att : 1) * ea;
+    out[i] = sat((body * 0.7 + (tine ? sinp(pt) * et : 0)) * amp * 1.2);
+    ei *= kI;
+    ea *= kA;
+    et *= kT;
   }
   return norm([out], 0.85);
 }
@@ -395,80 +434,71 @@ export function modal(sr: number, f: number, p: { dur: number; ratios: readonly 
 
 // ---------------------------------------------------------------- crowd, applause, room
 
-/** Seamless stereo crowd murmur loop: formant-filtered noise with syllable-rate swells. */
+/** Seamless crowd murmur loop: formant-filtered noise with syllable-rate swells (mono; widen() for stereo). */
 export function crowd(sr: number, dur: number, seed = 8): Chans {
   const fade = Math.floor(0.6 * sr);
   const n = Math.floor(dur * sr);
   const total = n + fade;
-  const chans: Chans = [];
-  for (let c = 0; c < 2; c++) {
-    const r = rng(seed + c * 999);
-    const raw = new Float32Array(total);
-    const forms = [new Svf(), new Svf(), new Svf()];
-    const fc = [520, 1150, 2500];
-    const fq = [3, 4, 5];
-    const lvl = [1, 0.55, 0.22];
-    const rum = new Svf().set(260, 0.7, sr);
-    // Many voices -> a slowly breathing envelope made from interpolated random points.
-    let e0 = r();
-    let e1 = r();
-    let seg = 0;
-    const segLen = Math.floor(sr * 0.11);
-    for (let i = 0; i < total; i++) {
-      if (i % 64 === 0) {
-        for (let k = 0; k < 3; k++) {
-          fc[k] *= 1 + (r() - 0.5) * 0.04;
-          fc[k] = Math.min(Math.max(fc[k], [380, 900, 2000][k]), [700, 1500, 3000][k]);
-          forms[k].set(fc[k], fq[k], sr);
-        }
-      }
-      if (++seg >= segLen) {
-        seg = 0;
-        e0 = e1;
-        e1 = r();
-      }
-      const env = 0.65 + 0.35 * (e0 + (e1 - e0) * (seg / segLen));
-      const w = r() * 2 - 1;
-      let x = 0;
+  const r = rng(seed);
+  const raw = new Float32Array(total);
+  const forms = [new Svf(), new Svf(), new Svf()];
+  const lo = [380, 900, 2000];
+  const hi = [700, 1500, 3000];
+  const fc = [520, 1150, 2500];
+  const lvl = [1, 0.55, 0.22];
+  const rum = new Svf().set(260, 0.7, sr);
+  let e0 = r();
+  let e1 = r();
+  let seg = 0;
+  const segLen = Math.floor(sr * 0.11);
+  for (let i = 0; i < total; i++) {
+    if ((i & 127) === 0) {
       for (let k = 0; k < 3; k++) {
-        forms[k].run(w);
-        x += forms[k].bp * lvl[k];
+        fc[k] = Math.min(Math.max(fc[k] * (1 + (r() - 0.5) * 0.06), lo[k]), hi[k]);
+        forms[k].set(fc[k], 3 + k, sr);
       }
-      rum.run(w);
-      raw[i] = x * env + rum.lp * 0.5;
     }
-    const out = raw.subarray(0, n).slice();
-    for (let i = 0; i < fade; i++) {
-      const a = i / fade;
-      out[i] = out[i] * Math.sqrt(a) + raw[n + i] * Math.sqrt(1 - a);
+    if (++seg >= segLen) {
+      seg = 0;
+      e0 = e1;
+      e1 = r();
     }
-    chans.push(out);
+    const env = 0.65 + 0.35 * (e0 + (e1 - e0) * (seg / segLen));
+    const w = r() * 2 - 1;
+    forms[0].run(w);
+    forms[1].run(w);
+    forms[2].run(w);
+    rum.run(w);
+    raw[i] = (forms[0].bp * lvl[0] + forms[1].bp * lvl[1] + forms[2].bp * lvl[2]) * env + rum.lp * 0.5;
   }
-  return norm(chans, 0.7);
+  const out = raw.slice(0, n);
+  for (let i = 0; i < fade; i++) {
+    const a = i / fade;
+    out[i] = out[i] * Math.sqrt(a) + raw[n + i] * Math.sqrt(1 - a);
+  }
+  return norm(widen([out]), 0.7);
 }
 
-/** Applause/clapping texture: many tiny band-passed clicks. */
+/** Applause/clapping loop: many tiny band-passed clicks (mono texture, widened). */
 export function applause(sr: number, dur: number, rate: number, seed = 9): Chans {
   const n = Math.floor(dur * sr);
-  const chans: Chans = [];
-  for (let c = 0; c < 2; c++) {
-    const r = rng(seed + c * 55);
-    const out = new Float32Array(n);
-    const len = Math.floor(sr * 0.012);
-    const count = Math.floor(dur * rate);
-    const f = new Svf();
-    for (let k = 0; k < count; k++) {
-      const at = Math.floor(r() * (n - len));
-      const g = 0.3 + r() * 0.7;
-      f.set(900 + r() * 1800, 1.4, sr);
-      for (let i = 0; i < len; i++) {
-        f.run(r() * 2 - 1);
-        out[at + i] += f.bp * g * Math.exp(-i / (sr * 0.0022));
-      }
+  const r = rng(seed);
+  const out = new Float32Array(n);
+  const len = Math.floor(sr * 0.012);
+  const count = Math.floor(dur * rate);
+  const f = new Svf();
+  const decay = Math.exp(-1 / (sr * 0.0022));
+  for (let k = 0; k < count; k++) {
+    const at = Math.floor(r() * n);
+    let g = 0.3 + r() * 0.7;
+    f.set(900 + r() * 1800, 1.4, sr);
+    for (let i = 0; i < len; i++) {
+      f.run(r() * 2 - 1);
+      out[(at + i) % n] += f.bp * g;
+      g *= decay;
     }
-    chans.push(out);
   }
-  return norm(chans, 0.8);
+  return norm(widen([out]), 0.8);
 }
 
 /** Generated stereo reverb impulse: early reflections, then a darkening exponential tail. */
@@ -480,11 +510,17 @@ export function impulse(sr: number, dur: number, decay: number, seed = 10): Chan
     const out = new Float32Array(n);
     const pre = Math.floor(0.012 * sr);
     let y = 0;
+    let damp = 0.85;
+    let amp = 1;
+    const dDamp = Math.exp(-1 / (0.35 * sr));
+    const dAmp = Math.exp(-6.9 / (decay * sr));
+    const ramp = 0.006 * sr;
     for (let i = pre; i < n; i++) {
-      const t = (i - pre) / sr;
-      const a = 0.85 * Math.exp(-t / 0.35) + 0.12;
-      y += a * ((r() * 2 - 1) - y);
-      out[i] = y * Math.exp((-6.9 * t) / decay) * Math.min(1, t / 0.006);
+      const k = i - pre;
+      y += (damp + 0.12) * ((r() * 2 - 1) - y);
+      out[i] = y * amp * (k < ramp ? k / ramp : 1);
+      damp *= dDamp;
+      amp *= dAmp;
     }
     for (let k = 0; k < 7; k++) {
       const at = pre + Math.floor((0.004 + r() * 0.05) * sr);

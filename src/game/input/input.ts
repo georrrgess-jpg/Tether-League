@@ -3,6 +3,7 @@ import type { Action, Settings } from '../../storage/settings';
 import { attackDir, type Command, type Robot, type World } from '../sim/types';
 import { SmartSwing } from '../sim/swing';
 import { anchorInRange } from '../sim/world';
+import { buzz } from '../../ui/device';
 
 /**
  * Converts keyboard, mouse, touch and gamepad state into the normalised Command the simulation consumes.
@@ -76,6 +77,13 @@ export class InputManager {
   private touchRoot: HTMLElement | null = null;
   private stickBase: HTMLElement | null = null;
   private stickKnob: HTMLElement | null = null;
+  /** Radius of the drawn stick at rest (client px); 0 until measured. */
+  private stickR = 0;
+  private passBtn: HTMLElement | null = null;
+  /** Last long-ball charge drawn on the PASS button (to skip redundant style writes). */
+  private chargeDrawn = -1;
+  private chargeInWindow = false;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private tmp = { x: 0, z: 0 };
   private off: (() => void)[] = [];
 
@@ -128,8 +136,12 @@ export class InputManager {
   detach(): void {
     for (const f of this.off) f();
     this.off.length = 0;
+    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
     this.touchRoot?.remove();
     this.touchRoot = null;
+    this.passBtn = null;
+    this.layer.classList.remove('has-touch');
     this.releaseAll();
   }
 
@@ -164,8 +176,10 @@ export class InputManager {
     if (this.stickBase) {
       this.stickBase.style.left = '';
       this.stickBase.style.top = '';
+      this.stickBase.classList.remove('is-steer');
     }
     this.touchRoot?.querySelectorAll('.is-down').forEach((el) => el.classList.remove('is-down'));
+    this.showCharge(null);
   }
 
   private pressPass(): void {
@@ -263,12 +277,13 @@ export class InputManager {
     if (!this.enabled) return false;
     if (!this.touchSeen) this.showTouch();
     this.device = 'touch';
+    this.wake();
     const btn = target?.closest?.('[data-touch]') as HTMLElement | null;
     const kind = btn?.dataset.touch;
     if (kind === 'pass' && this.passId === null) {
       this.passId = id;
       this.pressPass();
-      btn!.classList.add('is-down');
+      this.pressed(btn!);
       return true;
     }
     if (kind === 'kick' && this.kickId === null) {
@@ -276,7 +291,7 @@ export class InputManager {
       this.kickSX = x;
       this.kickSY = y;
       this.dragAim = false;
-      btn!.classList.add('is-down');
+      this.pressed(btn!);
       return true;
     }
     if (kind === 'tether' && this.tetherId === null) {
@@ -284,7 +299,7 @@ export class InputManager {
       this.tetherTouch = true;
       this.tetherLatch = true;
       this.used.tether++;
-      btn!.classList.add('is-down');
+      this.pressed(btn!);
       return true;
     }
     if (kind || this.stickId !== null || target?.closest?.('button, a, .no-game-input')) return false;
@@ -296,7 +311,7 @@ export class InputManager {
     // Pressing on or near the drawn stick steers at once, so movement works without a drag.
     // Anywhere else on that half, the stick appears under the thumb and steers as it moves.
     const home = this.stickHome();
-    const reach = 1.7 * 62 * this.settings().touchScale;
+    const reach = 1.7 * (this.stickR || 62 * this.settings().touchScale);
     if (home && Math.hypot(x - home.x, y - home.y) <= reach) {
       this.stickOX = home.x;
       this.stickOY = home.y;
@@ -321,11 +336,13 @@ export class InputManager {
     this.stickBase.style.top = '';
     const r = this.stickBase.getBoundingClientRect();
     if (!r.width) return null;
+    this.stickR = r.width / 2;
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
   private steer(x: number, y: number): void {
-    const max = 56 * this.settings().touchScale;
+    // Full deflection at 90% of the drawn radius (the knob then sits on the rim).
+    const max = this.stickR ? this.stickR * 0.9 : 56 * this.settings().touchScale;
     let dx = x - this.stickOX;
     let dy = y - this.stickOY;
     const d = Math.hypot(dx, dy);
@@ -347,6 +364,12 @@ export class InputManager {
     this.stickX = dx * k;
     this.stickY = dy * k;
     if (this.stickKnob) this.stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    if (this.stickBase) {
+      // Outside the dead zone the knob lights up and the rim shows the steering direction.
+      const steering = k > 0;
+      this.stickBase.classList.toggle('is-steer', steering);
+      if (steering) this.stickBase.style.setProperty('--dir', `${Math.round((Math.atan2(dy, dx) * 180) / Math.PI)}deg`);
+    }
   }
 
   private pointerMove(e: PointerEvent): void {
@@ -391,7 +414,7 @@ export class InputManager {
       this.stickX = this.stickY = 0;
       if (this.stickKnob) this.stickKnob.style.transform = '';
       if (this.stickBase) {
-        this.stickBase.classList.remove('is-down');
+        this.stickBase.classList.remove('is-down', 'is-steer');
         this.stickBase.style.left = '';
         this.stickBase.style.top = '';
       }
@@ -412,6 +435,61 @@ export class InputManager {
       this.tetherTouch = false;
       this.touchRoot?.querySelector('[data-touch="tether"]')?.classList.remove('is-down');
     }
+    if (this.stickId === null && this.passId === null && this.kickId === null && this.tetherId === null) this.restSoon();
+  }
+
+  /** Button pressed: lit state and, where supported and enabled, a short buzz. */
+  private pressed(btn: HTMLElement): void {
+    btn.classList.add('is-down');
+    if (this.settings().vibration) buzz(btn.dataset.touch === 'kick' ? 12 : 8);
+  }
+
+  /** Controls are at full strength while touched, and fade back a little when left alone. */
+  private wake(): void {
+    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+    this.touchRoot?.classList.remove('is-idle');
+  }
+
+  private restSoon(): void {
+    if (!this.touchRoot) return;
+    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      this.touchRoot?.classList.add('is-idle');
+    }, 3500);
+  }
+
+  /**
+   * Long-ball charge on the PASS button, matching the meter at the robot's feet: a fill that grows
+   * while PASS is held and a gold notch at the ideal charge (when there is a pass to aim).
+   */
+  showCharge(ideal: number | null): void {
+    const btn = this.passBtn;
+    if (!btn) return;
+    const charge = this.lobCharge;
+    if (charge === null) {
+      if (this.chargeDrawn !== -1) {
+        this.chargeDrawn = -1;
+        this.chargeInWindow = false;
+        btn.classList.remove('is-charging', 'has-ideal', 'in-window');
+      }
+      return;
+    }
+    const q = Math.round(charge * 100) / 100;
+    const inWindow = ideal !== null && Math.abs(charge - ideal) <= 0.06;
+    if (q !== this.chargeDrawn) {
+      this.chargeDrawn = q;
+      btn.style.setProperty('--charge', String(q));
+      btn.classList.add('is-charging');
+    }
+    btn.classList.toggle('has-ideal', ideal !== null);
+    if (ideal !== null) btn.style.setProperty('--ideal', String(Math.round(ideal * 100) / 100));
+    if (inWindow !== this.chargeInWindow) {
+      this.chargeInWindow = inWindow;
+      btn.classList.toggle('in-window', inWindow);
+      if (inWindow && this.settings().vibration) buzz(6);
+    }
   }
 
   private showTouch(): void {
@@ -419,23 +497,31 @@ export class InputManager {
     if (this.touchRoot) return;
     const root = document.createElement('div');
     root.className = 'touch-ui';
+    // The stick's rest spot shows four chevrons; the rim arc (.stick-dir) shows the steering direction.
+    const chev = (deg: number) => `<path transform="rotate(${deg} 50 50)" d="M44 13 50 7l6 6"/>`;
     root.innerHTML = `
-      <div class="stick-base"><div class="stick-knob"></div></div>
-      <div class="tbtn tbtn-tether" data-touch="tether"><span>SWING</span><small>tap · hold</small></div>
-      <div class="tbtn tbtn-kick" data-touch="kick"><span>KICK</span><small>drag to aim</small></div>
-      <div class="tbtn tbtn-pass" data-touch="pass"><span>PASS</span></div>`;
+      <div class="stick-base" aria-hidden="true"><svg class="stick-chev" viewBox="0 0 100 100">${chev(0)}${chev(90)}${chev(180)}${chev(270)}</svg><i class="stick-dir"></i><div class="stick-knob"></div></div>
+      <div class="tbtn tbtn-tether" data-touch="tether" role="button" aria-label="Swing"><span>SWING</span><small>tap · hold</small></div>
+      <div class="tbtn tbtn-kick" data-touch="kick" role="button" aria-label="Kick"><span>KICK</span><small>drag to aim</small></div>
+      <div class="tbtn tbtn-pass" data-touch="pass" role="button" aria-label="Pass"><i class="tb-charge" aria-hidden="true"></i><span>PASS</span><small>hold: long</small></div>`;
     this.layer.appendChild(root);
+    this.layer.classList.add('has-touch');
     this.touchRoot = root;
     this.stickBase = root.querySelector('.stick-base');
     this.stickKnob = root.querySelector('.stick-knob');
+    this.passBtn = root.querySelector('.tbtn-pass');
     this.layoutTouch();
+    this.restSoon();
   }
 
   private layoutTouch(): void {
     if (!this.touchRoot) return;
     const s = this.settings();
-    this.touchRoot.style.setProperty('--touch-scale', String(s.touchScale));
+    // On the play layer so HUD pieces (rotate tip, hint) can keep clear of the controls too.
+    this.layer.style.setProperty('--touch-scale', String(s.touchScale));
     this.touchRoot.classList.toggle('swap', s.touchSwap);
+    this.layer.classList.toggle('touch-swap', s.touchSwap);
+    this.stickR = 0;
   }
 
   private padPoll(): { mx: number; mz: number; ax: number; az: number; aim: boolean } | null {

@@ -257,17 +257,20 @@ export class MatchMode implements PlayMode {
           this.banner(rec.ownGoalBy >= 0 ? 'GOAL!' : rec.swing ? 'SWING GOAL!' : rec.oneTouch ? 'ONE-TOUCH GOAL!' : 'GOAL!', sub, ours ? 'ours' : 'theirs', TUNING.match.goalCelebration + 0.8, rec.team === 0 ? this.setup.home.primary : this.setup.away.primary);
           audio.play(ours ? 'goal' : 'concede');
           audio.cheer(ours ? 1 : 0.5);
+          audio.musicCue(ours ? 'goal' : 'concede');
           break;
         }
         case 'overtime':
           this.banner('OVERTIME', 'Next goal wins', 'neutral', 2.4);
           this.elPhase.textContent = 'Sudden death';
           audio.play('whistle');
+          audio.musicCue('overtime');
           break;
         case 'final':
           this.banner('FULL TIME', `${m.score[0]} – ${m.score[1]}`, m.score[0] > m.score[1] ? 'ours' : 'theirs', 5);
           audio.play('whistle');
           audio.cheer(0.7);
+          audio.musicCue(m.score[0] > m.score[1] ? 'win' : m.score[0] < m.score[1] ? 'lose' : 'draw');
           break;
         case 'save':
           if (e.robot === 0) {
@@ -291,7 +294,7 @@ export class MatchMode implements PlayMode {
           const name = e.play === 'long_ball' ? (e.perfect ? 'Perfect long ball!' : 'Long ball!') : e.play === 'give_and_go' ? (e.perfect ? 'First-time give-and-go!' : 'Give-and-go!') : e.play === 'wall_pass' ? 'Wall pass!' : '';
           if (name && (me || e.play !== 'give_and_go')) {
             this.toast(me ? name : `Teammate: ${name}`, 'good');
-            audio.play('gate', { intensity: me ? 0.6 : 0.35 });
+            audio.play('play', { intensity: me ? 0.8 : 0.4 });
           }
           break;
         }

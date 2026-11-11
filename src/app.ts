@@ -83,6 +83,8 @@ export class App {
       audio.unlock();
       if (!this.session) audio.startMusic('menu');
     };
+    // iOS Safari only applies :active (pressed styles) when a touch listener exists up the tree.
+    document.addEventListener('touchstart', () => {}, { passive: true });
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     window.addEventListener('resize', () => this.onResize());
