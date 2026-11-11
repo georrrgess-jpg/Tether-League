@@ -48,7 +48,7 @@ export const CHASSIS: Record<ChassisId, ChassisDef> = {
     weakness: 'Light in challenges, a slightly softer shot, and sheds release momentum sooner.',
     credits: 400,
     unlockLevel: 4,
-    mod: { acceleration: 1.08, braking: 1.1, mass: 0.84, releaseDrag: 1.22, swing: 1.08, steer: 1.1, kick: 0.975 },
+    mod: { acceleration: 1.06, braking: 1.1, mass: 0.84, releaseDrag: 1.22, swing: 1.08, steer: 1.1, kick: 0.975 },
   },
   bulwark: {
     id: 'bulwark',

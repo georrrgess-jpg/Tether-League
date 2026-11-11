@@ -62,14 +62,15 @@ export class LessonMode extends Scenario {
     return i >= 0 && i < chain.length - 1 ? chain[i + 1] : null;
   }
 
-  private keys(): { move: string; tether: string; kick: string; pass: string } {
+  private keys(): { move: string; tether: string; kick: string; pass: string; meg: string } {
     const k = this.settings().keys;
-    if (this.touch) return { move: `the stick (bottom ${this.settings().touchSwap ? 'right' : 'left'})`, tether: 'SWING', kick: 'KICK', pass: 'PASS' };
+    if (this.touch) return { move: `the stick (bottom ${this.settings().touchSwap ? 'right' : 'left'})`, tether: 'SWING', kick: 'KICK', pass: 'PASS', meg: 'MEG' };
     return {
       move: `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])}`,
       tether: `right mouse or ${keyLabel(k.tether[0])}`,
       kick: `left mouse or ${keyLabel(k.kick[0])}`,
       pass: `${keyLabel(k.pass[0])} (or ${keyLabel(k.pass[1])})`,
+      meg: keyLabel(k.meg[0]),
     };
   }
 
@@ -308,6 +309,14 @@ export class LessonMode extends Scenario {
               return false;
             },
           },
+          {
+            text: this.touch
+              ? 'Nutmeg: run straight at the charging defender and tap MEG as it lights up.'
+              : `Nutmeg: run straight at the charging defender and press ${k.meg} as the ball ring turns pink.`,
+            sub: 'The ball goes through their legs and you run through after it. It takes a little luck: if they block it, go again.',
+            enter: () => this.megDrill(),
+            check: (ev) => this.megDone(ev),
+          },
         ];
         break;
       case 'defend':
@@ -351,6 +360,50 @@ export class LessonMode extends Scenario {
 
   private ggCall = false;
   private ggReturned = false;
+
+  /** Nutmeg drill: ball at your feet, a defender who charges straight at you once you set off. */
+  private megDrill(): void {
+    this.a = -6;
+    this.b = 0;
+    this.place(0, -7, 0, 0);
+    this.place(1, -12, -7, 0);
+    this.place(2, 6, 0, Math.PI);
+    this.ball(this.a, this.b);
+    this.flag = false;
+    this.megGo = 0;
+    this.stepT = 0;
+    this.setMarkers([]);
+  }
+
+  private megGo = 0;
+
+  private megDone(ev: SimEvent[]): boolean {
+    for (const e of ev) {
+      if (e.type !== 'meg' || e.robot !== 0) continue;
+      if (e.success) {
+        this.toast('Nutmeg! Right through them', 'good');
+        return true;
+      }
+      this.toast('Blocked! Megs need a little luck: go again', 'bad');
+      this.megGo = -1.2; // short pause, then reset
+    }
+    // Reset when the attempt fizzled out: blocked, the defender won the ball, or you ran past each other.
+    const me = this.me();
+    const def = this.world.robots[2];
+    const b = this.world.ball;
+    if (this.megGo < 0) {
+      this.megGo += DT;
+      if (this.megGo >= 0) this.megDrill();
+      return false;
+    }
+    const lost = Math.hypot(b.x - me.x, b.z - me.z) > 4 || def.x < me.x - 1.5;
+    this.stepT = lost ? this.stepT + DT : 0;
+    if (this.stepT > 0.8) {
+      this.megDrill();
+      this.toast('Reset: run at the defender with the ball at your feet');
+    }
+    return false;
+  }
 
   /** Long-ball drill: ball at your feet, teammate up the pitch, a defender parked in the straight lane. */
   private lobDrill(perfectOnly: boolean): void {
@@ -557,6 +610,15 @@ export class LessonMode extends Scenario {
     const b = w.ball;
     if (this.wait2 > 0) this.wait2 -= DT;
     const bd = Math.hypot(b.x - mate.x, b.z - mate.z);
+    if (this.index === 3) {
+      // Nutmeg step: once you set off, the defender charges straight at the ball (a committed challenge).
+      const def = w.robots[2];
+      if (this.megGo >= 0 && (Math.hypot(me.vx, me.vz) > 1.5 || this.megGo > 0)) {
+        this.megGo += DT;
+        if (def.megged <= 0) runTo(cmds[2], b.x, b.z, def.x, def.z, 0.2);
+      }
+      return;
+    }
     // The defender stays put (it only blocks the straight lane).
     if (this.index === 2) {
       // Player pressed PASS without the ball after passing: the call for a give-and-go.

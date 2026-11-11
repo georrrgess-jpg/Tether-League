@@ -618,7 +618,9 @@
   /* centre-to-centre distances from KICK, and the derived top of the button cluster */
   --d-ks: calc(var(--tk) / 2 + var(--ts) / 2 + var(--tg));
   --d-kp: calc(var(--tk) / 2 + var(--tp) / 2 + var(--tg));
-  --t-top: calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-kp) * 0.985 + var(--tp) / 2);
+  --tmeg: max(48px, calc(var(--tk) * 0.56)); /* MEG: above SWING, beside PASS */
+  --meg-b: calc(var(--tk) / 2 + var(--d-ks) * 0.259 + var(--ts) / 2 + var(--tg)); /* MEG bottom edge above KICK's corner */
+  --t-top: max(calc(var(--tm) + var(--safe-b) + var(--tk) / 2 + var(--d-kp) * 0.985 + var(--tp) / 2), calc(var(--tm) + var(--safe-b) + var(--meg-b) + var(--tmeg)));
 }
 .touch-ui {
   position: absolute;
@@ -757,6 +759,37 @@
 .tbtn-pass small {
   font-size: max(12px, calc(var(--tp) * 0.15));
 }
+/* MEG (skill touch): sits above SWING. Quiet until a nutmeg is on, then it lights up. */
+.tbtn-meg {
+  --c: 137, 96, 223;
+  right: calc(var(--tm) + var(--safe-r) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--tmeg) / 2);
+  bottom: calc(var(--tm) + var(--safe-b) + var(--meg-b));
+  width: var(--tmeg);
+  height: var(--tmeg);
+  font-size: max(13px, calc(var(--tmeg) * 0.26));
+  opacity: 0.62;
+}
+.tbtn-meg.is-on {
+  --c: 236, 72, 153;
+  opacity: 1;
+  border-color: #fff;
+  box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.4), 0 0 18px 3px rgba(236, 72, 153, 0.55), 0 4px 10px rgba(10, 22, 40, 0.35);
+}
+.tbtn-meg.is-hot {
+  animation: meg-hot 0.5s ease-in-out infinite alternate;
+}
+@keyframes meg-hot {
+  to {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px rgba(244, 200, 75, 0.55), 0 0 24px 6px rgba(236, 72, 153, 0.7), 0 4px 10px rgba(10, 22, 40, 0.35);
+  }
+}
+.reduced-motion .tbtn-meg.is-hot {
+  animation: none;
+}
+.touch-ui.is-idle .tbtn-meg:not(.is-on) {
+  opacity: 0.5;
+}
 .touch-ui.swap .tbtn-kick {
   right: auto;
   left: calc(var(--tm) + var(--safe-l));
@@ -768,6 +801,10 @@
 .touch-ui.swap .tbtn-pass {
   right: auto;
   left: calc(var(--tm) + var(--safe-l) + var(--tk) / 2 + var(--d-kp) * 0.17 - var(--tp) / 2);
+}
+.touch-ui.swap .tbtn-meg {
+  right: auto;
+  left: calc(var(--tm) + var(--safe-l) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--tmeg) / 2);
 }
 /* pressed: pushed in, brighter, with a glow ring in the button's colour */
 .tbtn.is-down {
@@ -1129,6 +1166,18 @@
   height: var(--tp);
   font-size: max(12px, calc(var(--tp) * 0.22)) !important;
   background: rgba(47, 181, 122, 0.85);
+}
+.tp-meg {
+  right: calc(var(--tm) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--tmeg) / 2);
+  bottom: calc(var(--tm) + var(--meg-b));
+  width: var(--tmeg);
+  height: var(--tmeg);
+  font-size: max(10px, calc(var(--tmeg) * 0.24)) !important;
+  background: rgba(137, 96, 223, 0.85);
+}
+.touch-preview.swap .tp-meg {
+  right: auto;
+  left: calc(var(--tm) + var(--tk) / 2 + var(--d-ks) * 0.966 - var(--tmeg) / 2);
 }
 .touch-preview.swap .tp-stick i {
   left: auto;

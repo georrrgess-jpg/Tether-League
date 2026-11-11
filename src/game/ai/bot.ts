@@ -2,7 +2,7 @@ import { DT, TUNING } from '../../content/tuning';
 import { Rng } from '../sim/rng';
 import { attackDir, type Command, type Robot, type World } from '../sim/types';
 import { releaseNow, planSwing } from '../sim/swing';
-import { lobPlan, predictBall } from '../sim/world';
+import { lobPlan, megWindow, predictBall } from '../sim/world';
 
 /**
  * Bots drive robots through the same Command interface as a human. Difficulty changes reaction time,
@@ -136,6 +136,8 @@ interface BotState {
   diff: Difficulty;
   /** The declared difficulty; `diff` may be an eased copy of it (mercy rule). */
   base: Difficulty;
+  /** Nutmeg decision for the current opening: null = not rolled yet. */
+  megRoll: boolean | null;
   style: BotStyle;
   role: 'challenger' | 'support';
   thinkIn: number;
@@ -212,6 +214,7 @@ export class BotDirector {
         id: s.robot,
         diff: s.difficulty,
         base: s.difficulty,
+        megRoll: null,
         style: s.style,
         role: 'support',
         thinkIn: this.rng.range(0, 0.15),
@@ -648,6 +651,7 @@ export class BotDirector {
     c.pass = false;
     c.lob = 0;
     c.giveGo = false;
+    c.meg = false;
     c.mx = 0;
     c.mz = 0;
     c.ax = ball.x;
@@ -788,6 +792,21 @@ export class BotDirector {
       }
     } else if (ballDist > TUNING.kick.range + 0.4) {
       b.kick = null;
+    }
+
+    // Nutmeg: with the ball at its feet and a defender diving in on its line, a bot sometimes goes
+    // through them. One decision per opening (more often at higher difficulty), only on a good chance.
+    const mw = r.megCd <= 0 && r.kickCd <= 0 ? megWindow(w, r) : null;
+    if (!mw) b.megRoll = null;
+    else {
+      if (b.megRoll === null) b.megRoll = this.rng.chance(b.diff.dribble * 0.4);
+      if (b.megRoll && mw.chance >= 0.62 && mw.timing > 0.5 && b.hesitate <= 0) {
+        c.meg = true;
+        c.kick = false;
+        c.pass = false;
+        b.kick = null;
+        b.megRoll = null;
+      }
     }
   }
 }

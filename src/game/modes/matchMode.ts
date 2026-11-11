@@ -41,6 +41,8 @@ export interface MatchSetup {
   hints: boolean;
   /** Show the long-ball / give-and-go hints (until the player has used plays a few times). */
   playHints?: boolean;
+  /** Show the nutmeg hint when an opening is on (until the player has landed a few). */
+  megHints?: boolean;
   /** The player's club match ball (cosmetic id). */
   ball?: string;
 }
@@ -88,6 +90,7 @@ export class MatchMode implements PlayMode {
   private myPassTick = -9999;
   private triedLob = false;
   private triedGiveGo = false;
+  private megTried = false;
   private rushedTold = 0;
   readonly ballSkin?: string;
   private mercy = 0;
@@ -225,6 +228,11 @@ export class MatchMode implements PlayMode {
       if (e.type === 'kick' && e.robot === 0 && e.pass) this.myPassTick = this.world.tick;
       if (e.type === 'kick' && e.robot === 0 && e.oneTouch) this.toast('One-touch strike!', 'good');
       if (e.type === 'kick' && e.robot === 0 && e.lob && e.perfect) this.toast('Perfect weight!', 'good');
+      if (e.type === 'meg') {
+        if (e.robot === 0) this.megTried = true;
+        if (e.robot === 0 && !e.success) this.toast('Meg blocked! They kept their legs shut', 'bad');
+        else if (e.victim === 0 && e.success) this.toast('Nutmegged! Stay on your feet next time', 'bad');
+      }
     }
     for (const e of m.events) {
       switch (e.type) {
@@ -291,7 +299,7 @@ export class MatchMode implements PlayMode {
           const ours = e.robot < 2;
           if (!ours) break;
           const me = e.robot === 0;
-          const name = e.play === 'long_ball' ? (e.perfect ? 'Perfect long ball!' : 'Long ball!') : e.play === 'give_and_go' ? (e.perfect ? 'First-time give-and-go!' : 'Give-and-go!') : e.play === 'wall_pass' ? 'Wall pass!' : '';
+          const name = e.play === 'long_ball' ? (e.perfect ? 'Perfect long ball!' : 'Long ball!') : e.play === 'give_and_go' ? (e.perfect ? 'First-time give-and-go!' : 'Give-and-go!') : e.play === 'wall_pass' ? 'Wall pass!' : e.play === 'nutmeg' ? (e.perfect ? 'Cheeky nutmeg!' : 'NUTMEG!') : '';
           if (name && (me || e.play !== 'give_and_go')) {
             this.toast(me ? name : `Teammate: ${name}`, 'good');
             audio.play('play', { intensity: me ? 0.8 : 0.4 });
@@ -356,6 +364,12 @@ export class MatchMode implements PlayMode {
         key = 'givego';
         text = `Give-and-go: after passing, run forward and press ${pass} again to get it straight back`;
       }
+    }
+    // Nutmeg: shown while an opening is on, until the player has tried one this match (or landed a few ever).
+    if (!key && this.setup.megHints && !this.megTried && this.settings().showHints && m.phase === 'play' && session.megOn !== null) {
+      const k = this.settings().keys;
+      key = 'meg';
+      text = session.input.touchSeen ? 'Defender diving in: tap MEG to poke the ball through them!' : `Defender diving in: press ${keyLabel(k.meg[0])} to nutmeg the ball through them!`;
     }
     if (key !== this.hintKey) {
       this.hintKey = key;

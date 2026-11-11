@@ -44,8 +44,8 @@ export const REWARDS = {
 } as const;
 
 /** Completed plays in a match: long balls, give-and-goes, wall passes and one-touch goals. */
-export function playCount(s: { longBalls?: number; giveAndGos?: number; wallPasses?: number; oneTouchGoals?: number }): number {
-  return (s.longBalls ?? 0) + (s.giveAndGos ?? 0) + (s.wallPasses ?? 0) + (s.oneTouchGoals ?? 0);
+export function playCount(s: { longBalls?: number; giveAndGos?: number; wallPasses?: number; oneTouchGoals?: number; megs?: number }): number {
+  return (s.longBalls ?? 0) + (s.giveAndGos ?? 0) + (s.wallPasses ?? 0) + (s.oneTouchGoals ?? 0) + (s.megs ?? 0);
 }
 
 export function contributionScore(s: { goals: number; assists: number; saves: number; passes: number; interceptions: number }): number {
@@ -191,6 +191,7 @@ export function commitMatch(save: SaveGame, result: MatchResult, ctx: CommitCont
   rec.giveAndGos += p.giveAndGos ?? 0;
   rec.wallPasses += p.wallPasses ?? 0;
   rec.oneTouchGoals += p.oneTouchGoals ?? 0;
+  rec.megs += p.megs ?? 0;
   if (facts.cleanSheets) rec.cleanSheets++;
   if (facts.hatTrick) rec.hatTricks++;
   if (p.goals > rec.bestGoals) {

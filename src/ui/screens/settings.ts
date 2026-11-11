@@ -104,7 +104,7 @@ export function settingsScreen(app: App, params: URLSearchParams): ScreenView {
   // Sketch of the in-match touch controls (four-fifths size) that follows the size slider.
   const preview = h('div', { class: `touch-preview${s.touchSwap ? ' swap' : ''}`, 'aria-hidden': 'true', style: `--touch-scale:${s.touchScale}` },
     h('span', { class: 'tp-stick' }, h('i')),
-    h('span', { class: 'tp-btns' }, h('i', { class: 'tp-swing' }, 'SWING'), h('i', { class: 'tp-pass' }, 'PASS'), h('i', { class: 'tp-kick' }, 'KICK')),
+    h('span', { class: 'tp-btns' }, h('i', { class: 'tp-swing' }, 'SWING'), h('i', { class: 'tp-meg' }, 'MEG'), h('i', { class: 'tp-pass' }, 'PASS'), h('i', { class: 'tp-kick' }, 'KICK')),
   );
 
   const data = () => {

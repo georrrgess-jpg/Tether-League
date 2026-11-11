@@ -162,6 +162,7 @@ export function careerSetup(save: SaveGame): MatchSetup | null {
     seed: hashString(info.next.id) ^ save.career.seed,
     hints: save.records.matches < 2,
     playHints: save.records.longBalls + save.records.giveAndGos < 3,
+    megHints: save.records.megs < 3,
     ball: save.club.ball,
   };
 }
@@ -190,6 +191,7 @@ export function quickSetup(save: SaveGame): MatchSetup {
     seed: (Date.now() ^ (save.matchSeq * 2654435761)) >>> 0,
     hints: save.records.matches < 2,
     playHints: save.records.longBalls + save.records.giveAndGos < 3,
+    megHints: save.records.megs < 3,
     ball: save.club.ball,
   };
 }

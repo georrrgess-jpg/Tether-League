@@ -3,7 +3,7 @@
  * (src/game/sim/world.ts) and input (src/game/input/input.ts); this is the player-facing description,
  * shown in the Academy playbook, the pause menu and the controls help.
  */
-export type PlayId = 'long_ball' | 'give_and_go' | 'wall_pass' | 'one_touch';
+export type PlayId = 'long_ball' | 'give_and_go' | 'wall_pass' | 'one_touch' | 'nutmeg';
 
 export interface PlayDef {
   id: PlayId;
@@ -15,7 +15,7 @@ export interface PlayDef {
   /** What separates a good attempt from a perfect one. */
   skill: string;
   /** The Records counter that tracks it. */
-  record: 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals';
+  record: 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals' | 'megs';
   icon: string;
 }
 
@@ -72,6 +72,19 @@ export const PLAYS: Record<PlayId, PlayDef> = {
     record: 'oneTouchGoals',
     icon: 'ball',
   },
+  nutmeg: {
+    id: 'nutmeg',
+    name: 'Nutmeg',
+    summary: 'Poke the ball through a defender who dives in, and run straight through after it.',
+    how: {
+      keyboard: 'Run at a closing defender with the ball at your feet and press MEG (L / G) as the ball ring turns pink.',
+      touch: 'Run at a closing defender with the ball at your feet and tap MEG when it lights up.',
+      pad: 'Run at a closing defender with the ball at your feet and press X when the ball ring turns pink.',
+    },
+    skill: 'Line them up, wait for the sweet distance, and pick a defender who is charging in: a standing or side-stepping defender shuts the gap. It still takes a little luck, and a miss gives the ball away. With nobody in the way, MEG is a knock-on.',
+    record: 'megs',
+    icon: 'next',
+  },
 };
 
-export const PLAY_ORDER: PlayId[] = ['long_ball', 'give_and_go', 'wall_pass', 'one_touch'];
+export const PLAY_ORDER: PlayId[] = ['long_ball', 'give_and_go', 'wall_pass', 'one_touch', 'nutmeg'];

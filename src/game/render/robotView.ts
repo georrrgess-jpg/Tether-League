@@ -6,13 +6,23 @@ import { faceTexture, jerseyTexture, luminance, shade, type Expression } from '.
 
 /**
  * Procedural robot: rounded clear-coat white shell, navy joints, a dark glass face screen with glowing eyes,
- * the club jersey with its number, a glowing team-colour belt and ear rings, and two small back thrusters
- * that flare when the robot runs fast or swings. Optional head toppers come from the look.
+ * the club jersey with its number, a glowing team-colour belt and ear lights, and back thrusters that flare
+ * when the robot runs fast or swings. Optional head toppers come from the look.
+ *
+ * The four chassis are one family (same skull, face screen, materials and collision footprint) told apart by
+ * silhouette and a few signature parts that survive at match-camera size:
+ *  - All-Rounder: the balanced classic. One crown stripe, round shoulder caps, a twin-nozzle jet pack.
+ *  - Scout: lean and long-legged. Twin racing stripes, a visor peak, one ear antenna, slim twin boosters,
+ *    heel fins; leans forward.
+ *  - Bulwark: stocky and armoured. A broad helmet band, square ear blocks, a jaw guard, club-colour pauldrons,
+ *    a chest bumper with running lights, heavy boots and one big thruster; stands low and wide.
+ *  - Glider: aerodynamic. An arrowhead helmet graphic, swept ear fins and an aero tail, back wings with lit
+ *    leading edges, a teardrop torso and pointed boots; arms swept back.
  *
  * Static parts are merged per material inside each moving group (body, torso, head, arms, legs), so a robot
- * costs about thirty draw calls whatever its detail. Merged geometry is cached per chassis and per topper and
- * shared by every robot. All animation is presentation only; the simulation body is a circle and never
- * reads this.
+ * costs about twenty-five draw calls whatever its detail. Merged geometry is cached per chassis and per
+ * topper and shared by every robot. All animation is presentation only; the simulation body is a circle and
+ * never reads this.
  */
 export type RobotMood = 'play' | 'celebrate' | 'sad' | 'idle' | 'ready';
 
@@ -31,12 +41,16 @@ export interface RobotPose {
   kickAge: number;
   kickDir: number;
   bumpAge: number;
+  /** Seconds since this robot was nutmegged (undefined or above 1: none): plays a short wrong-footed reaction. */
+  megAge?: number;
   mood: RobotMood;
   reduced: boolean;
 }
 
 /** Typical anchor head height in world units, used to aim the rope arm when the pose gives none. */
 const ANCHOR_Y = 2.6;
+/** Length of the nutmeg reaction (s). */
+const MEG_TIME = 0.7;
 
 const WHITE = '#f6f8f6';
 const NAVY = '#1f2d45';
@@ -59,8 +73,10 @@ const _s = new THREE.Vector3();
 /** Collects transformed primitives per material slot and merges them into one geometry per slot. */
 class Parts {
   private lists = new Map<Slot, THREE.BufferGeometry[]>();
+  private solid = new Set<Slot>();
 
-  add(slot: Slot, g: THREE.BufferGeometry, x: Xf = {}): this {
+  /** `trim`: surface decoration (rings, stripes, inlays) that adds nothing to the shadow silhouette. */
+  add(slot: Slot, g: THREE.BufferGeometry, x: Xf = {}, trim = false): this {
     const c = g.clone();
     const s = x.s ?? 1;
     const p = x.p ?? [0, 0, 0];
@@ -70,7 +86,15 @@ class Parts {
     let list = this.lists.get(slot);
     if (!list) this.lists.set(slot, (list = []));
     list.push(c);
+    if (!trim) this.solid.add(slot);
     return this;
+  }
+
+  /** Slots whose parts are all surface trim. */
+  trimSlots(): Set<Slot> {
+    const out = new Set<Slot>();
+    for (const slot of this.lists.keys()) if (!this.solid.has(slot)) out.add(slot);
+    return out;
   }
 
   build(): Map<Slot, THREE.BufferGeometry> {
@@ -95,9 +119,17 @@ class Parts {
 
 const SPH = new THREE.SphereGeometry(1, 30, 18);
 const SPH_LO = new THREE.SphereGeometry(1, 14, 10);
+/** Tiny parts: thumbs, lamps, studs. */
+const SPH_XS = new THREE.SphereGeometry(1, 10, 7);
 /** Mid-detail sphere for joints, hands and boots (small on screen). */
 const SPH_MID = new THREE.SphereGeometry(1, 22, 14);
 const HEMI = new THREE.SphereGeometry(1, 24, 9, 0, Math.PI * 2, 0, Math.PI / 2);
+/** Cap of the unit sphere round +z: scaled like a boot (plus a hair) it is a toe cap with a clean edge. */
+const TOE_CAP = (() => {
+  const g = new THREE.SphereGeometry(1, 16, 5, 0, Math.PI * 2, 0, 1.0);
+  g.rotateX(Math.PI / 2);
+  return g;
+})();
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 24);
 const torus = (R: number, tube: number, seg = 32, arc = Math.PI * 2) => new THREE.TorusGeometry(R, tube, 6, seg, arc);
 const capsule = (r: number, len: number) => new THREE.CapsuleGeometry(r, len, 4, 14);
@@ -114,58 +146,6 @@ function extrude(points: [number, number][], depth: number, bevel = 0.008): THRE
   g.translate(0, 0, -depth / 2);
   return g;
 }
-
-/** Jersey torso: a smooth lathe whose v coordinate follows height so the number sits mid-chest. */
-const TORSO_H = 0.455;
-const TORSO_GEO = (() => {
-  const ctrl = [
-    new THREE.Vector2(0.15, 0.0), new THREE.Vector2(0.205, 0.035), new THREE.Vector2(0.245, 0.13), new THREE.Vector2(0.272, 0.25),
-    new THREE.Vector2(0.266, 0.34), new THREE.Vector2(0.215, 0.41), new THREE.Vector2(0.12, 0.445), new THREE.Vector2(0.001, TORSO_H),
-  ];
-  const pts = new THREE.SplineCurve(ctrl).getPoints(18);
-  const g = new THREE.LatheGeometry(pts, 36, Math.PI, Math.PI * 2);
-  const pos = g.attributes.position;
-  const uv = g.attributes.uv;
-  for (let i = 0; i < pos.count; i++) uv.setY(i, Math.max(0, Math.min(1, pos.getY(i) / TORSO_H)));
-  return g;
-})();
-
-/** Twin thruster flame: an outer team-colour cone, a white-hot core and a nozzle disc; vertex colours fade to the tip. */
-const THRUSTER_X = 0.1;
-const THR_Y = 0.115;
-const THR_Z = -0.29;
-const THRUSTER_TILT = 0.45;
-const FLAME_GEO = (() => {
-  const parts: THREE.BufferGeometry[] = [];
-  const colorize = (g: THREE.BufferGeometry, base: number, len: number) => {
-    const pos = g.attributes.position;
-    const c = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      const t = len > 0 ? Math.max(0, Math.min(1, -pos.getY(i) / len)) : 0;
-      const k = base * (1 - t) * (1 - t);
-      c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k;
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-    return g;
-  };
-  for (const sx of [-1, 1]) {
-    const outer = new THREE.ConeGeometry(0.05, 1, 14, 3, true);
-    outer.rotateX(Math.PI);
-    outer.translate(sx * THRUSTER_X, -0.5, 0);
-    parts.push(colorize(outer, 1.1, 1));
-    const core = new THREE.ConeGeometry(0.026, 0.6, 10, 2, true);
-    core.rotateX(Math.PI);
-    core.translate(sx * THRUSTER_X, -0.3, 0);
-    parts.push(colorize(core, 2.6, 0.6));
-    const disc = new THREE.CircleGeometry(0.04, 16);
-    disc.rotateX(Math.PI / 2);
-    disc.translate(sx * THRUSTER_X, -0.002, 0);
-    parts.push(colorize(disc, 2.2, 0));
-  }
-  const norm = parts.map((g) => (g.index ? g.toNonIndexed() : g));
-  for (const g of norm) for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'color') g.deleteAttribute(name);
-  return mergeGeometries(norm, false)!;
-})();
 
 /** Soft ring sprite used behind the halo topper. */
 let haloGlowTex: THREE.Texture | null = null;
@@ -191,31 +171,93 @@ function haloGlowTexture(): THREE.Texture {
 type ChassisId = RobotLook['chassis'];
 type GroupName = 'body' | 'torso' | 'head' | 'armL' | 'armR' | 'legL' | 'legR';
 
+/**
+ * Proportions and stance of one chassis. The four share one skeleton, head and collision footprint (plan
+ * width stays within about 8% of the All-Rounder); each has its own silhouette, signature parts and posture.
+ */
 interface ChassisDims {
-  torso: V3;
+  /** Head scale and height of the head centre in body space. */
   head: number;
+  headY: number;
+  /** Arm scale and shoulder joint position. */
   arm: number;
-  legY: number;
-  legSpread: number;
   shoulder: number;
+  shoulderY: number;
+  legSpread: number;
+  /** Extra leg length (negative: shorter legs); the body rides this much higher so the boots stay grounded. */
+  drop: number;
+  /** Stance: constant forward lean, how far the arms hang out / back, outward leg splay. */
+  lean: number;
+  armOut: number;
+  armBack: number;
+  legSplay: number;
+  /** Running: forward lean and bounce relative to the All-Rounder. */
+  runLean: number;
+  hop: number;
+  /** Peak leg swing of a kick and the deepest forward nod (rad) that keeps the chassis clear of itself. */
+  kick: number;
+  nod: number;
 }
+
+const DIMS: Record<ChassisId, ChassisDims> = {
+  all_rounder: { head: 1, headY: 1.02, arm: 1, shoulder: 0.315, shoulderY: 0.7, legSpread: 0.125, drop: 0, lean: 0, armOut: 0.12, armBack: 0, legSplay: 0, runLean: 1, hop: 1, kick: 1.4, nod: 0.38 },
+  scout: { head: 0.94, headY: 0.992, arm: 0.95, shoulder: 0.29, shoulderY: 0.688, legSpread: 0.115, drop: 0.08, lean: 0.07, armOut: 0.17, armBack: 0.14, legSplay: 0, runLean: 1.2, hop: 1.15, kick: 1.45, nod: 0.38 },
+  bulwark: { head: 1.04, headY: 1.015, arm: 1.12, shoulder: 0.34, shoulderY: 0.69, legSpread: 0.15, drop: -0.05, lean: -0.02, armOut: 0.06, armBack: -0.1, legSplay: 0.05, runLean: 0.8, hop: 0.75, kick: 1.2, nod: 0.24 },
+  glider: { head: 0.98, headY: 1.02, arm: 0.97, shoulder: 0.305, shoulderY: 0.705, legSpread: 0.12, drop: 0, lean: 0.035, armOut: 0.2, armBack: 0.15, legSplay: 0, runLean: 1.15, hop: 0.9, kick: 1.4, nod: 0.38 },
+};
+
+/** Jersey torso: lathe profile [radius, height] from hem to neck, cross-section squareness (2 = round), depth. */
+interface TorsoSpec {
+  profile: [number, number][];
+  sq: number;
+  depth: number;
+  belt: [number, number];
+  collar: [number, number];
+  pelvis: V3;
+}
+
+const TORSO: Record<ChassisId, TorsoSpec> = {
+  // the balanced classic: a rounded barrel
+  all_rounder: {
+    profile: [[0.15, 0], [0.205, 0.035], [0.245, 0.13], [0.272, 0.25], [0.266, 0.34], [0.215, 0.41], [0.12, 0.445], [0.001, 0.455]],
+    sq: 2, depth: 1, belt: [0.19, 0.042], collar: [0.122, 0.04], pelvis: [0.162, 0.08, 0.128],
+  },
+  // lean and short in the body: narrow waist, high chest
+  scout: {
+    profile: [[0.128, 0], [0.172, 0.033], [0.204, 0.12], [0.236, 0.24], [0.238, 0.32], [0.2, 0.385], [0.115, 0.42], [0.001, 0.43]],
+    sq: 2, depth: 0.93, belt: [0.158, 0.036], collar: [0.114, 0.038], pelvis: [0.15, 0.076, 0.12],
+  },
+  // stocky and square-shouldered: a boxier section with a thick belt
+  bulwark: {
+    profile: [[0.185, 0], [0.238, 0.035], [0.262, 0.12], [0.27, 0.25], [0.262, 0.345], [0.212, 0.412], [0.125, 0.446], [0.001, 0.455]],
+    sq: 3.2, depth: 0.98, belt: [0.222, 0.05], collar: [0.132, 0.046], pelvis: [0.2, 0.086, 0.15],
+  },
+  // teardrop: full chest tapering hard to a narrow waist
+  glider: {
+    profile: [[0.122, 0], [0.162, 0.035], [0.2, 0.12], [0.25, 0.255], [0.26, 0.345], [0.214, 0.412], [0.12, 0.446], [0.001, 0.455]],
+    sq: 2, depth: 0.94, belt: [0.15, 0.036], collar: [0.118, 0.04], pelvis: [0.15, 0.076, 0.12],
+  },
+};
+
+const HIP_Y = 0.36;
+/** Hip joint to the sole of the boot (before `drop`). */
+const LEG_LEN = 0.357;
+const BELT_Y = 0.028;
+/** Skull ellipsoid radii (the head sphere is 0.3 scaled 1.14 / 0.93 / 1). */
+const SKULL: V3 = [0.342, 0.279, 0.3];
 
 interface ChassisGeo {
   dims: ChassisDims;
   groups: Record<GroupName, Map<Slot, THREE.BufferGeometry>>;
+  /** Per group: slots made only of surface trim, which add nothing to the shadow silhouette. */
+  trim: Record<GroupName, Set<Slot>>;
+  /** Jersey shell (textured), rank belt and thruster flames fitted to this chassis. */
+  jersey: THREE.BufferGeometry;
+  rankBelt: THREE.BufferGeometry;
+  flame: THREE.BufferGeometry;
+  /** Flame origin and tilt in torso space. */
+  jet: { y: number; z: number; tilt: number };
 }
-
-const DIMS: Record<ChassisId, ChassisDims> = {
-  all_rounder: { torso: [1, 1, 1], head: 1, arm: 1, legY: 1, legSpread: 0.125, shoulder: 0.315 },
-  scout: { torso: [0.86, 0.96, 0.9], head: 0.93, arm: 0.92, legY: 1.22, legSpread: 0.125, shoulder: 0.275 },
-  bulwark: { torso: [1.24, 1.0, 1.14], head: 1.04, arm: 1.22, legY: 0.86, legSpread: 0.17, shoulder: 0.39 },
-  glider: { torso: [0.94, 1, 0.96], head: 0.98, arm: 0.96, legY: 1, legSpread: 0.125, shoulder: 0.315 },
-};
-
-const HIP_Y = 0.36;
-const HEAD_Y = 1.02;
-/** Skull ellipsoid radii (the head sphere is 0.3 scaled 1.14 / 0.93 / 1). */
-const SKULL: V3 = [0.342, 0.279, 0.3];
 
 const chassisCache = new Map<ChassisId, ChassisGeo>();
 
@@ -254,13 +296,106 @@ export function vividColor(hex: string): string {
   return '#' + c.getHexString(THREE.SRGBColorSpace);
 }
 
-/** Unit-sphere band in the x = 0 plane, from just above the face screen over the crown to the back of the head. */
-const CROWN_BAND = (() => {
-  const half = 0.235;
-  const g = new THREE.SphereGeometry(1, 44, 3, Math.PI - 0.84, 0.84 + 2.02, Math.PI / 2 - half, half * 2);
-  g.rotateZ(Math.PI / 2);
+/**
+ * Patch of the unit sphere used for inlaid helmet graphics. `map` takes (s, t) in 0..1 to (a, b): `a` is the
+ * angle from the crown toward the face (negative down the back of the head), `b` the angle off the centre
+ * line toward +x. Scaled by the skull radii (plus a hair) it is a panel of the skull surface itself.
+ */
+function skullPatch(map: (s: number, t: number) => [number, number], segS: number, segT: number): THREE.BufferGeometry {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= segS; i++) {
+    for (let j = 0; j <= segT; j++) {
+      const [a, b] = map(i / segS, j / segT);
+      pos.push(Math.sin(b), Math.cos(b) * Math.cos(a), Math.cos(b) * Math.sin(a));
+      uv.push(j / segT, i / segS);
+    }
+  }
+  // wind the triangles to face outward whichever way the map runs
+  const w = segT + 1;
+  const mid = (Math.floor(segS / 2) * w + Math.floor(segT / 2)) * 3;
+  const e1 = new THREE.Vector3(pos[mid + 3] - pos[mid], pos[mid + 4] - pos[mid + 1], pos[mid + 5] - pos[mid + 2]);
+  const e2 = new THREE.Vector3(pos[mid + w * 3] - pos[mid], pos[mid + w * 3 + 1] - pos[mid + 1], pos[mid + w * 3 + 2] - pos[mid + 2]);
+  const outward = e1.cross(e2).dot(new THREE.Vector3(pos[mid], pos[mid + 1], pos[mid + 2])) > 0;
+  for (let i = 0; i < segS; i++) {
+    for (let j = 0; j < segT; j++) {
+      const p = i * w + j;
+      if (outward) idx.push(p, p + 1, p + w, p + 1, p + w + 1, p + w);
+      else idx.push(p, p + w, p + 1, p + 1, p + w, p + w + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.slice(), 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
   return g;
-})();
+}
+
+/** Front edge of the helmet graphics (tucked under the visor rim) and back edge (at the chin seam). */
+const STRIPE_FRONT = 0.86;
+const STRIPE_BACK = -2.07;
+
+/**
+ * Stripe from the brow over the crown to the nape between lateral angles `b0` and `b1` (which may vary along
+ * it: s = 0 at the nape, 1 at the brow). Its ends follow lines of constant height, so wide and offset stripes
+ * still meet the visor rim and the chin seam squarely. `from` / `to` trim the run (0..1).
+ */
+function crownStripe(b0: (s: number) => number, b1: (s: number) => number, from = 0, to = 1, segS = 40, segT = 2): THREE.BufferGeometry {
+  return skullPatch((s, t) => {
+    const u = from + (to - from) * s;
+    const b = b0(u) + (b1(u) - b0(u)) * t;
+    const cb = Math.max(0.2, Math.cos(b));
+    const aF = Math.acos(Math.min(1, Math.cos(STRIPE_FRONT) / cb));
+    const aB = -Math.acos(Math.max(-1, Math.cos(STRIPE_BACK) / cb));
+    return [aB + (aF - aB) * u, b];
+  }, segS, segT);
+}
+
+/** Recomputes smooth normals and welds them across coincident vertices (lathe / torus seams stay invisible). */
+function smoothNormals(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  g.computeVertexNormals();
+  const pos = g.attributes.position;
+  const nor = g.attributes.normal;
+  const sums = new Map<string, [number, number, number]>();
+  const key = (i: number) => `${Math.round(pos.getX(i) * 2e4)},${Math.round(pos.getY(i) * 2e4)},${Math.round(pos.getZ(i) * 2e4)}`;
+  for (let i = 0; i < pos.count; i++) {
+    const k = key(i);
+    const s = sums.get(k);
+    if (s) {
+      s[0] += nor.getX(i);
+      s[1] += nor.getY(i);
+      s[2] += nor.getZ(i);
+    } else sums.set(k, [nor.getX(i), nor.getY(i), nor.getZ(i)]);
+  }
+  for (let i = 0; i < pos.count; i++) {
+    const s = sums.get(key(i))!;
+    const l = Math.hypot(s[0], s[1], s[2]) || 1;
+    nor.setXYZ(i, s[0] / l, s[1] / l, s[2] / l);
+  }
+  return g;
+}
+
+/** Superellipse factor for a squarer cross-section: 1 on the axes, fuller toward the corners (n = 2 is round). */
+function squareK(x: number, z: number, n: number): number {
+  const r = Math.hypot(x, z);
+  if (n === 2 || r < 1e-6) return 1;
+  return Math.pow(Math.pow(Math.abs(x) / r, n) + Math.pow(Math.abs(z) / r, n), -1 / n);
+}
+
+/** Reshapes geometry built round the torso axis to the chassis' cross-section (squareness, depth). */
+function shapeRound(g: THREE.BufferGeometry, n: number, depth: number): THREE.BufferGeometry {
+  if (n === 2 && depth === 1) return g;
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const k = squareK(x, z, n);
+    pos.setXYZ(i, x * k, pos.getY(i), z * k * depth);
+  }
+  return smoothNormals(g);
+}
 
 /**
  * Planar part laid out in (u, v) and placed with an explicit basis: u along `span`, v along `chord` (made
@@ -276,136 +411,368 @@ function placedExtrude(points: [number, number][], depth: number, bevel: number,
   return g;
 }
 
-function chassisGeo(id: ChassisId): ChassisGeo {
-  const hit = chassisCache.get(id);
+/** Capsule between two points. */
+function rod(r: number, a: THREE.Vector3, b: THREE.Vector3): THREE.BufferGeometry {
+  const d = b.clone().sub(a);
+  const g = new THREE.CapsuleGeometry(r, d.length(), 3, 8);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
+  g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  return g;
+}
+
+/** Thruster tilt: nozzles point down and back. */
+const JET_TILT = 0.45;
+
+/**
+ * Thruster flames for nozzles at the given x offsets: per nozzle an outer team-colour cone, a white-hot core
+ * and a nozzle disc; vertex colours fade to the tip. `r` is the nozzle radius (0.05 on the All-Rounder).
+ */
+const flameCache = new Map<string, THREE.BufferGeometry>();
+function flameGeo(xs: number[], r: number): THREE.BufferGeometry {
+  const key = `${xs.join(',')}|${r}`;
+  const hit = flameCache.get(key);
   if (hit) return hit;
-  const P = {
-    body: new Parts(),
-    torso: new Parts(),
-    head: new Parts(),
-    armL: new Parts(),
-    armR: new Parts(),
-    legL: new Parts(),
-    legR: new Parts(),
+  const k = r / 0.05;
+  const parts: THREE.BufferGeometry[] = [];
+  const colorize = (g: THREE.BufferGeometry, base: number, len: number) => {
+    const pos = g.attributes.position;
+    const c = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const t = len > 0 ? Math.max(0, Math.min(1, -pos.getY(i) / len)) : 0;
+      const v = base * (1 - t) * (1 - t);
+      c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = v;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    return g;
+  };
+  for (const x of xs) {
+    const outer = new THREE.ConeGeometry(0.05 * k, 1, 14, 3, true);
+    outer.rotateX(Math.PI);
+    outer.translate(x, -0.5, 0);
+    parts.push(colorize(outer, 1.1, 1));
+    const core = new THREE.ConeGeometry(0.026 * k, 0.6, 10, 2, true);
+    core.rotateX(Math.PI);
+    core.translate(x, -0.3, 0);
+    parts.push(colorize(core, 2.6, 0.6));
+    const disc = new THREE.CircleGeometry(0.04 * k, 16);
+    disc.rotateX(Math.PI / 2);
+    disc.translate(x, -0.002, 0);
+    parts.push(colorize(disc, 2.2, 0));
+  }
+  const norm = parts.map((g) => (g.index ? g.toNonIndexed() : g));
+  for (const g of norm) for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'color') g.deleteAttribute(name);
+  const geo = mergeGeometries(norm, false)!;
+  flameCache.set(key, geo);
+  return geo;
+}
+
+/** Regular-ish octagon outline (half extents and corner chamfer) for armour blocks. */
+function octagon(hw: number, hh: number, c: number): [number, number][] {
+  return [[-hw + c, -hh], [hw - c, -hh], [hw, -hh + c], [hw, hh - c], [hw - c, hh], [-hw + c, hh], [-hw, hh - c], [-hw, -hh + c]];
+}
+
+// --- torso: jersey, collar, belt, jet pack and the chassis' back / chest signature
+
+function buildTorso(id: ChassisId, T: Parts, B: Parts): Pick<ChassisGeo, 'jersey' | 'rankBelt' | 'flame' | 'jet'> {
+  const spec = TORSO[id];
+  const pts = new THREE.SplineCurve(spec.profile.map(([r, y]) => new THREE.Vector2(r, y))).getPoints(18);
+  const H = spec.profile[spec.profile.length - 1][1];
+  // Jersey: a smooth lathe whose v coordinate follows height so the number sits mid-chest.
+  const jersey = new THREE.LatheGeometry(pts, 36, Math.PI, Math.PI * 2);
+  {
+    const pos = jersey.attributes.position;
+    const uv = jersey.attributes.uv;
+    for (let i = 0; i < pos.count; i++) uv.setY(i, Math.max(0, Math.min(1, pos.getY(i) / H)));
+  }
+  shapeRound(jersey, spec.sq, spec.depth);
+  jersey.computeBoundingSphere();
+  /** Jersey radius on the axes at height y. */
+  const rAt = (y: number): number => {
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].y >= y) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        return b.y - a.y < 1e-6 ? b.x : a.x + ((b.x - a.x) * (y - a.y)) / (b.y - a.y);
+      }
+    }
+    return pts[pts.length - 1].x;
+  };
+  const back = (y: number) => -rAt(y) * spec.depth;
+  const front = (y: number) => rAt(y) * spec.depth;
+  const ring = (R: number, tube: number, seg: number, tubeSeg = 6) => {
+    const g = new THREE.TorusGeometry(R, tube, tubeSeg, seg);
+    g.rotateX(Math.PI / 2);
+    return shapeRound(g, spec.sq, spec.depth);
   };
 
-  // --- body (unscaled): pelvis and neck
-  P.body.add('navy', SPH_MID, { p: [0, HIP_Y, 0], s: [0.162, 0.08, 0.128] });
-  P.body.add('navy', SPH_MID, { p: [0, 0.8, 0], s: [0.094, 0.06, 0.094] });
+  // pelvis (body group, under the hem) and neck
+  B.add('navy', SPH_LO, { p: [0, HIP_Y, 0], s: spec.pelvis });
+  T.add('navy', SPH_LO, { p: [0, H + 0.015, 0], s: [0.094, 0.06, 0.094] });
+  const [collarR, collarTube] = spec.collar;
+  T.add('navy', ring(collarR, collarTube, 28), { p: [0, H - 0.025, 0] });
+  const [beltR, beltTube] = spec.belt;
+  T.add('navy', ring(beltR, beltTube, 32), { p: [0, BELT_Y, 0] });
+  T.add('glow', ring(beltR + beltTube, 0.009, 40, 5), { p: [0, BELT_Y, 0] }, true);
+  const rankBelt = ring(beltR + 0.004, beltTube + 0.005, 44, 8);
+  rankBelt.translate(0, BELT_Y, 0);
+  rankBelt.computeBoundingSphere();
 
-  // --- torso (scaled per chassis; y = 0 at the hem)
-  const T = P.torso;
-  T.add('navy', torus(0.122, 0.04), { p: [0, 0.43, 0], r: [Math.PI / 2, 0, 0] }); // collar
-  T.add('navy', torus(0.19, 0.042), { p: [0, 0.028, 0], r: [Math.PI / 2, 0, 0] }); // belt
-  T.add('glow', torus(0.232, 0.009, 56), { p: [0, 0.028, 0], r: [Math.PI / 2, 0, 0] }); // light belt
-  // Compact jet pack on the lower back: a moulded shell with two nozzles that point down and back.
-  T.add('shell', SPH, { p: [0, 0.14, -0.235], r: [THRUSTER_TILT * 0.5, 0, 0], s: [0.2, 0.105, 0.085] });
-  T.add('accent', torus(1, 0.02, 48), { p: [0, 0.14, -0.235], r: [THRUSTER_TILT * 0.5 + Math.PI / 2, 0, 0], s: [0.2, 0.085, 1] });
-  const ax = [0, Math.cos(THRUSTER_TILT), Math.sin(THRUSTER_TILT)];
-  for (const sx of [-1, 1]) {
-    const c: V3 = [sx * THRUSTER_X, THR_Y, THR_Z];
-    const at = (d: number): V3 => [c[0], c[1] + ax[1] * d, c[2] + ax[2] * d];
-    T.add('navy', CYL, { p: at(-0.045), r: [THRUSTER_TILT, 0, 0], s: [0.046, 0.05, 0.046] });
-    T.add('metal', new THREE.CylinderGeometry(0.04, 0.054, 0.05, 20), { p: at(-0.075), r: [THRUSTER_TILT, 0, 0] });
-  }
+  // Thrusters: nozzle bells along the tilted jet axis; the flame starts at their mouths.
+  const ay = Math.cos(JET_TILT);
+  const az = Math.sin(JET_TILT);
+  const jets = (xs: number[], y: number, z: number, r: number): Pick<ChassisGeo, 'flame' | 'jet'> => {
+    const k = r / 0.05;
+    for (const x of xs) T.add('navy', new THREE.CylinderGeometry(0.04 * k, 0.056 * k, 0.085 * k, 16), { p: [x, y - ay * 0.058 * k, z - az * 0.058 * k], r: [JET_TILT, 0, 0] });
+    return { flame: flameGeo(xs, r), jet: { y: y - ay * 0.1 * k, z: z - az * 0.1 * k, tilt: JET_TILT } };
+  };
+  let out: Pick<ChassisGeo, 'flame' | 'jet'>;
 
-  // --- head (y = 0 at the head centre)
-  const H = P.head;
-  H.add('shell', SPH, { s: [SKULL[0], SKULL[1], SKULL[2]] });
-  // Crown stripe: a band of the skull surface itself (front edge above the face screen, over the top and down
-  // the back), lifted 1.2% so it reads as an inlaid panel with clean edges and nothing to z-fight.
-  H.add('accent', CROWN_BAND, { s: [SKULL[0] * 1.012, SKULL[1] * 1.012, SKULL[2] * 1.012] });
-  // navy rim around the face screen: a clear lip proud of the skull (no near-coincident surfaces)
-  H.add('navy', new THREE.SphereGeometry(0.309, 40, 12, Math.PI / 2 - 1.06, 2.12, 1.02, 0.98), { p: [0, 0.035, 0.012], s: [1.14, 0.93, 1] });
-  // chin seam
-  H.add('navy', torus(1, 0.03, 48), { p: [0, -0.15, 0.0], r: [Math.PI / 2, 0, 0], s: [0.282, 0.249, 0.5] });
-  for (const sx of [-1, 1]) {
-    H.add('navy', CYL, { p: [sx * 0.345, 0, 0], r: [0, 0, Math.PI / 2], s: [0.097, 0.075, 0.097] });
-    H.add('accent', CYL, { p: [sx * 0.386, 0, 0], r: [0, 0, Math.PI / 2], s: [0.066, 0.022, 0.066] });
-    H.add('glow', torus(0.08, 0.012, 32), { p: [sx * 0.384, 0, 0], r: [0, Math.PI / 2, 0] });
-  }
-
-  // --- arms (y = 0 at the shoulder, hanging down)
-  const bulwark = id === 'bulwark';
-  for (const [A, right] of [[P.armL, false], [P.armR, true]] as [Parts, boolean][]) {
-    A.add('navy', SPH_MID, { s: 0.085 });
-    if (!bulwark) {
-      A.add('shell', HEMI, { p: [0, 0.008, 0], s: [0.118, 0.1, 0.118] });
-      A.add('accent', torus(0.115, 0.012, 32), { p: [0, 0.008, 0], r: [Math.PI / 2, 0, 0] });
-    } else {
-      // Armoured pauldron centred on the shoulder joint so it turns with the arm (a body-fixed pad was pierced
-      // by raised arms). The arm group is scaled by DIMS.bulwark.arm, so sizes are divided by it.
-      const k = 1 / DIMS.bulwark.arm;
-      const sx = right ? 1 : -1;
-      A.add('shell', SPH, { p: [sx * 0.01 * k, 0.045 * k, 0], s: [0.16 * k, 0.11 * k, 0.155 * k] });
-      A.add('secondary', torus(1, 0.05, 40), { p: [sx * 0.01 * k, 0.05 * k, 0], r: [Math.PI / 2, 0, 0], s: [0.162 * k, 0.157 * k, 0.4 * k] });
-      A.add('glow', SPH_LO, { p: [sx * 0.01 * k, 0.155 * k, 0.04 * k], s: [0.03 * k, 0.012 * k, 0.06 * k] });
-    }
-    A.add('shell', capsule(0.058, 0.17), { p: [0, -0.17, 0] });
-    A.add('navy', torus(0.058, 0.014, 28), { p: [0, -0.165, 0], r: [Math.PI / 2, 0, 0] }); // elbow seam
-    A.add(right ? 'yellow' : 'accent', torus(0.06, 0.018, 28), { p: [0, -0.255, 0], r: [Math.PI / 2, 0, 0] });
-    A.add('navy', SPH_MID, { p: [0, -0.34, 0], s: 0.092 });
-  }
-
-  // --- legs (y = 0 at the hip)
-  const boot = bulwark ? 1.18 : 1;
-  for (const L of [P.legL, P.legR]) {
-    L.add('navy', capsule(0.062, 0.14), { p: [0, -0.12, 0] });
-    L.add('shell', CYL, { p: [0, -0.215, 0.006], s: [0.07, 0.09, 0.075] }); // boot shaft
-    L.add('navy', torus(0.07, 0.013, 28), { p: [0, -0.17, 0.006], r: [Math.PI / 2, 0, 0] });
-    L.add('accent', ROUND_BOX, { p: [0, -0.215, 0.078], s: [0.03, 0.04, 0.014] });
-    L.add('shell', SPH_MID, { p: [0, -0.285, 0.035], s: [0.105 * boot, 0.072 * boot, 0.155 * boot] });
-    L.add('accent', SPH_MID, { p: [0, -0.32, 0.035], s: [0.108 * boot, 0.03, 0.16 * boot] });
-  }
-
-  // --- chassis identity
   if (id === 'scout') {
-    // side sensor antenna and winged boots: light and quick
-    H.add('navy', CYL, { p: [-0.385, 0.165, -0.04], r: [0, 0, 0.25], s: [0.013, 0.2, 0.013] });
-    H.add('glow', SPH_LO, { p: [-0.41, 0.27, -0.04], s: 0.03 });
-    // swept ankle wings on the outer side of each boot, in the club colour
-    for (const [L, sx] of [[P.legL, -1], [P.legR, 1]] as [Parts, number][]) {
-      L.add('accent', extrude([[-0.035, -0.02], [0.05, 0.03], [0.115, 0.085], [0.1, 0.03], [0.04, -0.035]], 0.014, 0.006), { p: [sx * 0.078, -0.215, 0.0], r: [0, Math.PI / 2, 0] });
-    }
-  } else if (bulwark) {
-    // armoured shoulders (built with the arms above) and a reinforced waist
-    T.add('navy', torus(0.205, 0.05, 48), { p: [0, 0.045, 0], r: [Math.PI / 2, 0, 0] });
-  } else if (id === 'glider') {
-    // Swept-back wings rising from the jet pack in a shallow V, below the back number and clear of the arms.
-    // Each wing is laid out in its own plane: u runs out along the span, v back along the chord.
+    // Twin slim boosters on a yoke: light and quick.
+    const zb = back(0.135) - 0.028;
+    T.add('navy', SPH_LO, { p: [0, 0.15, zb + 0.03], s: [0.12, 0.05, 0.045] });
     for (const sx of [-1, 1]) {
-      const at: V3 = [sx * 0.11, 0.235, -0.215];
-      const span: V3 = [sx * 0.74, 0.6, -0.3];
+      const at = (d: number): V3 => [sx * 0.074, 0.135 + ay * d, zb + az * d];
+      T.add('shell', capsule(0.046, 0.1), { p: at(0.03), r: [JET_TILT, 0, 0] });
+      T.add('accent', torus(0.047, 0.011, 20), { p: at(0.065), r: [JET_TILT + Math.PI / 2, 0, 0] }, true);
+    }
+    out = jets([-0.074, 0.074], 0.135 - ay * 0.045, zb - az * 0.045, 0.04);
+  } else if (id === 'bulwark') {
+    // One heavy thruster in a broad armoured housing.
+    const zb = back(0.16);
+    T.add('shell', SPH, { p: [0, 0.14, zb + 0.022], r: [JET_TILT * 0.5, 0, 0], s: [0.215, 0.105, 0.1] });
+    for (const sx of [-1, 1]) T.add('accent', ROUND_BOX, { p: [sx * 0.135, 0.145, zb - 0.052], r: [JET_TILT * 0.5, 0, sx * 0.25], s: [0.04, 0.038, 0.03] }, true);
+    T.add('navy', torus(0.064, 0.018, 24), { p: [0, 0.105 - ay * 0.012, zb - 0.036 - az * 0.012], r: [JET_TILT + Math.PI / 2, 0, 0] });
+    out = jets([0], 0.105, zb - 0.036, 0.076);
+    // Front bumper with two running lights, below the number.
+    const zf = front(0.105);
+    T.add('shell', capsule(0.036, 0.25), { p: [0, 0.105, zf + 0.012], r: [0, 0, Math.PI / 2] });
+    for (const sx of [-1, 1]) {
+      T.add('glow', SPH_XS, { p: [sx * 0.095, 0.105, zf + 0.044], s: [0.032, 0.02, 0.012] }, true);
+      T.add('navy', SPH_XS, { p: [sx * 0.168, 0.105, zf + 0.004], s: [0.03, 0.044, 0.044] });
+    }
+  } else if (id === 'glider') {
+    // Slim spine pack carrying swept wings in a shallow V, below the back number and clear of the arms.
+    const zb = back(0.17);
+    T.add('shell', SPH, { p: [0, 0.17, zb + 0.012], r: [JET_TILT * 0.5, 0, 0], s: [0.13, 0.115, 0.075] });
+    T.add('accent', torus(1, 0.03, 32), { p: [0, 0.17, zb + 0.012], r: [JET_TILT * 0.5 + Math.PI / 2, 0, 0], s: [0.13, 0.066, 0.6] }, true);
+    out = jets([-0.078, 0.078], 0.108, zb - 0.036, 0.044);
+    // Each wing is laid out in its own plane: u runs out along the span, v back along the chord (both wings
+    // share one outline: with a right-handed basis per side they come out mirror images).
+    for (const sx of [-1, 1]) {
+      const at: V3 = [sx * 0.085, 0.215, zb + 0.03];
+      const span: V3 = [sx * 0.86, 0.45, -0.24];
       const chord: V3 = [0, -0.3, -1];
-      // (both wings share one outline: with a right-handed basis per side they come out mirror images)
-      T.add('shell', placedExtrude([[0, -0.01], [0.27, 0.085], [0.33, 0.115], [0.33, 0.155], [0.17, 0.15], [0, 0.18]], 0.022, 0.007, at, span, chord));
-      T.add('accent', placedExtrude([[0.03, 0.075], [0.25, 0.118], [0.3, 0.14], [0.03, 0.15]], 0.036, 0.002, at, span, chord));
+      T.add('shell', placedExtrude([[0, -0.02], [0.2, 0.012], [0.33, 0.062], [0.345, 0.1], [0.3, 0.118], [0.15, 0.15], [0, 0.19]], 0.022, 0.007, at, span, chord));
+      T.add('accent', placedExtrude([[0.04, 0.062], [0.19, 0.06], [0.3, 0.085], [0.28, 0.105], [0.14, 0.132], [0.04, 0.15]], 0.036, 0.002, at, span, chord), {}, true);
       const S = new THREE.Vector3(...span).normalize();
       const C = new THREE.Vector3(...chord);
       C.addScaledVector(S, -C.dot(S)).normalize();
-      const p0 = new THREE.Vector3(...at).addScaledVector(S, 0.02).addScaledVector(C, -0.004);
-      const p1 = new THREE.Vector3(...at).addScaledVector(S, 0.3).addScaledVector(C, 0.094);
-      const d = p1.clone().sub(p0);
-      const edge = capsule(0.011, d.length());
-      edge.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
-      edge.translate((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2);
-      T.add('glow', edge);
-      // swept fins on the ear pods
-      H.add('accent', extrude([[0, 0], [-0.17, 0.16], [-0.12, 0.17], [0.05, 0.05]], 0.02), { p: [sx * 0.385, 0.03, -0.02], r: [0, -Math.PI / 2, 0] });
+      const O = new THREE.Vector3(...at);
+      const pt = (u: number, v: number) => O.clone().addScaledVector(S, u).addScaledVector(C, v);
+      T.add('glow', rod(0.011, pt(0.03, -0.012), pt(0.2, 0.014)), {}, true);
+      T.add('glow', rod(0.011, pt(0.2, 0.014), pt(0.325, 0.062)), {}, true);
+    }
+  } else {
+    // Compact jet pack: a moulded shell with a trim ring and two nozzles.
+    const zb = back(0.14);
+    T.add('shell', SPH, { p: [0, 0.14, zb + 0.013], r: [JET_TILT * 0.5, 0, 0], s: [0.2, 0.105, 0.085] });
+    T.add('accent', torus(1, 0.02, 36), { p: [0, 0.14, zb + 0.013], r: [JET_TILT * 0.5 + Math.PI / 2, 0, 0], s: [0.2, 0.085, 1] }, true);
+    out = jets([-0.1, 0.1], 0.115, zb - 0.042, 0.05);
+  }
+  return { jersey, rankBelt, ...out };
+}
+
+// --- head: one skull, visor and ear pods for the whole family; helmet graphics and fittings per chassis
+
+function buildHead(id: ChassisId, H: Parts): void {
+  const skin = (g: THREE.BufferGeometry, lift = 1.012): [THREE.BufferGeometry, Xf] => [g, { s: [SKULL[0] * lift, SKULL[1] * lift, SKULL[2] * lift] }];
+  H.add('shell', SPH, { s: [SKULL[0], SKULL[1], SKULL[2]] });
+  // navy rim around the face screen: a clear lip proud of the skull (no near-coincident surfaces)
+  H.add('navy', new THREE.SphereGeometry(0.309, 36, 10, Math.PI / 2 - 1.06, 2.12, 1.02, 0.98), { p: [0, 0.035, 0.012], s: [1.14, 0.93, 1] });
+  // chin seam
+  H.add('navy', torus(1, 0.03, 40), { p: [0, -0.15, 0.0], r: [Math.PI / 2, 0, 0], s: [0.282, 0.249, 0.5] }, true);
+
+  // Helmet graphics: panels of the skull surface itself, lifted 1.2% so they read as inlaid with clean edges
+  // and nothing to z-fight. One centre stripe / twin racing stripes / a broad armour band / a swept dart.
+  const flat = (b: number) => () => b;
+  if (id === 'scout') {
+    for (const sx of [-1, 1]) H.add('accent', ...skin(crownStripe(flat(sx * 0.085), flat(sx * 0.205))), true);
+  } else if (id === 'bulwark') {
+    H.add('accent', ...skin(crownStripe(flat(-0.4), flat(0.4), 0, 1, 40, 6)), true);
+    for (const sx of [-1, 1]) H.add('navy', ...skin(crownStripe(flat(sx * 0.4), flat(sx * 0.47)), 1.013), true);
+  } else if (id === 'glider') {
+    // arrowhead pointing forward, swallow-tailed at the back
+    for (const sx of [-1, 1]) {
+      const outer = (s: number) => sx * (0.03 + 0.4 * Math.pow((1 - s) / 0.7, 0.9));
+      const inner = (s: number) => sx * Math.max(0, 0.5 - 0.92 * s);
+      H.add('accent', ...skin(crownStripe(inner, outer, 0.3, 1, 30, 3)), true);
+    }
+  } else {
+    H.add('accent', ...skin(crownStripe(flat(-0.235), flat(0.235), 0, 1, 40, 3)), true);
+  }
+
+  // Ear pods
+  for (const sx of [-1, 1]) {
+    if (id === 'bulwark') {
+      // armoured ear blocks with a light bar
+      H.add('navy', extrude(octagon(0.08, 0.086, 0.03), 0.06, 0.008), { p: [sx * 0.345, 0, 0], r: [0, Math.PI / 2, 0] });
+      H.add('accent', extrude(octagon(0.058, 0.064, 0.022), 0.016, 0.005), { p: [sx * 0.388, 0, 0], r: [0, Math.PI / 2, 0] }, true);
+      H.add('glow', SPH_XS, { p: [sx * 0.396, 0, 0], s: [0.01, 0.045, 0.016] }, true);
+    } else {
+      H.add('navy', CYL, { p: [sx * 0.345, 0, 0], r: [0, 0, Math.PI / 2], s: [0.097, 0.075, 0.097] });
+      H.add('accent', CYL, { p: [sx * 0.386, 0, 0], r: [0, 0, Math.PI / 2], s: [0.066, 0.022, 0.066] }, true);
+      H.add('glow', torus(0.08, 0.012, 24), { p: [sx * 0.384, 0, 0], r: [0, Math.PI / 2, 0] }, true);
     }
   }
 
+  if (id === 'scout') {
+    // Visor peak: a short cap brim over the face screen, and a sensor antenna on the left ear pod.
+    const peak: [number, number][] = [];
+    const span = 0.98;
+    const rim = (a: number, out: number): [number, number] => {
+      const x = Math.sin(a) * 0.245;
+      const z = Math.cos(a) * 0.215;
+      const k = 1 + out / Math.hypot(x, z);
+      return [x * k, z * k];
+    };
+    for (let i = 0; i <= 12; i++) {
+      const a = -span + (2 * span * i) / 12;
+      peak.push(rim(a, 0.108 * Math.pow(Math.cos((a / span) * (Math.PI / 2)), 0.8)));
+    }
+    for (let i = 12; i >= 0; i--) peak.push(rim(-span + (2 * span * i) / 12, -0.02));
+    // (the brim droops toward its corners so it wraps the brow instead of sitting on it like a plate)
+    const brim = extrude(peak, 0.014, 0.006);
+    const bp = brim.attributes.position;
+    for (let i = 0; i < bp.count; i++) bp.setZ(i, bp.getZ(i) + 0.55 * bp.getX(i) * bp.getX(i));
+    brim.computeVertexNormals();
+    H.add('accent', brim, { p: [0, 0.224, 0], r: [Math.PI / 2 + 0.13, 0, 0] });
+    H.add('navy', CYL, { p: [-0.385, 0.165, -0.04], r: [0, 0, 0.25], s: [0.015, 0.2, 0.015] });
+    H.add('glow', SPH_LO, { p: [-0.41, 0.272, -0.04], s: 0.034 });
+  } else if (id === 'bulwark') {
+    // Jaw guard: a fat chin bar hugging the lower face, rising into the ear blocks at both ends.
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const f = -1 + i / 6;
+      const a = f * 1.75;
+      pts.push(new THREE.Vector3(Math.sin(a) * 0.292, -0.165 + 0.1 * Math.pow(Math.abs(f), 2.2), Math.cos(a) * 0.262));
+    }
+    H.add('accent', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.042, 8, false));
+  } else if (id === 'glider') {
+    // Swept fins on the ear pods and a flattened aero tail on the back of the helmet (its wide base is
+    // inside the skull; with the arrowhead it reads as one dart from above).
+    for (const sx of [-1, 1]) {
+      H.add('accent', extrude([[0.035, -0.03], [-0.2, 0.15], [-0.15, 0.172], [0.06, 0.055]], 0.02), { p: [sx * 0.387, 0.03, -0.02], r: [0, -Math.PI / 2, 0] });
+    }
+    const up = 0.1;
+    const rot: V3 = [-Math.PI / 2 + up, 0, 0];
+    const along = (d: number): V3 => [0, -0.02 + Math.sin(up) * d, -0.25 - Math.cos(up) * d];
+    H.add('accent', new THREE.ConeGeometry(1, 1, 20, 1, true), { p: along(0.055), r: rot, s: [0.235, 0.31, 0.095] });
+  }
+}
+
+// --- arms (y = 0 at the shoulder, hanging down; the group is scaled by dims.arm)
+
+function buildArm(id: ChassisId, A: Parts, sx: number): void {
+  const band: Slot = sx > 0 ? 'yellow' : 'accent'; // the tether hand wears the yellow band
+  const flat: V3 = [Math.PI / 2, 0, 0];
+  A.add('navy', SPH_LO, { s: 0.085 });
+  /** Upper arm, elbow seam, flared cuff with the wrist band, and a mitten hand with a thumb. */
+  const limb = (r: number, cuff: number, hand: number, bandTube = 0.017): void => {
+    A.add('shell', capsule(r, 0.17), { p: [0, -0.17, 0] });
+    A.add('navy', torus(r, 0.013, 24), { p: [0, -0.165, 0], r: flat }, true);
+    A.add('shell', new THREE.CylinderGeometry(r + 0.003, cuff, 0.075, 18, 1, true), { p: [0, -0.258, 0] });
+    A.add(band, torus(cuff - 0.006, bandTube, 24), { p: [0, -0.262, 0], r: flat }, true);
+    A.add('navy', SPH_MID, { p: [0, -0.34, 0], s: hand });
+    A.add('navy', SPH_XS, { p: [-sx * hand * 0.55, -0.335, hand * 0.62], s: hand * 0.46 });
+  };
+  if (id === 'scout') {
+    // slim arm, low shoulder cap, racing stripe down the outside
+    A.add('shell', HEMI, { p: [0, 0.006, 0], s: [0.098, 0.08, 0.1] });
+    limb(0.05, 0.06, 0.084, 0.014);
+    A.add('accent', ROUND_BOX, { p: [sx * 0.048, -0.135, 0], s: [0.014, 0.075, 0.034] }, true);
+    A.add('accent', torus(0.096, 0.01, 24), { p: [0, 0.006, 0], r: flat }, true);
+  } else if (id === 'bulwark') {
+    // Armoured pauldron centred on the shoulder joint so it turns with the arm (a body-fixed pad would be
+    // pierced by raised arms), with a club-colour top plate; thick arm, gauntlet and a big fist. The arm
+    // group is scaled by dims.arm, so the pauldron is sized in body units and divided by it.
+    const k = 1 / DIMS.bulwark.arm;
+    const c: V3 = [sx * 0.008 * k, -0.008 * k, 0];
+    A.add('shell', SPH, { p: c, s: [0.128 * k, 0.114 * k, 0.136 * k] });
+    A.add('navy', torus(1, 0.06, 32), { p: c, r: flat, s: [0.125 * k, 0.133 * k, 0.3 * k] }, true);
+    A.add('accent', new THREE.SphereGeometry(1, 18, 4, 0, Math.PI * 2, 0, 0.9), { p: c, s: [0.1325 * k, 0.118 * k, 0.141 * k] }, true);
+    limb(0.07, 0.09, 0.103, 0.021);
+  } else if (id === 'glider') {
+    // teardrop shoulder fairing swept back, and a blade fin behind the forearm
+    A.add('shell', HEMI, { p: [0, 0.008, -0.014], s: [0.106, 0.092, 0.13] });
+    A.add('accent', torus(1, 0.105, 28), { p: [0, 0.008, -0.014], r: flat, s: [0.104, 0.128, 0.115] }, true);
+    limb(0.054, 0.066, 0.089);
+    A.add('accent', extrude([[-0.03, -0.275], [-0.03, -0.185], [-0.125, -0.15], [-0.085, -0.235]], 0.014, 0.005), { r: [0, -Math.PI / 2, 0] });
+  } else {
+    // round shoulder cap with a trim ring
+    A.add('shell', HEMI, { p: [0, 0.008, 0], s: [0.118, 0.1, 0.118] });
+    A.add('accent', torus(0.115, 0.012, 28), { p: [0, 0.008, 0], r: flat }, true);
+    limb(0.058, 0.07, 0.092);
+    A.add('accent', torus(0.058, 0.012, 24), { p: [0, -0.105, 0], r: flat }, true); // sleeve band
+  }
+}
+
+// --- legs (y = 0 at the hip; `drop` lengthens the thigh and lowers the boot)
+
+function buildLeg(id: ChassisId, L: Parts, sx: number): void {
+  const drop = DIMS[id].drop;
+  const flat: V3 = [Math.PI / 2, 0, 0];
+  /** Thigh, boot shaft with its cuff, boot and coloured welt; returns the boot centre height. */
+  const leg = (thigh: number, shaft: number, boot: V3, bootZ: number): number => {
+    L.add('navy', capsule(thigh, 0.14 + drop), { p: [0, -0.12 - drop / 2, 0] });
+    L.add('shell', CYL, { p: [0, -0.215 - drop, 0.006], s: [shaft, 0.09, shaft * 1.07] });
+    L.add('navy', torus(shaft, 0.013, 24), { p: [0, -0.17 - drop, 0.006], r: flat }, true);
+    const by = -LEG_LEN - drop + boot[1];
+    L.add('shell', SPH_MID, { p: [0, by, bootZ], s: boot });
+    L.add('accent', SPH_MID, { p: [0, -0.32 - drop, bootZ], s: [boot[0] * 1.03, 0.03, boot[2] * 1.03] }, true);
+    return by;
+  };
+  if (id === 'scout') {
+    // long slim legs with a racing stripe, light boots and swept heel fins
+    leg(0.054, 0.062, [0.093, 0.066, 0.15], 0.036);
+    L.add('accent', ROUND_BOX, { p: [0, -0.215 - drop, 0.071], s: [0.026, 0.04, 0.014] }, true);
+    L.add('accent', ROUND_BOX, { p: [sx * 0.05, -0.115 - drop / 2, 0], s: [0.014, 0.07 + drop / 2, 0.034] }, true);
+    L.add('accent', extrude([[-0.04, -0.03], [0.055, 0.04], [0.15, 0.125], [0.125, 0.045], [0.045, -0.045]], 0.014, 0.006), { p: [sx * 0.07, -0.215 - drop, -0.005], r: [0, Math.PI / 2, 0] });
+  } else if (id === 'bulwark') {
+    // short thick legs, heavy boots with a toe bumper and a shin plate
+    const by = leg(0.076, 0.086, [0.124, 0.08, 0.176], 0.04);
+    L.add('accent', ROUND_BOX, { p: [0, -0.212 - drop, 0.096], s: [0.062, 0.034, 0.02] }, true);
+    L.add('navy', TOE_CAP, { p: [0, by, 0.04], s: [0.124 * 1.035, 0.08 * 1.035, 0.176 * 1.035] }, true);
+  } else if (id === 'glider') {
+    // slim legs and long pointed boots with club-colour toes
+    const by = leg(0.058, 0.066, [0.094, 0.066, 0.176], 0.046);
+    L.add('accent', ROUND_BOX, { p: [0, -0.215 - drop, 0.075], s: [0.028, 0.04, 0.014] }, true);
+    L.add('accent', TOE_CAP, { p: [0, by, 0.046], s: [0.094 * 1.035, 0.066 * 1.035, 0.176 * 1.035] }, true);
+  } else {
+    // classic boots with a shin pad
+    leg(0.062, 0.07, [0.105, 0.072, 0.155], 0.035);
+    L.add('shell', ROUND_BOX, { p: [0, -0.2 - drop, 0.076], s: [0.066, 0.036, 0.026] });
+    L.add('accent', ROUND_BOX, { p: [0, -0.2 - drop, 0.086], s: [0.026, 0.04, 0.014] }, true);
+  }
+}
+
+function chassisGeo(id: ChassisId): ChassisGeo {
+  const hit = chassisCache.get(id);
+  if (hit) return hit;
+  const key: ChassisId = DIMS[id] ? id : 'all_rounder';
+  const P: Record<GroupName, Parts> = { body: new Parts(), torso: new Parts(), head: new Parts(), armL: new Parts(), armR: new Parts(), legL: new Parts(), legR: new Parts() };
+  const torso = buildTorso(key, P.torso, P.body);
+  buildHead(key, P.head);
+  buildArm(key, P.armL, -1);
+  buildArm(key, P.armR, 1);
+  buildLeg(key, P.legL, -1);
+  buildLeg(key, P.legR, 1);
+  const names = Object.keys(P) as GroupName[];
   const geo: ChassisGeo = {
-    dims: DIMS[id] ?? DIMS.all_rounder,
-    groups: {
-      body: P.body.build(),
-      torso: P.torso.build(),
-      head: P.head.build(),
-      armL: P.armL.build(),
-      armR: P.armR.build(),
-      legL: P.legL.build(),
-      legR: P.legR.build(),
-    },
+    dims: DIMS[key],
+    groups: Object.fromEntries(names.map((n) => [n, P[n].build()])) as ChassisGeo['groups'],
+    trim: Object.fromEntries(names.map((n) => [n, P[n].trimSlots()])) as ChassisGeo['trim'],
+    ...torso,
   };
   chassisCache.set(id, geo);
   return geo;
@@ -659,10 +1026,17 @@ function topperGeo(id: string): TopperGeo | null {
 // ----------------------------------------------------------------------------- view
 
 const tmpV = new THREE.Vector3();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const smooth01 = (a: number, b: number, v: number): number => {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 export class RobotView {
   readonly root = new THREE.Group();
   private body = new THREE.Group();
+  /** Everything above the hips (torso, head, arms): twists as one for the nutmeg reaction. */
+  private upper = new THREE.Group();
   private torso = new THREE.Group();
   private head = new THREE.Group();
   private armL = new THREE.Group();
@@ -703,6 +1077,11 @@ export class RobotView {
   private topperKind: TopperGeo['kind'] = 'none';
   private topperId = '';
   private chassisId: ChassisId | '' = '';
+  private dims: ChassisDims = DIMS.all_rounder;
+  /** Nutmeg reaction: active flag, the side the upper body whips round to (alternates), current twist. */
+  private megOn = false;
+  private megSide = Math.random() < 0.5 ? 1 : -1;
+  private twist = 0;
   private topperHeight = TOP_Y;
   private look!: RobotLook;
   private eyeColor = '#7ff3ff';
@@ -714,7 +1093,6 @@ export class RobotView {
   private lastFacing = 0;
   private blinkIn = 2 + Math.random() * 3;
   private blink = 0;
-  private hipY = HIP_Y;
   private yaw = 0;
   private thrust = 0;
   private lastVx = 0;
@@ -736,25 +1114,24 @@ export class RobotView {
         : new THREE.MeshPhysicalMaterial({ color: '#02050a', roughness: 0.22, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04, emissive: '#ffffff', emissiveIntensity: 1.3 });
     this.flameMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
-    this.body.add(this.torso, this.head, this.armL, this.armR, this.legL, this.legR);
-    this.torso.position.set(0, this.hipY - 0.03, 0);
-    this.head.position.set(0, HEAD_Y, 0.01);
-    this.jersey = new THREE.Mesh(TORSO_GEO, this.jerseyMat);
+    this.body.add(this.upper, this.legL, this.legR);
+    this.upper.add(this.torso, this.head, this.armL, this.armR);
+    this.torso.position.set(0, HIP_Y - 0.03, 0);
+    // The jersey, flames and rank belt are fitted to the chassis: buildChassis swaps their geometry.
+    const geo = chassisGeo(look.chassis);
+    this.jersey = new THREE.Mesh(geo.jersey, this.jerseyMat);
     this.jersey.castShadow = shadows;
     this.torso.add(this.jersey);
     this.visor = new THREE.Mesh(VISOR_GEO, this.visorMat);
     this.visor.scale.set(1.14, 0.93, 1.0);
     this.visor.position.set(0, 0.035, 0.012);
     this.head.add(this.visor);
-    this.flame = new THREE.Mesh(FLAME_GEO, this.flameMat);
-    this.flame.position.set(0, THR_Y - Math.cos(THRUSTER_TILT) * 0.1, THR_Z - Math.sin(THRUSTER_TILT) * 0.1);
-    this.flame.rotation.x = THRUSTER_TILT;
+    this.flame = new THREE.Mesh(geo.flame, this.flameMat);
     this.flame.renderOrder = 3;
     this.torso.add(this.flame);
     this.rankMat = new THREE.MeshStandardMaterial({ color: '#f4c84b', roughness: 0.22, metalness: 0.9 });
-    this.rankBelt = new THREE.Mesh(RANK_BELT_GEO, this.rankMat);
-    this.rankBelt.position.set(0, 0.028, 0);
-    this.rankBelt.rotation.x = Math.PI / 2;
+    this.rankBelt = new THREE.Mesh(geo.rankBelt, this.rankMat);
+    this.rankBelt.castShadow = false; // it hugs the belt: nothing to add to the shadow
     this.rankBelt.visible = false;
     this.torso.add(this.rankBelt);
     this.handR.position.set(0, -0.34, 0);
@@ -849,24 +1226,28 @@ export class RobotView {
     for (const name of Object.keys(groups) as GroupName[]) {
       for (const [slot, g] of geo.groups[name]) {
         const mesh = new THREE.Mesh(g, this.mats[slot]);
-        mesh.castShadow = this.shadows && slot !== 'glow';
+        mesh.castShadow = this.shadows && slot !== 'glow' && !geo.trim[name].has(slot);
         groups[name].add(mesh);
         this.partMeshes.push(mesh);
       }
     }
     const d = geo.dims;
-    this.torso.scale.set(d.torso[0], d.torso[1], d.torso[2]);
+    this.dims = d;
+    this.jersey.geometry = geo.jersey;
+    this.rankBelt.geometry = geo.rankBelt;
+    this.flame.geometry = geo.flame;
+    this.flame.position.set(0, geo.jet.y, geo.jet.z);
+    this.flame.rotation.x = geo.jet.tilt;
+    this.head.position.set(0, d.headY, 0.01);
     this.head.scale.setScalar(d.head);
     this.armL.scale.setScalar(d.arm);
     this.armR.scale.setScalar(d.arm);
-    this.armL.position.set(-d.shoulder, 0.7, 0);
-    this.armR.position.set(d.shoulder, 0.7, 0);
-    this.legL.scale.set(1, d.legY, 1);
-    this.legR.scale.set(1, d.legY, 1);
-    this.legL.position.set(-d.legSpread, this.hipY, 0);
-    this.legR.position.set(d.legSpread, this.hipY, 0);
+    this.armL.position.set(-d.shoulder, d.shoulderY, 0);
+    this.armR.position.set(d.shoulder, d.shoulderY, 0);
+    this.legL.position.set(-d.legSpread, HIP_Y, 0);
+    this.legR.position.set(d.legSpread, HIP_Y, 0);
     // Longer / shorter legs raise or lower the whole body so feet stay on the ground.
-    this.bodyBaseY = (d.legY - 1) * 0.33;
+    this.bodyBaseY = d.drop;
     this.body.position.y = this.bodyBaseY;
   }
 
@@ -913,12 +1294,13 @@ export class RobotView {
 
   /** Height of the top of the robot above its feet, in world units (includes the topper and scale). */
   get topHeight(): number {
-    const d = DIMS[this.look.chassis] ?? DIMS.all_rounder;
-    return (this.body.position.y + HEAD_Y + this.topperHeight * d.head + 0.04) * this.scale;
+    const d = this.dims;
+    return (this.body.position.y + d.headY + this.topperHeight * d.head + 0.04) * this.scale;
   }
 
   private applyFace(force = false): void {
-    const exp: Expression = this.blink > 0 && (this.expression === 'neutral' || this.expression === 'focus') ? 'blink' : this.expression;
+    // wide-eyed for the whole nutmeg reaction, whatever the match asks for
+    const exp: Expression = this.megOn ? 'wow' : this.blink > 0 && (this.expression === 'neutral' || this.expression === 'focus') ? 'blink' : this.expression;
     const t = faceTexture(this.look.face, exp, this.eyeColor);
     if (force || this.visorMat.emissiveMap !== t) {
       this.visorMat.emissiveMap = t;
@@ -945,6 +1327,7 @@ export class RobotView {
 
   update(dt: number, p: RobotPose): void {
     this.time += dt;
+    const d0 = this.dims;
     const speed = Math.hypot(p.vx, p.vz);
     // Stride grows with speed so the feet roughly keep pace with the ground from a jog to a sprint.
     const stride = Math.min(1.25, speed / 4.6);
@@ -982,19 +1365,21 @@ export class RobotView {
     const airTarget = reduced ? 0 : p.tethered ? 0.34 : fast ? 0.14 : 0;
     this.air += (airTarget - this.air) * k;
 
+    // Stance comes from the chassis: how it leans, where the arms hang, how far it bounces.
     let rollTarget = Math.max(-0.45, Math.min(0.45, -turnRate * 0.05 * Math.min(1, speed / 4)));
-    let pitch = Math.min(0.45, speed * 0.04);
-    let armLx = -swing * 0.75 * stride;
-    let armRx = swing * 0.75 * stride;
-    let armLz = -0.12;
-    let armRz = 0.12;
+    let pitch = d0.lean + Math.min(0.45, speed * 0.04) * d0.runLean;
+    let armLx = d0.armBack - swing * 0.75 * stride;
+    let armRx = d0.armBack + swing * 0.75 * stride;
+    let armLz = -d0.armOut;
+    let armRz = d0.armOut;
     let legLx = swing * 0.95 * stride;
     let legRx = -swing * 0.95 * stride;
-    let legLz = 0;
-    let legRz = 0;
+    let legLz = -d0.legSplay;
+    let legRz = d0.legSplay;
     let headX = 0;
     let headY = 0;
-    let y = Math.abs(swing) * 0.05 * stride + this.air;
+    let twistTarget = 0;
+    let y = Math.abs(swing) * 0.05 * stride * d0.hop + this.air;
     let thrustTarget = p.tethered ? 1 : Math.max(0, Math.min(1, (speed - 4.6) / 4.2));
 
     // Anchor in the robot's own frame (x: its +x side, where armR hangs).
@@ -1025,7 +1410,7 @@ export class RobotView {
     } else {
       this.ropeArm = 0;
       if (fast) {
-        pitch = 0.55;
+        pitch = 0.55 * (0.6 + 0.4 * d0.runLean);
         armLx = 0.9;
         armRx = 0.9;
         armLz = -0.35;
@@ -1035,7 +1420,7 @@ export class RobotView {
 
     if (p.kickAge < 0.26) {
       const t = p.kickAge / 0.26;
-      legRx = -1.5 * Math.sin(Math.PI * Math.min(1, t * 1.15));
+      legRx = -d0.kick * Math.sin(Math.PI * Math.min(1, t * 1.15));
       if (this.ropeArm >= 0) armLx = -0.8;
       if (this.ropeArm <= 0) armRx = 0.6;
       pitch = -0.12;
@@ -1152,7 +1537,7 @@ export class RobotView {
       y = y * (1 - this.cheer) + lift * this.cheer;
       headX = -0.18;
     } else if (p.mood === 'sad') {
-      headX = 0.38;
+      headX = d0.nod;
       pitch = 0.16;
       armLx = armRx = 0.12;
       y = 0;
@@ -1175,6 +1560,44 @@ export class RobotView {
         legLz = -0.16;
         legRz = 0.16;
       }
+    }
+
+    // Nutmeg reaction: wrong-footed for about 0.7 s. The legs splay (too late), the upper body whips round
+    // after the ball with the head leading over the shoulder, the arms flail, then everything recovers.
+    // Reduced motion keeps a gentle version: a small splay and a look over the shoulder, no spin or wobble.
+    const megAge = p.megAge;
+    const megNow = megAge !== undefined && megAge >= 0 && megAge < MEG_TIME && !celebrating && p.mood !== 'sad';
+    if (megNow !== this.megOn) {
+      this.megOn = megNow;
+      if (megNow) this.megSide = -this.megSide;
+      this.applyFace();
+    }
+    if (megNow) {
+      const u = megAge / MEG_TIME;
+      const m = smooth01(0, 0.16, u) * (1 - smooth01(0.64, 1, u));
+      const side = this.megSide;
+      const wob = reduced ? 0 : Math.sin(u * 21);
+      const keep = 1 - m;
+      const splay = reduced ? 0.2 : 0.58;
+      legLx = legLx * keep + wob * 0.1 * m;
+      legRx = legRx * keep - wob * 0.1 * m;
+      legLz = legLz * keep - splay * m;
+      legRz = legRz * keep + splay * m;
+      twistTarget = reduced ? 0 : side * (1.2 + wob * 0.14) * m;
+      headY = side * (reduced ? 0.55 : 0.9) * m;
+      headX = headX * keep + 0.1 * m;
+      // arms windmill for balance, one up as the other comes down
+      const flail = reduced ? 0.45 : 1.15;
+      const mill = reduced ? 0 : wob * 0.45;
+      armLx = armLx * keep + (-0.3 + wob * 0.3) * m;
+      armRx = armRx * keep + (-0.3 - wob * 0.3) * m;
+      armLz = armLz * keep - (flail + mill) * m;
+      armRz = armRz * keep + (flail - mill) * m;
+      rollTarget = rollTarget * keep + side * wob * 0.1 * m;
+      pitch = pitch * keep + (d0.lean - 0.1) * m;
+      // a startled little hop as the ball goes through
+      y = y * keep + (reduced ? 0 : 0.07 * Math.sin(Math.PI * Math.min(1, u / 0.3)));
+      thrustTarget *= keep;
     }
 
     this.roll += (rollTarget - this.roll) * k;
@@ -1202,6 +1625,7 @@ export class RobotView {
       const sc = this.scale || 1;
       const v = tmpV.set(anchorX / sc, ((p.ay ?? ANCHOR_Y) - y * sc) / sc - b.position.y, anchorZ / sc);
       v.applyQuaternion(_q.setFromEuler(b.rotation).invert());
+      if (this.twist !== 0) v.applyAxisAngle(Y_AXIS, -this.twist);
       v.sub(arm.position).normalize();
       // keep the arm on its own side and raised
       v.x = side > 0 ? Math.max(0.12, v.x) : Math.min(-0.12, v.x);
@@ -1231,6 +1655,9 @@ export class RobotView {
     this.legR.rotation.z = this.legRz;
     this.head.rotation.x += (headX - this.head.rotation.x) * kk;
     this.head.rotation.y += (headY - this.head.rotation.y) * kk;
+    this.twist += (twistTarget - this.twist) * kk;
+    if (Math.abs(this.twist) < 1e-4 && twistTarget === 0) this.twist = 0;
+    this.upper.rotation.y = this.twist;
 
     this.root.position.set(p.x, y * this.scale, p.z);
     this.root.rotation.y = Math.PI / 2 - this.yaw + this.spinAngle;
@@ -1308,7 +1735,6 @@ export class RobotView {
   }
 }
 
-const RANK_BELT_GEO = new THREE.TorusGeometry(0.194, 0.047, 10, 48);
 const VISOR_GEO = new THREE.SphereGeometry(0.312, 36, 12, Math.PI / 2 - 1.0, 2.0, 1.08, 0.86);
 const HALO_SPRITE = new THREE.PlaneGeometry(1, 1);
 

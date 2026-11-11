@@ -10,7 +10,7 @@ import { MatchView, type Marker, type ViewFrame } from './render/matchView';
 import type { RobotMood } from './render/robotView';
 import type { Expression } from './render/textures';
 import { clearCommand, emptyCommand, type Command, type World } from './sim/types';
-import { detach, lobPlan } from './sim/world';
+import { detach, lobPlan, megWindow } from './sim/world';
 
 export interface PlayContext {
   gfx: Gfx;
@@ -249,6 +249,7 @@ export class PlaySession {
               h('h3', null, 'Plays'),
               row('Long ball', 'Hold PASS: its ring fills; let go on the gold notch'),
               row('Give-and-go', 'Tap PASS again after passing'),
+              row('Nutmeg', 'Run at a defender who dives in and tap MEG when it lights up (otherwise MEG is a knock-on)'),
               h('p', { class: 'muted' }, 'Walls are lively: bank passes and crosses off them. PASS bends round a blocked lane off the side wall, and a first-time shot off a teammate\'s pass is a one-touch strike. The Academy playbook explains every play.'),
             )
           : h('div', { class: 'pause-controls' },
@@ -258,6 +259,7 @@ export class PlaySession {
               row('Swing: tap again = let go now; hold = let go yourself (rope glows green when lined up)', 'same button'),
               row('Kick toward aim (one press; mashing scuffs the shot)', `Left mouse or ${keyLabel(k.kick[0])}`),
               row('Pass to teammate (without the ball: call for it)', `${keyLabel(k.pass[0])} / ${keyLabel(k.pass[1])}`),
+              row('Meg: nutmeg a defender who dives in when the ball ring turns pink (otherwise a knock-on)', `${keyLabel(k.meg[0])} / ${keyLabel(k.meg[1])} or middle mouse`),
               row('Cycle anchor', `${keyLabel(k.anchorPrev[0])} / ${keyLabel(k.anchorNext[0])}`),
               row('Pause', keyLabel(k.pause[0])),
               h('h3', null, 'Plays'),
@@ -295,6 +297,9 @@ export class PlaySession {
   }
 
   /** Long-ball meter state while the player holds PASS near the ball (null otherwise). */
+  /** Chance of the nutmeg currently on for the player (null = none). Read by the HUD and hints. */
+  megOn: number | null = null;
+
   private lobFrame(w: World, human: number): ViewFrame['lob'] {
     const charge = this.input.lobCharge;
     if (charge === null) return null;
@@ -332,6 +337,14 @@ export class PlaySession {
         }
         case 'land':
           audio.play('land', { intensity: Math.min(1, e.speed / 12), pan: e.x / w.hx * 0.6 });
+          break;
+        case 'meg':
+          // Through the legs: a quick zip and, when it comes off, a cheer from the crowd.
+          audio.play('kick', { intensity: 0.3, pan: w.ball.x / w.hx * 0.6 });
+          if (e.success) {
+            audio.play(e.robot === hmn ? 'perfect' : 'tetherRelease', { intensity: 0.7, pan: w.ball.x / w.hx * 0.6 });
+            audio.cheer(e.robot === hmn ? 0.55 : 0.35);
+          } else audio.play('bump', { intensity: 0.5, pan: w.ball.x / w.hx * 0.6 });
           break;
         case 'touch':
           if (e.speed > 1.2) audio.play('touch', { intensity: Math.min(1, e.speed / 9), pan: w.ball.x / w.hx * 0.6 });
@@ -427,6 +440,11 @@ export class PlaySession {
     const lob = live && mode.human >= 0 ? this.lobFrame(w, mode.human) : null;
     this.input.showCharge(lob ? lob.ideal : null);
     audio.charge(lob ? lob.charge : null);
+    // Nutmeg opening for the player: lights the MEG button and turns the ball ring pink.
+    const human = mode.human >= 0 ? w.robots[mode.human] : null;
+    const mw = live && human && human.megCd <= 0 ? megWindow(w, human) : null;
+    this.megOn = mw ? mw.chance : null;
+    this.input.showMeg(this.megOn);
     this.view.render(w, {
       alpha: this.paused ? 1 : Math.min(1, this.acc / DT),
       dt: this.paused ? 0 : dt,
@@ -437,6 +455,7 @@ export class PlaySession {
       aimZ: this.input.aimZ,
       showAim: live && this.input.showAim,
       lob,
+      meg: this.megOn,
       moods: this.moods,
       expressions: this.exprs,
       human: mode.human,

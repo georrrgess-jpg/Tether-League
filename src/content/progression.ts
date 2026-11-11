@@ -165,11 +165,11 @@ export function masteryReward(chassis: ChassisId, level: number): MasteryReward 
  * Signature play: each chassis earns bonus mastery XP for the things it is built for, on top of the
  * match XP. Weights are mastery XP per stat in one match; the bonus is capped per match.
  */
-export type SignatureStat = 'goals' | 'assists' | 'saves' | 'passes' | 'interceptions' | 'swingKicks' | 'swings' | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals' | 'cleanSheet';
+export type SignatureStat = 'goals' | 'assists' | 'saves' | 'passes' | 'interceptions' | 'swingKicks' | 'swings' | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals' | 'megs' | 'cleanSheet';
 export interface MasterySignature { name: string; blurb: string; weights: Partial<Record<SignatureStat, number>>; cap: number }
 export const MASTERY_SIGNATURE: Record<ChassisId, MasterySignature> = {
   all_rounder: { name: 'Total football', blurb: 'Passes, assists, goals and saves all count.', weights: { passes: 5, assists: 15, goals: 12, saves: 10 }, cap: 120 },
-  scout: { name: 'Quick strike', blurb: 'Swing kicks, interceptions, goals and one-touch finishes.', weights: { swingKicks: 10, interceptions: 10, goals: 12, oneTouchGoals: 20 }, cap: 120 },
+  scout: { name: 'Quick strike', blurb: 'Swing kicks, interceptions, goals, nutmegs and one-touch finishes.', weights: { swingKicks: 10, interceptions: 10, goals: 12, megs: 15, oneTouchGoals: 20 }, cap: 120 },
   bulwark: { name: 'Hold the line', blurb: 'Saves, interceptions and clean sheets.', weights: { saves: 18, interceptions: 8, cleanSheet: 40 }, cap: 120 },
   glider: { name: 'Air play', blurb: 'Long balls, give-and-goes, swings and swing kicks.', weights: { longBalls: 18, giveAndGos: 15, swings: 2, swingKicks: 8 }, cap: 120 },
 };
@@ -178,7 +178,7 @@ export const SIGNATURE_LABEL: Record<SignatureStat, [string, string]> = {
   goals: ['goal', 'goals'], assists: ['assist', 'assists'], saves: ['save', 'saves'], passes: ['pass', 'passes'],
   interceptions: ['interception', 'interceptions'], swingKicks: ['swing kick', 'swing kicks'], swings: ['swing', 'swings'],
   longBalls: ['long ball', 'long balls'], giveAndGos: ['give-and-go', 'give-and-goes'], wallPasses: ['wall pass', 'wall passes'],
-  oneTouchGoals: ['one-touch goal', 'one-touch goals'], cleanSheet: ['clean sheet', 'clean sheets'],
+  oneTouchGoals: ['one-touch goal', 'one-touch goals'], megs: ['nutmeg', 'nutmegs'], cleanSheet: ['clean sheet', 'clean sheets'],
 };
 
 // ---------------------------------------------------------------------------
@@ -192,7 +192,7 @@ export type MatchMetric =
   | 'goals' | 'assists' | 'saves' | 'passes' | 'interceptions' | 'shots' | 'swingGoals' | 'swingKicks'
   | 'wins' | 'careerMatches' | 'careerWins' | 'cleanSheets' | 'comebackWins' | 'firstGoal' | 'winBy2' | 'winBy3'
   | 'hatTrick' | 'goalAndSave' | 'arenaWin' | 'teamGoals'
-  | 'plays' | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals';
+  | 'plays' | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals' | 'megs';
 export type TrialMetric = 'trialBronze' | 'trialSilver' | 'trialGold';
 
 export interface ObjectiveDef {
@@ -238,6 +238,7 @@ export const OBJECTIVES: ObjectiveDef[] = [
   o('m_swing2', 'medium', 'Score 2 swing goals', 'swingGoals', 2),
   o('m_longball2', 'medium', 'Complete 2 long balls', 'longBalls', 2),
   o('m_givego2', 'medium', 'Complete 2 give-and-goes', 'giveAndGos', 2),
+  o('m_meg1', 'medium', 'Nutmeg an opponent', 'megs', 1),
   o('m_passes6', 'medium', 'Complete 6 passes in one match', 'passes', 6, 'match'),
   o('m_clean1', 'medium', 'Keep a clean sheet', 'cleanSheets', 1),
   o('m_saves3', 'medium', 'Make 3 saves in one match', 'saves', 3, 'match'),
@@ -264,6 +265,7 @@ export const OBJECTIVES: ObjectiveDef[] = [
   o('h_swing4', 'hard', 'Score 4 swing goals', 'swingGoals', 4),
   o('h_plays3m', 'hard', 'Complete 3 plays in one match', 'plays', 3, 'match'),
   o('h_onetouch2', 'hard', 'Score 2 one-touch goals', 'oneTouchGoals', 2),
+  o('h_meg3', 'hard', 'Nutmeg opponents 3 times', 'megs', 3),
 ];
 
 export const OBJECTIVE_BY_ID: Record<string, ObjectiveDef> = Object.assign(Object.create(null), Object.fromEntries(OBJECTIVES.map((d) => [d.id, d])));
@@ -276,7 +278,7 @@ export const OBJECTIVE_BY_ID: Record<string, ObjectiveDef> = Object.assign(Objec
 export type AchievementStat =
   | 'goals' | 'swingGoals' | 'assists' | 'passes' | 'saves' | 'interceptions' | 'shots' | 'wins' | 'matches'
   | 'bestStreak' | 'bestMargin' | 'bestGoals' | 'bestSaves' | 'cleanSheets' | 'comebackWins' | 'overtimeWins' | 'hatTricks'
-  | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals'
+  | 'longBalls' | 'giveAndGos' | 'wallPasses' | 'oneTouchGoals' | 'megs'
   | 'trophies' | 'topDivision' | 'seasons' | 'finals' | 'trialMedals' | 'trialGolds' | 'lessons'
   | 'clubLevel' | 'objectivesDone' | 'bestMastery' | 'totalMastery' | 'playoffs' | 'shopOwned' | 'arenasWon';
 
@@ -320,6 +322,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'playmaker', name: 'Playmaker', text: 'Complete {n} {give-and-go|give-and-goes}', stat: 'giveAndGos', tiers: [3, 15, 50], items: { 1: 'ball_playbook', 2: 'celebration_point' } },
   { id: 'wall_artist', name: 'Off the Wall', text: 'Complete {n} wall {pass|passes}', stat: 'wallPasses', tiers: [3, 15, 40], items: { 1: 'badge_bank', 2: 'trail_chalk' } },
   { id: 'first_time', name: 'First Time', text: 'Score {n} one-touch {goal|goals}', stat: 'oneTouchGoals', tiers: [3, 15, 40], items: { 2: 'title_one_touch' } },
+  { id: 'cheeky', name: 'Cheeky', text: 'Nutmeg {n} {opponent|opponents}', stat: 'megs', tiers: [3, 15, 50] },
   { id: 'hat_tricks', name: 'Hat-trick Heroes', text: 'Score {n} {hat-trick|hat-tricks}', stat: 'hatTricks', tiers: [1, 3, 8], items: { 2: 'title_goal_machine' } },
   { id: 'silverware', name: 'Silverware', text: 'Win {n} division {trophy|trophies}', stat: 'trophies', tiers: [1, 3, 6], items: { 0: 'title_champions', 1: 'badge_cup' } },
   { id: 'climber', name: 'The Climb', text: 'Reach division {n} of 5', stat: 'topDivision', tiers: [2, 3, 5] },

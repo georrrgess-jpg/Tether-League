@@ -18,6 +18,7 @@ const RECORD_LABEL: Record<string, string> = {
   giveAndGos: 'give-and-goes completed',
   wallPasses: 'wall passes',
   oneTouchGoals: 'one-touch goals',
+  megs: 'nutmegs landed',
 };
 
 /** The backdrop colour the arena diagram uses, so the preview frame blends with it. */
@@ -133,6 +134,7 @@ export function academyScreen(app: App, params: URLSearchParams): ScreenView {
     const keys = save.settings.keys;
     const passKeys = [keyLabel(keys.pass[0]), keyLabel(keys.pass[1])].filter((x) => x !== '—').join(' / ');
     const kickKeys = [keyLabel(keys.kick[0]), keyLabel(keys.kick[1])].filter((x) => x !== '—').join(' / ');
+    const megKeys = [keyLabel(keys.meg[0]), keyLabel(keys.meg[1])].filter((x) => x !== '—').join(' / ');
     const inputs: { id: InputKind; label: string; ic: string }[] = [
       { id: 'keyboard', label: 'Keyboard', ic: 'keyboard' },
       { id: 'touch', label: 'Touch', ic: 'touch' },
@@ -140,7 +142,7 @@ export function academyScreen(app: App, params: URLSearchParams): ScreenView {
     ];
     detail.replaceChildren(
       h('div', { class: 'ad-head' },
-        h('div', { class: 'ad-title' }, h('h2', null, p.name, h('span', { class: 'chip chip-yellow' }, 'Team play')), h('p', null, p.summary)),
+        h('div', { class: 'ad-title' }, h('h2', null, p.name, h('span', { class: 'chip chip-yellow' }, play === 'nutmeg' ? 'Skill move' : 'Team play')), h('p', null, p.summary)),
         h('div', { class: 'play-count' }, h('b', null, String(n)), h('small', null, RECORD_LABEL[p.record] ?? 'in your records')),
       ),
       h('div', { class: 'howto' },
@@ -153,7 +155,7 @@ export function academyScreen(app: App, params: URLSearchParams): ScreenView {
           ),
         ),
         h('p', { class: 'howto-text' }, p.how[input]),
-        input === 'keyboard' ? h('p', { class: 'muted' }, 'Your keys: PASS ', h('kbd', { class: 'cap' }, passKeys || '—'), ' · KICK ', h('kbd', { class: 'cap' }, 'Left click'), ' ', h('kbd', { class: 'cap' }, kickKeys || '—'), '. Change them in Settings → Controls.') : null,
+        input === 'keyboard' ? h('p', { class: 'muted' }, 'Your keys: PASS ', h('kbd', { class: 'cap' }, passKeys || '—'), ' · KICK ', h('kbd', { class: 'cap' }, 'Left click'), ' ', h('kbd', { class: 'cap' }, kickKeys || '—'), ' · MEG ', h('kbd', { class: 'cap' }, megKeys || '—'), '. Change them in Settings → Controls.') : null,
       ),
       h('div', { class: 'tip' }, icon('star'), h('div', null, h('b', null, 'Skill'), h('p', null, p.skill))),
       h('p', { class: 'muted ad-scoring' }, 'Plays work in every match. Your lifetime counts are kept in Club → Records.'),

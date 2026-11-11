@@ -54,6 +54,12 @@ export function createRobot(id: number, team: 0 | 1, slot: number, chassis: Chas
     kickGiveGo: false,
     mash: 0,
     ghost: 0,
+    megBuffer: 0,
+    megCd: 0,
+    megged: 0,
+    megImmune: 0,
+    phaseId: -1,
+    phaseT: 0,
     carry: 99,
     lastKickTick: -999,
     lastKickDirX: 1,
@@ -71,7 +77,7 @@ export function createWorld(arena: ArenaDef, robots: Robot[]): World {
     hx: arena.length / 2,
     hz: arena.width / 2,
     robots,
-    ball: { x: 0, z: 0, vx: 0, vz: 0, lastTouchRobot: -1, lastTouchTick: -999, lastTouchDeliberate: false, h: 0, vh: 0, passBy: -1, passTick: -999 },
+    ball: { x: 0, z: 0, vx: 0, vz: 0, lastTouchRobot: -1, lastTouchTick: -999, lastTouchDeliberate: false, h: 0, vh: 0, megId: -1, megT: 0, passBy: -1, passTick: -999 },
     tick: 0,
     events: [],
     goalsOpen: true,
@@ -100,6 +106,12 @@ export function placeRobot(r: Robot, x: number, z: number, facing: number): void
   r.kickCd = 0;
   r.kickBuffer = 0;
   r.ghost = 0;
+  r.megBuffer = 0;
+  r.megCd = 0;
+  r.megged = 0;
+  r.megImmune = 0;
+  r.phaseId = -1;
+  r.phaseT = 0;
   r.carry = 99;
 }
 
@@ -116,6 +128,8 @@ export function placeBall(w: World, x: number, z: number, vx = 0, vz = 0): void 
   b.passTick = -999;
   b.h = 0;
   b.vh = 0;
+  b.megId = -1;
+  b.megT = 0;
   w.goalLatch = false;
 }
 
@@ -212,10 +226,29 @@ function controlRobot(w: World, r: Robot, c: Command): void {
 
   if (r.kickCd > 0) r.kickCd -= DT;
   if (r.ghost > 0) r.ghost -= DT;
+  if (r.megCd > 0) r.megCd -= DT;
+  if (r.megged > 0) r.megged -= DT;
+  if (r.megImmune > 0) r.megImmune -= DT;
+  if (r.phaseId >= 0) {
+    // Running through a beaten defender: ends once clear of them (or at the hard limit).
+    r.phaseT += DT;
+    const o = w.robots[r.phaseId];
+    const clear = !o || Math.hypot(o.x - r.x, o.z - r.z) >= R * 2;
+    if ((r.phaseT >= TUNING.meg.phaseSeconds && clear) || r.phaseT >= TUNING.meg.phaseMax) r.phaseId = -1;
+  }
   r.carry += DT;
   r.mash = Math.max(0, r.mash - TUNING.kick.mashDecay * DT);
-  if (c.kick || c.pass) r.mash += 1;
-  if (c.pass) {
+  if (c.kick || c.pass || c.meg) r.mash += 1;
+  // Wrong-footed by a nutmeg: no kicks or skill touches until it wears off.
+  const stunned = r.megged > 0;
+  if (stunned) {
+    r.kickBuffer = 0;
+    r.megBuffer = 0;
+  } else if (c.meg) r.megBuffer = TUNING.meg.buffer;
+  else if (r.megBuffer > 0) r.megBuffer -= DT;
+  if (stunned) {
+    // (kick and pass presses are dropped while wrong-footed)
+  } else if (c.pass) {
     r.kickBuffer = TUNING.kick.passBufferSeconds;
     r.kickPower = 1;
     r.kickPass = true;
@@ -288,7 +321,7 @@ function controlRobot(w: World, r: Robot, c: Command): void {
       const tvx = mx * maxRun;
       const tvz = mz * maxRun;
       const opposing = ml < 0.05 || mx * r.vx + mz * r.vz < 0;
-      const rate = (opposing ? RT.braking * mod.braking : RT.acceleration * mod.acceleration) * DT;
+      const rate = (opposing ? RT.braking * mod.braking : RT.acceleration * mod.acceleration) * DT * (stunned ? TUNING.meg.stunAccel : 1);
       const ddx = tvx - r.vx;
       const ddz = tvz - r.vz;
       const dl = Math.hypot(ddx, ddz);
@@ -324,7 +357,8 @@ function controlRobot(w: World, r: Robot, c: Command): void {
     }
   }
 
-  // --- deliberate kick ---
+  // --- skill touch (nutmeg / knock-on), then the deliberate kick ---
+  if (r.megBuffer > 0 && r.megCd <= 0 && r.kickCd <= 0 && r.tState !== 'attached') tryMeg(w, r);
   if (r.kickBuffer > 0 && r.kickCd <= 0) tryKick(w, r);
 }
 
@@ -436,6 +470,188 @@ function launchLob(b: World['ball'], dirX: number, dirZ: number, carry: number):
   b.vz = dirZ * v;
   b.vh = (B.gravity * T) / 2;
   b.h = 0.05;
+}
+
+/** The way a robot is heading: movement input, else its velocity, else its facing. */
+function heading(r: Robot): [number, number] {
+  const ml = Math.hypot(r.mx, r.mz);
+  if (ml > 0.2) return [r.mx / ml, r.mz / ml];
+  const sp = Math.hypot(r.vx, r.vz);
+  if (sp > 1) return [r.vx / sp, r.vz / sp];
+  return [Math.cos(r.facing), Math.sin(r.facing)];
+}
+
+export interface MegWindow {
+  victim: Robot;
+  /** Success chance 0..1 if attempted now. */
+  chance: number;
+  align: number;
+  timing: number;
+  commit: number;
+}
+
+/**
+ * Is a nutmeg on for robot r right now? The ball must be at its feet and an opponent must be in the
+ * window ahead of it on the running line. The chance grows with alignment (run straight at them),
+ * timing (the sweet distance), how hard the defender is closing in (legs open) and the approach speed;
+ * a defender shuffling sideways shuts the gap. Pure: the HUD, the bots and the attempt all use it.
+ */
+export function megWindow(w: World, r: Robot): MegWindow | null {
+  const M = TUNING.meg;
+  const b = w.ball;
+  if (b.h > 0 || w.goalLatch || r.megged > 0 || r.tState === 'attached') return null;
+  if (Math.hypot(b.x - r.x, b.z - r.z) > TUNING.kick.range) return null;
+  const [ux, uz] = heading(r);
+  if ((b.x - r.x) * ux + (b.z - r.z) * uz < -0.25) return null; // the ball is behind
+  let best: MegWindow | null = null;
+  let bestAhead = Infinity;
+  for (const o of w.robots) {
+    if (o.team === r.team || o.megImmune > 0 || o.tState === 'attached') continue;
+    const dx = o.x - b.x;
+    const dz = o.z - b.z;
+    const ahead = dx * ux + dz * uz;
+    if (ahead < M.minAhead || ahead > M.maxAhead || ahead >= bestAhead) continue;
+    const side = Math.abs(dx * uz - dz * ux);
+    if (side > M.width) continue;
+    const align = 1 - side / M.width;
+    const timing = Math.max(0, 1 - Math.abs(ahead - M.sweet) / M.sweetSpan);
+    const closing = -(o.vx * ux + o.vz * uz);
+    const commit = Math.max(0, Math.min(1, closing / M.commitSpeed));
+    const shut = Math.max(0, Math.min(1, Math.abs(o.vx * uz - o.vz * ux) / M.shutSpeed));
+    const approach = Math.max(0, Math.min(1, (r.vx * ux + r.vz * uz) / M.approachSpeed));
+    const chance = Math.max(M.minChance, Math.min(M.maxChance, M.base + M.align * align + M.timing * timing + M.commit * commit + M.approach * approach - M.shut * shut));
+    best = { victim: o, chance, align, timing, commit };
+    bestAhead = ahead;
+  }
+  return best;
+}
+
+/** True when an opponent is closing in on the running line just outside the meg window (an early press waits for them). */
+function megIncoming(w: World, r: Robot): boolean {
+  const M = TUNING.meg;
+  const b = w.ball;
+  const [ux, uz] = heading(r);
+  for (const o of w.robots) {
+    if (o.team === r.team || o.megImmune > 0) continue;
+    const dx = o.x - b.x;
+    const dz = o.z - b.z;
+    const ahead = dx * ux + dz * uz;
+    if (ahead > M.maxAhead && ahead < M.maxAhead + 1.4 && Math.abs(dx * uz - dz * ux) <= M.width && o.vx * ux + o.vz * uz < -1) return true;
+  }
+  return false;
+}
+
+/**
+ * Skill touch. With a defender in the window: a nutmeg attempt (seeded roll against megWindow().chance).
+ * Success sends the ball through the defender and lets the attacker run through them; failure pokes
+ * the ball into the defender and the attacker stumbles. With nobody in the window: a knock-on.
+ */
+function tryMeg(w: World, r: Robot): void {
+  const M = TUNING.meg;
+  const K = TUNING.kick;
+  const b = w.ball;
+  if (b.h > 0 || w.goalLatch || Math.hypot(b.x - r.x, b.z - r.z) > K.range) return;
+  const [ux, uz] = heading(r);
+  const along = Math.max(0, r.vx * ux + r.vz * uz);
+  const touch = (): void => {
+    b.lastTouchRobot = r.id;
+    b.lastTouchTick = w.tick;
+    b.lastTouchDeliberate = true;
+    b.passBy = -1;
+    r.megBuffer = 0;
+    r.kickBuffer = 0;
+    r.ghost = K.ghostSeconds;
+    r.lastKickTick = w.tick;
+    r.lastKickDirX = ux;
+    r.lastKickDirZ = uz;
+  };
+  const mw = megWindow(w, r);
+  if (!mw) {
+    if (megIncoming(w, r)) return; // keep the buffered press for the closing defender
+    // Knock-on: push the ball ahead to run onto.
+    const speed = Math.max(M.knockSpeed, along + M.knockExtra);
+    b.vx = ux * speed;
+    b.vz = uz * speed;
+    touch();
+    r.megCd = M.knockCooldown;
+    r.kickCd = K.cooldownSeconds;
+    w.events.push({ type: 'kick', robot: r.id, speed, power: 0.12, assisted: 'none', swing: false, target: -1, pass: false, rushed: false, bank: false, oneTouch: false, lob: false, perfect: false, giveGo: false, knock: true });
+    return;
+  }
+  const o = mw.victim;
+  // Through the defender's centre and out the far side.
+  let dx = o.x + ux * 1.6 - b.x;
+  let dz = o.z + uz * 1.6 - b.z;
+  const dl = Math.hypot(dx, dz) || 1;
+  dx /= dl;
+  dz /= dl;
+  const roll = (tickNoise(w, r, 11) + 1) / 2;
+  const success = roll < mw.chance;
+  touch();
+  if (success) {
+    const speed = Math.max(M.ballSpeed, along + M.ballExtra);
+    b.vx = dx * speed;
+    b.vz = dz * speed;
+    b.megId = o.id;
+    b.megT = 0;
+    r.phaseId = o.id;
+    r.phaseT = 0;
+    // A burst so the attacker goes through with the ball.
+    const floor = TUNING.robot.maxRunSpeed * M.burst;
+    if (along < floor) {
+      r.vx = ux * floor;
+      r.vz = uz * floor;
+    }
+    r.megCd = M.cooldown;
+    r.kickCd = 0.12;
+    o.megged = M.stun;
+    o.megImmune = M.immune;
+    o.kickBuffer = 0;
+    o.megBuffer = 0;
+  } else {
+    b.vx = dx * M.failBall;
+    b.vz = dz * M.failBall;
+    r.vx *= M.failSlow;
+    r.vz *= M.failSlow;
+    r.megCd = M.failCooldown;
+    r.kickCd = M.failKickCd;
+  }
+  w.events.push({ type: 'meg', robot: r.id, victim: o.id, success, chance: mw.chance });
+}
+
+/** Close control: the robot running with the ball at its feet keeps it there through turns. */
+function closeControl(w: World): void {
+  const C = TUNING.control;
+  const b = w.ball;
+  if (b.h > 0 || w.goalLatch || b.megId >= 0) return;
+  let owner: Robot | null = null;
+  let od: number = C.range;
+  for (const r of w.robots) {
+    const d = Math.hypot(b.x - r.x, b.z - r.z);
+    if (d < od) {
+      od = d;
+      owner = r;
+    }
+  }
+  if (!owner) return;
+  const r = owner;
+  for (const o of w.robots) if (o.team !== r.team && Math.hypot(b.x - o.x, b.z - o.z) < C.contest) return;
+  const sp = Math.hypot(r.vx, r.vz);
+  if (sp < C.minSpeed || Math.hypot(r.mx, r.mz) < 0.2 || r.ghost > 0 || r.megged > 0 || r.tState === 'attached') return;
+  if (w.tick - r.lastKickTick < C.afterKick * TUNING.sim.hz) return;
+  const ux = r.vx / sp;
+  const uz = r.vz / sp;
+  const rx = b.x - r.x;
+  const rz = b.z - r.z;
+  if (rx * ux + rz * uz < 0.3) return; // only a ball in front of the feet
+  if (Math.hypot(b.vx - r.vx, b.vz - r.vz) > C.maxRelSpeed) return;
+  // Target: the robot's velocity plus a little lead, corrected back onto the running line.
+  const side = rx * -uz + rz * ux;
+  const tvx = r.vx + ux * C.lead - -uz * side * C.spring;
+  const tvz = r.vz + uz * C.lead - ux * side * C.spring;
+  const k = Math.min(1, C.grip * DT);
+  b.vx += (tvx - b.vx) * k;
+  b.vz += (tvz - b.vz) * k;
 }
 
 function tryKick(w: World, r: Robot): void {
@@ -890,6 +1106,8 @@ function integrateBall(b: BallState, h: number): number {
 }
 
 function collideRobots(w: World, a: Robot, b: Robot): void {
+  // A robot that has just nutmegged the other runs through them.
+  if (a.phaseId === b.id || b.phaseId === a.id) return;
   const dx = b.x - a.x;
   const dz = b.z - a.z;
   const d = Math.hypot(dx, dz);
@@ -923,6 +1141,7 @@ function collideRobots(w: World, a: Robot, b: Robot): void {
 function collideRobotBall(w: World, r: Robot, pinned: boolean): void {
   if (r.ghost > 0) return;
   const b = w.ball;
+  if (b.megId === r.id) return; // nutmegged: the ball goes through
   if (b.h > TUNING.ball.headHeight) return; // a lofted ball sails over
   const dx = b.x - r.x;
   const dz = b.z - r.z;
@@ -1020,6 +1239,15 @@ export function stepWorld(w: World, cmds: Command[]): void {
       w.events.push({ type: 'goal', side: b.x > 0 ? 1 : 0 });
     }
   }
+
+  if (b.megId >= 0) {
+    // The ball is through once it is clear of the beaten defender (or at the hard limit).
+    b.megT += DT;
+    const o = robots[b.megId];
+    const clear = !o || Math.hypot(o.x - b.x, o.z - b.z) >= R + RB;
+    if ((b.megT >= TUNING.meg.phaseSeconds && clear) || b.megT >= TUNING.meg.phaseMax) b.megId = -1;
+  }
+  closeControl(w);
 
   for (let i = 0; i < robots.length; i++) {
     const r = robots[i];

@@ -49,7 +49,8 @@ export function matchFacts(result: MatchResult): MatchFacts {
     arenaWin: won ? 1 : 0,
     teamGoals: result.score[0],
     // Play counters default to 0 for results recorded before plays existed.
-    plays: (p.longBalls ?? 0) + (p.giveAndGos ?? 0) + (p.wallPasses ?? 0) + (p.oneTouchGoals ?? 0),
+    plays: (p.longBalls ?? 0) + (p.giveAndGos ?? 0) + (p.wallPasses ?? 0) + (p.oneTouchGoals ?? 0) + (p.megs ?? 0),
+    megs: p.megs ?? 0,
     longBalls: p.longBalls ?? 0,
     giveAndGos: p.giveAndGos ?? 0,
     wallPasses: p.wallPasses ?? 0,

@@ -39,6 +39,8 @@ export interface ViewFrame {
   human: number;
   reduced: boolean;
   shake: boolean;
+  /** A nutmeg is on for the player (chance 0..1): the ball ring turns pink. */
+  meg?: number | null;
   /** Long ball being charged by the player: charge, ideal charge (gold notch) and the aim (ball -> target). */
   lob?: { charge: number; ideal: number; bx: number; bz: number; tx: number; tz: number } | null;
 }
@@ -212,6 +214,8 @@ export class MatchView {
   private ballShadow: THREE.Mesh;
   private ballRing: THREE.Mesh;
   private prevBallH = 0;
+  /** Tick each robot was last nutmegged (drives the wrong-footed reaction). */
+  private megTick: number[] = [];
   /** Where a lofted ball will land. */
   private landRing!: THREE.Mesh;
   /** Long-ball charge meter around the player's feet. */
@@ -632,6 +636,18 @@ export class MatchView {
           this.burst((a.x + b.x) / 2, 0.7, (a.z + b.z) / 2, 5, 2, '#fff3c2', 0, 0, 0.1);
           break;
         }
+        case 'meg': {
+          const v = w.robots[e.victim];
+          const a = w.robots[e.robot];
+          if (e.success) {
+            // Through the legs: a pink streak under the beaten defender, who gets a wrong-footed wobble.
+            this.megTick[e.victim] = w.tick;
+            this.flash(v.x, v.z, 2.3, '#ff5fb0', 0.36);
+            this.burst(v.x, 0.25, v.z, 12, 4.2, '#ff8fca', a.lastKickDirX * 1.6, a.lastKickDirZ * 1.6, 0.1);
+            if (!reduced) this.shake = Math.max(this.shake, 0.06);
+          } else this.burst(w.ball.x, 0.3, w.ball.z, 5, 1.8, '#c9d4de', 0, 0, 0.09);
+          break;
+        }
         case 'attach': {
           this.ropeGrow[e.robot] = 0;
           const h = this.arenaView.anchors[e.anchor].head;
@@ -790,6 +806,7 @@ export class MatchView {
       pose.kickAge = (tick - r.lastKickTick) / hz;
       pose.kickDir = Math.atan2(r.lastKickDirZ, r.lastKickDirX);
       pose.bumpAge = (tick - r.lastBumpTick) / hz;
+      pose.megAge = (tick - (this.megTick[i] ?? -9999)) / hz;
       pose.mood = f.moods[i];
       pose.reduced = f.reduced;
       const rv = this.robots[i];
@@ -890,8 +907,11 @@ export class MatchView {
       const rm = this.ballRing.material as THREE.MeshBasicMaterial;
       const target = kickable ? 0.95 : this.opts.ballOutline ? 0.55 : 0;
       rm.opacity += (target - rm.opacity) * Math.min(1, dt * 18);
-      rm.color.set(kickable ? '#ffe36a' : '#ffffff');
-      const brs = kickable ? 1.7 + (f.reduced ? 0 : Math.sin(t * 10) * 0.07) : 1.4;
+      // Pink ring: a nutmeg is on (brighter and bigger for a good chance).
+      const megOn = kickable && f.meg != null;
+      rm.color.set(megOn ? '#ff5fb0' : kickable ? '#ffe36a' : '#ffffff');
+      const megPulse = megOn ? 0.25 + (f.meg ?? 0) * 0.35 + (f.reduced ? 0 : Math.sin(t * 16) * 0.09) : 0;
+      const brs = (kickable ? 1.7 + (f.reduced ? 0 : Math.sin(t * 10) * 0.07) : 1.4) + megPulse;
       this.ballRing.scale.set(brs, brs, 1);
       this.ballRing.position.set(bx, 0.022, bz);
 

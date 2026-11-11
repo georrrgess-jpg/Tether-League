@@ -15,7 +15,7 @@ import { defaultSettings, sanitizeSettings, type Settings } from './settings';
  * Versioned save data. One complete snapshot is written at a time; the previous valid snapshot is kept
  * so a failed or corrupted write never erases a working save.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const KEY = 'tether-league/save';
 const KEY_PREV = 'tether-league/save.prev';
 const KEY_NEXT = 'tether-league/save.next';
@@ -67,6 +67,8 @@ export interface Records {
   longBalls: number;
   wallPasses: number;
   oneTouchGoals: number;
+  /** Successful nutmegs (save version 4). */
+  megs: number;
 }
 
 export interface ActiveObjective {
@@ -253,7 +255,7 @@ export function emptyRecords(): Records {
   return {
     matches: 0, wins: 0, goals: 0, assists: 0, saves: 0, passes: 0, interceptions: 0, swingGoals: 0, bestGoals: 0, bestSaves: 0, bestMargin: 0, streak: 0, bestStreak: 0,
     shots: 0, cleanSheets: 0, overtimeWins: 0, comebackWins: 0, hatTricks: 0, careerWins: 0,
-    giveAndGos: 0, longBalls: 0, wallPasses: 0, oneTouchGoals: 0,
+    giveAndGos: 0, longBalls: 0, wallPasses: 0, oneTouchGoals: 0, megs: 0,
   };
 }
 
@@ -492,6 +494,8 @@ const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string
   // 2 -> 3: match ball cosmetic (defaults to the starter ball) and play counters (start at 0).
   // Both are filled in by validation, so the data needs no other change.
   2: (raw) => ({ ...raw, version: 3 }),
+  // 3 -> 4: nutmeg counter (starts at 0, filled in by validation).
+  3: (raw) => ({ ...raw, version: 4 }),
 };
 
 export class SaveError extends Error {}

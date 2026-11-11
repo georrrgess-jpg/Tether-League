@@ -25,10 +25,12 @@ export interface Command {
   lob: number;
   /** With pass: a give-and-go return, led further into the receiver's run. */
   giveGo: boolean;
+  /** Skill touch pressed this tick (edge): a nutmeg through a defender in the window, otherwise a knock-on. */
+  meg: boolean;
 }
 
 export function emptyCommand(): Command {
-  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0, pass: false, lob: 0, giveGo: false };
+  return { mx: 0, mz: 0, ax: 0, az: 0, tether: false, kick: false, power: 1, anchor: -1, swingDir: 0, pass: false, lob: 0, giveGo: false, meg: false };
 }
 
 export function clearCommand(c: Command): void {
@@ -42,6 +44,7 @@ export function clearCommand(c: Command): void {
   c.pass = false;
   c.lob = 0;
   c.giveGo = false;
+  c.meg = false;
 }
 
 export type TetherState = 'ready' | 'attached' | 'cooldown';
@@ -91,6 +94,16 @@ export interface Robot {
   mash: number;
   ghost: number;
 
+  /** Skill touch: buffered press, cooldown before the next attempt. */
+  megBuffer: number;
+  megCd: number;
+  /** Wrong-footed after being nutmegged (seconds left) and immunity to another meg. */
+  megged: number;
+  megImmune: number;
+  /** After a successful meg: the beaten robot this one runs through, and for how long (-1 / 0 = none). */
+  phaseId: number;
+  phaseT: number;
+
   /** Seconds since release from a swing while still above run speed (used for "swing kick" detection). */
   carry: number;
 
@@ -115,13 +128,18 @@ export interface Ball {
   /** Height above the pitch and vertical speed (long balls). 0 / 0 for a rolling ball. */
   h: number;
   vh: number;
+  /** Nutmeg: the robot the ball is passing through, and for how long (-1 / 0 = none). */
+  megId: number;
+  megT: number;
   /** Robot that last passed the ball (pass button or assisted pass) and when; -1 when an opponent has touched it since. */
   passBy: number;
   passTick: number;
 }
 
 export type SimEvent =
-  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean; bank: boolean; oneTouch: boolean; lob: boolean; perfect: boolean; giveGo: boolean }
+  | { type: 'kick'; robot: number; speed: number; power: number; assisted: 'none' | 'goal' | 'pass'; swing: boolean; target: number; pass: boolean; rushed: boolean; bank: boolean; oneTouch: boolean; lob: boolean; perfect: boolean; giveGo: boolean; knock?: boolean }
+  /** A nutmeg attempt on `victim` (success = the ball and the attacker go through). */
+  | { type: 'meg'; robot: number; victim: number; success: boolean; chance: number }
   | { type: 'touch'; robot: number; speed: number }
   | { type: 'wall'; speed: number; x: number; z: number; nx: number; nz: number }
   | { type: 'post'; speed: number; x: number; z: number }

@@ -30,7 +30,7 @@ import { defaultSettings } from '../src/storage/settings';
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const fresh = (seed = 99): SaveGame => newSave(defaultClub(), defaultSettings(), seed);
-const stats = (p: Partial<RobotStats> = {}): RobotStats => ({ goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0, ...p });
+const stats = (p: Partial<RobotStats> = {}): RobotStats => ({ goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0, megs: 0, ...p });
 const goal = (team: 0 | 1, scorer: number, p: Partial<GoalRecord> = {}): GoalRecord => ({ time: 10, team, scorer, assist: -1, ownGoalBy: -1, overtime: false, swing: false, ...p });
 function result(p: Partial<MatchResult> = {}): MatchResult {
   const score = p.score ?? [1, 0];
@@ -376,7 +376,7 @@ describe('save v2', () => {
     const s = validateSave(raw);
     expect(raw).toEqual(snapshot); // input untouched
     expect(s.version).toBe(SAVE_VERSION);
-    expect(SAVE_VERSION).toBe(3);
+    expect(SAVE_VERSION).toBe(4);
     expect(s.club.ball).toBe('ball_classic');
     expect(s.records.giveAndGos).toBe(0);
     expect(s.xp).toBe(2620);
@@ -472,7 +472,8 @@ describe('save v3', () => {
     rec.goals = 41;
     v2.credits = 1234;
     const s = validateSave(v2);
-    expect(s.version).toBe(3);
+    expect(s.version).toBe(4);
+    expect(s.records.megs).toBe(0);
     expect(s.club.ball).toBe('ball_classic');
     expect(s.owned).toContain('ball_classic');
     expect(s.records.goals).toBe(41);
@@ -512,5 +513,25 @@ describe('plays progression', () => {
     const s = fresh();
     const rec = commitMatch(s, result({ matchId: 'q-none' }), CTX);
     expect(rec.rewards.some((l) => l.label.startsWith('Plays'))).toBe(false);
+  });
+});
+
+describe('nutmeg progression', () => {
+  it('nutmegs count as plays, add to records and advance the nutmeg objective', () => {
+    const s = fresh();
+    const slot = setObjective(s, 'm_meg1');
+    const rec = commitMatch(s, result({ matchId: 'q-meg', kind: 'career', player: stats({ megs: 2 }) }), CTX);
+    expect(rec.rewards.find((l) => l.label.startsWith('Plays completed'))?.label).toBe('Plays completed × 2');
+    expect(s.records.megs).toBe(2);
+    expect(s.progress.objectives[slot].id).not.toBe('m_meg1');
+  });
+
+  it('a v3 save migrates with a zeroed nutmeg counter', () => {
+    const v3 = JSON.parse(JSON.stringify(fresh())) as Record<string, unknown>;
+    v3.version = 3;
+    delete (v3.records as Record<string, unknown>).megs;
+    const s = validateSave(v3);
+    expect(s.version).toBe(4);
+    expect(s.records.megs).toBe(0);
   });
 });

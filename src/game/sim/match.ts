@@ -22,6 +22,8 @@ export interface RobotStats {
   giveAndGos: number;
   wallPasses: number;
   oneTouchGoals: number;
+  /** Successful nutmegs. */
+  megs: number;
 }
 
 export interface GoalRecord {
@@ -38,7 +40,7 @@ export interface GoalRecord {
   oneTouch?: boolean;
 }
 
-export type PlayKind = 'long_ball' | 'give_and_go' | 'wall_pass' | 'one_touch';
+export type PlayKind = 'long_ball' | 'give_and_go' | 'wall_pass' | 'one_touch' | 'nutmeg';
 
 export type MatchEvent =
   | { type: 'countdown'; n: number }
@@ -73,7 +75,7 @@ interface Touch {
 }
 
 function newStats(): RobotStats {
-  return { goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0 };
+  return { goals: 0, assists: 0, saves: 0, shots: 0, passes: 0, interceptions: 0, kicks: 0, swingKicks: 0, swings: 0, ownGoals: 0, longBalls: 0, giveAndGos: 0, wallPasses: 0, oneTouchGoals: 0, megs: 0 };
 }
 
 const HZ = TUNING.sim.hz;
@@ -333,6 +335,15 @@ export class Match {
         }
         case 'touch':
           this.recordTouch(e.robot, false, false);
+          break;
+        case 'meg':
+          // A nutmeg attempt is a deliberate touch by the attacker; a successful one is a completed play.
+          this.recordTouch(e.robot, true, false);
+          this.pendingPass = null;
+          if (e.success) {
+            this.stats[e.robot].megs++;
+            this.events.push({ type: 'play', play: 'nutmeg', robot: e.robot, perfect: e.chance < 0.45 });
+          }
           break;
         case 'attach':
           this.stats[e.robot].swings++;

@@ -141,6 +141,76 @@ export const TUNING = {
     /** A return pass within this many seconds of the first pass completes a give-and-go. */
     giveGoWindow: 4,
   },
+  /** Close control: a robot running with the ball at its feet keeps it there through turns. */
+  control: {
+    /** Centre distance within which the ball is "at the feet" (contact is radius + ball radius = 1.04). */
+    range: 1.42,
+    /** No close control while an opponent is this close to the ball: it is a 50/50. */
+    contest: 1.75,
+    /** How quickly the ball takes up the dribbler's velocity (1/s). */
+    grip: 7,
+    /** Pulls the ball back onto the running line (1/s per unit of sideways error). */
+    spring: 4,
+    /** Extra forward speed so the ball rolls just ahead of the feet. */
+    lead: 0.35,
+    /** Only a ball moving this slowly relative to the robot can be gathered. */
+    maxRelSpeed: 5,
+    minSpeed: 1.5,
+    /** No close control for this long after the robot's own kick. */
+    afterKick: 0.35,
+  },
+  /**
+   * Nutmeg ("meg"): poke the ball through a defender and run straight through after it.
+   * The chance is built from alignment, timing, how committed the defender is and the approach speed.
+   */
+  meg: {
+    /** The defender must be this far ahead of the ball (centre to centre) along the run. */
+    minAhead: 1.1,
+    maxAhead: 3.4,
+    /** Best distance: timing quality falls off linearly to 0 over `sweetSpan` either side. */
+    sweet: 1.8,
+    sweetSpan: 1.7,
+    /** Max sideways offset of the defender from the running line. */
+    width: 0.6,
+    base: 0.06,
+    align: 0.2,
+    timing: 0.2,
+    /** Defender closing in at commitSpeed or more: legs open. */
+    commit: 0.34,
+    commitSpeed: 4,
+    approach: 0.1,
+    approachSpeed: 4.5,
+    /** Defender shuffling sideways at shutSpeed: legs shut. */
+    shut: 0.25,
+    shutSpeed: 4,
+    minChance: 0.05,
+    maxChance: 0.9,
+    /** Ball speed through the defender: max(ballSpeed, attacker speed + ballExtra). */
+    ballSpeed: 6.6,
+    ballExtra: 1.5,
+    /** Ball and attacker ignore the beaten defender for this long (extended while still overlapping, up to phaseMax). */
+    phaseSeconds: 0.7,
+    phaseMax: 1.3,
+    /** Attacker speed floor (x run speed) on a successful meg. */
+    burst: 1.12,
+    /** The beaten defender is wrong-footed: reduced acceleration, no kicks. */
+    stun: 0.5,
+    stunAccel: 0.3,
+    /** A beaten defender cannot be megged again for this long. */
+    immune: 2.2,
+    cooldown: 2,
+    /** Failed attempt: the ball is poked at the defender, the attacker stumbles. */
+    failCooldown: 2.6,
+    failKickCd: 0.45,
+    failSlow: 0.55,
+    failBall: 4.6,
+    /** No defender in the window: a knock-on (the ball is pushed ahead to run onto). */
+    knockSpeed: 5.6,
+    knockExtra: 2.3,
+    knockCooldown: 0.5,
+    /** An early press waits this long for a closing defender to enter the window. */
+    buffer: 0.14,
+  },
   assist: {
     /** Max aim correction (radians) for off / light / strong. */
     maxAngle: [0, 0.14, 0.3],

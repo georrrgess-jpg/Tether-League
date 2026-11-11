@@ -21,7 +21,7 @@ export function achievementValue(save: SaveGame, stat: AchievementStat): number 
     case 'goals': case 'swingGoals': case 'assists': case 'passes': case 'saves': case 'interceptions': case 'shots':
     case 'wins': case 'matches': case 'bestStreak': case 'bestMargin': case 'bestGoals': case 'bestSaves':
     case 'cleanSheets': case 'comebackWins': case 'overtimeWins': case 'hatTricks':
-    case 'longBalls': case 'giveAndGos': case 'wallPasses': case 'oneTouchGoals':
+    case 'longBalls': case 'giveAndGos': case 'wallPasses': case 'oneTouchGoals': case 'megs':
       return r[stat];
     case 'trophies': return save.trophies.length;
     case 'topDivision': return 1 + Math.max(save.career.division, ...save.seasons.map((s) => s.division + (s.promoted ? 1 : 0)), ...save.trophies.map((t) => t.division));

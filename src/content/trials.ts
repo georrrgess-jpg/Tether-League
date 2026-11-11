@@ -89,5 +89,5 @@ export const LESSONS: LessonDef[] = [
   { id: 'kick', name: 'Kicking', summary: 'Aim a kick and score a practice goal.', icon: 'ball' },
   { id: 'pass', name: 'Passing', summary: 'Find your teammate in space.', icon: 'pass' },
   { id: 'defend', name: 'Defending', summary: 'Get goal-side and stop a shot.', icon: 'save' },
-  { id: 'plays', name: 'Plays', summary: 'Loft a long ball over a defender and finish a give-and-go.', icon: 'assist' },
+  { id: 'plays', name: 'Plays', summary: 'Long ball over a defender, a give-and-go finish and a nutmeg.', icon: 'assist' },
 ];

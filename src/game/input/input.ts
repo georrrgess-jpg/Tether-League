@@ -28,13 +28,17 @@ export class InputManager {
   /** True once any touch input has been seen (touch controls are then shown). */
   touchSeen = false;
   /** Counters the HUD uses to fade hints once an action has been performed. */
-  used = { move: 0, tether: 0, kick: 0, pass: 0 };
+  used = { move: 0, tether: 0, kick: 0, pass: 0, meg: 0 };
 
   private keys = new Set<string>();
   private bind = new Map<string, Action>();
   private mouseX = 0;
   private mouseY = 0;
   private kickQueued = false;
+  private megQueued = false;
+  private megBtn: HTMLElement | null = null;
+  private megShown = -1;
+  private padMegPrev = false;
   private passQueued = false;
   /** Long-ball charge of the queued pass (0 = ground pass). */
   private passLob = 0;
@@ -156,6 +160,7 @@ export class InputManager {
   releaseAll(): void {
     this.keys.clear();
     this.kickQueued = false;
+    this.megQueued = false;
     this.passQueued = false;
     this.passLob = 0;
     this.passDownAt = null;
@@ -222,6 +227,9 @@ export class InputManager {
     }
     if (a === 'pass') {
       this.pressPass();
+    } else if (a === 'meg') {
+      this.megQueued = true;
+      this.used.meg++;
     } else if (a === 'kick') {
       this.kickQueued = true;
       this.kickByKey = true;
@@ -259,6 +267,11 @@ export class InputManager {
         this.kickQueued = true;
         this.kickByKey = false;
         this.used.kick++;
+      } else if (e.button === 1) {
+        // Middle click: skill touch (nutmeg / knock-on).
+        e.preventDefault();
+        this.megQueued = true;
+        this.used.meg++;
       } else if (e.button === 2) {
         this.tetherMouse = true;
         this.tetherLatch = true;
@@ -292,6 +305,14 @@ export class InputManager {
       this.kickSY = y;
       this.dragAim = false;
       this.pressed(btn!);
+      return true;
+    }
+    if (kind === 'meg') {
+      // A tap: fires on touch down, nothing held.
+      this.megQueued = true;
+      this.used.meg++;
+      this.pressed(btn!);
+      setTimeout(() => btn!.classList.remove('is-down'), 140);
       return true;
     }
     if (kind === 'tether' && this.tetherId === null) {
@@ -464,6 +485,21 @@ export class InputManager {
    * Long-ball charge on the PASS button, matching the meter at the robot's feet: a fill that grows
    * while PASS is held and a gold notch at the ideal charge (when there is a pass to aim).
    */
+  /**
+   * Lights the MEG touch button when a nutmeg is on (chance 0..1), dims it otherwise. Three looks:
+   * off (knock-on only), on, and hot (a good chance).
+   */
+  showMeg(chance: number | null): void {
+    const btn = this.megBtn;
+    if (!btn) return;
+    const level = chance === null ? 0 : chance >= 0.6 ? 2 : 1;
+    if (level === this.megShown) return;
+    if (level > 0 && this.megShown <= 0 && this.settings().vibration) buzz(6);
+    this.megShown = level;
+    btn.classList.toggle('is-on', level >= 1);
+    btn.classList.toggle('is-hot', level === 2);
+  }
+
   showCharge(ideal: number | null): void {
     const btn = this.passBtn;
     if (!btn) return;
@@ -503,13 +539,16 @@ export class InputManager {
       <div class="stick-base" aria-hidden="true"><svg class="stick-chev" viewBox="0 0 100 100">${chev(0)}${chev(90)}${chev(180)}${chev(270)}</svg><i class="stick-dir"></i><div class="stick-knob"></div></div>
       <div class="tbtn tbtn-tether" data-touch="tether" role="button" aria-label="Swing"><span>SWING</span><small>tap · hold</small></div>
       <div class="tbtn tbtn-kick" data-touch="kick" role="button" aria-label="Kick"><span>KICK</span><small>drag to aim</small></div>
-      <div class="tbtn tbtn-pass" data-touch="pass" role="button" aria-label="Pass"><i class="tb-charge" aria-hidden="true"></i><span>PASS</span><small>hold: long</small></div>`;
+      <div class="tbtn tbtn-pass" data-touch="pass" role="button" aria-label="Pass"><i class="tb-charge" aria-hidden="true"></i><span>PASS</span><small>hold: long</small></div>
+      <div class="tbtn tbtn-meg" data-touch="meg" role="button" aria-label="Meg: nutmeg or knock-on"><span>MEG</span></div>`;
     this.layer.appendChild(root);
     this.layer.classList.add('has-touch');
     this.touchRoot = root;
     this.stickBase = root.querySelector('.stick-base');
     this.stickKnob = root.querySelector('.stick-knob');
     this.passBtn = root.querySelector('.tbtn-pass');
+    this.megBtn = root.querySelector('.tbtn-meg');
+    this.megShown = -1;
     this.layoutTouch();
     this.restSoon();
   }
@@ -542,7 +581,15 @@ export class InputManager {
       this.tetherLatch = true;
     }
     this.padTether = tether;
-    const kick = b(0) || b(2);
+    // X (button 2): skill touch.
+    const megBtn = b(2);
+    if (megBtn && !this.padMegPrev) {
+      this.megQueued = true;
+      this.used.meg++;
+      this.device = 'pad';
+    }
+    this.padMegPrev = megBtn;
+    const kick = b(0);
     if (kick && !this.padKickPrev) {
       this.kickQueued = true;
       this.kickByKey = !aim;
@@ -715,7 +762,9 @@ export class InputManager {
     this.passQueued = false;
     this.passLob = 0;
     this.lobCharge = this.enabled ? this.chargeAt(performance.now()) : null;
-    c.kick = this.enabled && this.kickQueued && !c.pass;
+    c.meg = this.enabled && this.megQueued && !c.pass;
+    this.megQueued = false;
+    c.kick = this.enabled && this.kickQueued && !c.pass && !c.meg;
     c.power = 1;
     if (this.kickQueued) {
       if (this.aimOnce) {

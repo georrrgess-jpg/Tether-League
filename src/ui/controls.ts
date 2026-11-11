@@ -3,7 +3,7 @@ import { h, icon } from './dom';
 
 /**
  * Compact key-cap strip describing the core controls for the player's current device and bindings,
- * followed by the two pass plays (long ball and give-and-go). Full play descriptions live in the
+ * followed by the plays (long ball, give-and-go, nutmeg). Full play descriptions live in the
  * Academy playbook.
  */
 export function controlsStrip(settings: Settings, touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches): HTMLElement {
@@ -29,6 +29,7 @@ export function controlsStrip(settings: Settings, touch = typeof matchMedia !== 
     h('ul', { class: 'plays-strip', 'aria-label': 'Pass plays' },
       h('li', null, icon('pass'), h('span', null, h('b', null, `Hold ${pass}`), ': long ball')),
       h('li', null, icon('assist'), h('span', null, h('b', null, `${pass} again after passing`), ': give-and-go')),
+      h('li', null, icon('next'), h('span', null, h('b', null, touch ? 'MEG at a diving defender' : `${keyLabel(k.meg[0])} at a diving defender`), ': nutmeg')),
     ),
   );
 }
