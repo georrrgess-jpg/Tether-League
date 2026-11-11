@@ -46,6 +46,9 @@ export class Gfx {
   static guessQuality(): Quality {
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
     const cores = navigator.hardwareConcurrency ?? 4;
+    // Low-memory phones (Chrome reports deviceMemory in GB) start on the light tier.
+    const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+    if (coarse && memory !== undefined && memory <= 3) return 'low';
     if (coarse || cores <= 4) return 'medium';
     return 'high';
   }

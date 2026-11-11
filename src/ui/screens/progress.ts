@@ -79,7 +79,7 @@ function levelStrip(app: App): HTMLElement {
   const lp = levelProgress(save.xp);
   const next = roadReward(lp.level + 1);
   return h('section', { class: 'panel lvl-strip', 'aria-label': 'Club level' },
-    h('div', { class: 'lvl-medal' }, h('small', null, 'Club level'), h('b', null, String(lp.level))),
+    h('div', { class: 'lvl-medal', 'aria-label': `Club level ${lp.level}` }, h('small', null, 'Level'), h('b', null, String(lp.level))),
     h('div', { class: 'lvl-xp' },
       h('div', { class: 'lvl-xp-top' }, h('b', null, `${save.xp - lp.from} / ${lp.to - lp.from} XP`), clubTitle(app) ? h('span', { class: 'chip chip-violet' }, clubTitle(app)) : null),
       meter(lp.frac, 'Club XP to next level', 'xp', save.xp - lp.from, lp.to - lp.from),

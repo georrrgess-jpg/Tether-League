@@ -64,7 +64,7 @@ export class LessonMode extends Scenario {
 
   private keys(): { move: string; tether: string; kick: string; pass: string } {
     const k = this.settings().keys;
-    if (this.touch) return { move: 'the left side of the screen', tether: 'SWING', kick: 'KICK', pass: 'PASS' };
+    if (this.touch) return { move: `the stick (bottom ${this.settings().touchSwap ? 'right' : 'left'})`, tether: 'SWING', kick: 'KICK', pass: 'PASS' };
     return {
       move: `${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])}`,
       tether: `right mouse or ${keyLabel(k.tether[0])}`,

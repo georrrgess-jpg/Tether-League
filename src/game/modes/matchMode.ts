@@ -328,7 +328,7 @@ export class MatchMode implements PlayMode {
       const touch = session.input.touchSeen;
       if (u.move < 2) {
         key = 'move';
-        text = touch ? 'Hold the stick (bottom left) toward where you want to go' : `Move with ${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])}. You attack the right-hand goal`;
+        text = touch ? `Hold the stick (bottom ${this.settings().touchSwap ? 'right' : 'left'}) toward where you want to go` : `Move with ${keyLabel(k.up[0])} ${keyLabel(k.left[0])} ${keyLabel(k.down[0])} ${keyLabel(k.right[0])}. You attack the right-hand goal`;
       } else if (u.kick < 2) {
         key = 'kick';
         text = touch ? 'Tap KICK near the ball, or drag it to aim' : `Left click (or ${keyLabel(k.kick[0])}) near the ball to kick toward your aim`;

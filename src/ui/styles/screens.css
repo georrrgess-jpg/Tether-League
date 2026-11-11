@@ -2965,7 +2965,7 @@ button.earned-color:active:not([disabled]) {
 }
 .lvl-medal small {
   white-space: nowrap;
-  font-size: 0.52rem;
+  font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;

@@ -1,3 +1,4 @@
+import { audio } from '../../audio/audio';
 import type { App, ScreenView } from '../../app';
 import { CHASSIS } from '../../content/chassis';
 import { COSMETIC_BY_ID } from '../../content/cosmetics';
@@ -69,6 +70,11 @@ export function resultsScreen(app: App, params: URLSearchParams): ScreenView {
   const career = r.kind !== 'quick';
   const lp = levelProgress(save.xp);
   const leveled = r.progress.levelAfter > r.progress.levelBefore;
+  // A celebratory sting for a result that was just committed (not when reopening an old one).
+  if (Date.now() - r.at < 15000) {
+    const masteryUp = !!r.progress.mastery && r.progress.mastery.levelAfter > r.progress.mastery.levelBefore;
+    setTimeout(() => audio.play(leveled || masteryUp ? 'levelUp' : r.credits > 0 || r.xp > 0 ? 'reward' : 'uiSelect', { intensity: 0.7 }), 600);
+  }
 
   const stat = (ic: string, label: string, value: number) => h('div', { class: 'stat' }, icon(ic), h('span', null, label), countUp(h('b', null), value, { ms: 700, delay: 300 }));
   const stats = h('section', { class: 'panel results-stats' },

@@ -1,3 +1,4 @@
+import { audio } from '../../audio/audio';
 import type { App, ScreenView } from '../../app';
 import { DIVISIONS } from '../../content/clubs';
 import { CLUB_COLORS, COSMETIC_BY_ID, EARNED_COLORS, catalogOfKind, colorHex, isEarnedOnly, type CosmeticKind, type RobotLook } from '../../content/cosmetics';
@@ -255,10 +256,14 @@ export function clubScreen(app: App, params: URLSearchParams): ScreenView {
         busy = false;
         if (res === 'ok') {
           app.persist();
+          audio.play('purchase');
           app.toast(done, 'good');
           app.refreshChrome();
           render();
-        } else app.toast(res === 'insufficient' ? `You need ${def.credits - save.credits} more credits.` : res === 'no_pick' ? 'No free picks left.' : res === 'earned' ? 'This item is earned through play, not bought.' : 'Already owned.', 'bad');
+        } else {
+          audio.play('uiDeny');
+          app.toast(res === 'insufficient' ? `You need ${def.credits - save.credits} more credits.` : res === 'no_pick' ? 'No free picks left.' : res === 'earned' ? 'This item is earned through play, not bought.' : 'Already owned.', 'bad');
+        }
       };
       buy = earnedOnly
         ? h('div', { class: 'buy-bar is-earned' },

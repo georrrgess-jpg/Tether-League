@@ -101,8 +101,21 @@ export class App {
     // UI sounds for every button without wiring each one.
     this.host.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button, a.btn');
-      if (b && !this.session) audio.play(b.classList.contains('is-back') ? 'uiBack' : 'uiSelect', { intensity: 0.5 });
+      if (!b || this.session) return;
+      const disabled = b.classList.contains('is-disabled') || b.getAttribute('aria-disabled') === 'true';
+      audio.play(disabled ? 'uiDeny' : b.classList.contains('is-back') ? 'uiBack' : 'uiSelect', { intensity: 0.5 });
     });
+    // A very quiet tick when a mouse moves onto a button (not on touch screens, not in matches).
+    const finePointer = typeof matchMedia !== 'undefined' && matchMedia('(hover: hover) and (pointer: fine)').matches;
+    let hovered: Element | null = null;
+    if (finePointer) {
+      this.host.addEventListener('pointerover', (e) => {
+        if (this.session || (e as PointerEvent).pointerType !== 'mouse') return;
+        const b = (e.target as HTMLElement).closest('button:not([disabled]), a.btn');
+        if (b && b !== hovered) audio.play('uiHover', { intensity: 0.4 });
+        hovered = b;
+      });
+    }
     document.fonts?.ready.then(() => {
       clearJerseyCache();
       this.syncStage(true);
