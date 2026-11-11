@@ -90,6 +90,43 @@ device performance, touch comfort and gamepad mapping are untested. Frame rate w
 real hardware (software GL is not representative). Audio was checked against a mock context, never
 heard.
 
+### Chassis balance, nutmeg, close control, robot and arena visuals (2026-11-11)
+
+- Chassis balance (`src/content/chassis.ts`, `tools/chassis.ts`, `npm run chassis`): a 2v2 bot round
+  robin (sides swapped every other match) showed Scout beating every chassis (62-71%) and Glider
+  losing to every chassis (29-37%). Acceleration drove Scout's edge; slow braking sank the Glider.
+  New stat `kick` (shot power): Bulwark 1.04, Scout 0.975. Scout acceleration 1.14 -> 1.06; Glider
+  acceleration 0.95 -> 1.02, braking 0.8 -> 0.96, steer 0.82 -> 0.88, swing 1 -> 1.05. After the
+  movement changes below, every pairing is 50-53% over 400 matches. Samples under about 300 matches
+  per pairing are too noisy to tune against (a 24-match sample is +/- 10 points).
+- Close control (`closeControl` in `world.ts`, `TUNING.control`): the nearest robot within 1.42 of a
+  grounded ball, running with input and the ball in front, steers the ball's velocity toward its own
+  (grip 7/s, sideways spring 4/s). Off for 0.35 s after its own kick, while swinging or wrong-footed,
+  when the ball's relative speed is above 5, and when an opponent is within 1.75 of the ball.
+- Nutmeg (`megWindow`, `tryMeg`, `TUNING.meg`; `Command.meg`): with the ball in kick range and an
+  opponent 1.1-3.4 ahead of the ball within 0.6 of the running line, chance = 0.06 + 0.2 align +
+  0.2 timing (sweet distance 1.8) + 0.34 commit (defender closing at 4 u/s) + 0.1 approach - 0.25
+  shut (defender moving sideways), clamped 0.05-0.9, decided by a seeded roll. Success: ball through
+  the defender (collision off for that robot until clear, 0.7-1.3 s), attacker runs through with a
+  1.12x run-speed floor, defender wrong-footed 0.5 s (30% acceleration, no kicks) and immune 2.2 s;
+  cooldown 2 s. Failure: ball poked into the defender at 4.6, attacker slowed to 55%, cooldown 2.6 s.
+  No opponent in the window: knock-on (ball pushed ahead); an early press waits up to 0.14 s for a
+  closing defender. Bots roll once per opening (dribble skill x 0.4) and need chance >= 0.62:
+  about 1 / 3 / 4 attempts per match at rookie / club / pro across four bots, around 75% success.
+  A stand-in that nutmegs at every decent opening gains about 3 win points (150 matches per cell).
+  Inputs: L / G, middle mouse, gamepad X (kick is now A only), MEG touch button above SWING.
+  HUD: pink ball ring and lit MEG button while a meg is on. Credited as a play (stats, record in
+  save v4, objectives, achievement Cheeky, Scout signature), Playbook entry, fourth step of the
+  Plays lesson (verified end to end in a browser).
+- Difficulty re-measured after these changes: Championship level 0.85 -> 0.8 (average stand-in 57%,
+  also against the top club; beginner stand-in 26%). Sweep: 24 matches, no problems, 0 own goals.
+- Robots (`robotView.ts`): four distinguishable chassis (All-Rounder classic; Scout lean with twin
+  stripes, visor peak and heel fins; Bulwark stocky and armoured with a chin bar; Glider with an
+  arrowhead graphic, ear fins and swept wings), plan width within -5% / +8%, per-chassis torso,
+  fitted rank belt, legs built to length, clipping fixes, wrong-footed reaction (`pose.megAge`),
+  about 19.5k triangles per robot (was 21.4k).
+- Not verified on real devices; no human playtest. Chassis balance is measured with bots only.
+
 ### Mastery in the Garage, audio overhaul, mobile pass (2026-11-11)
 
 - Mastery (`src/content/progression.ts`, `src/progression/mastery.ts`, `src/ui/screens/mastery.ts`):
